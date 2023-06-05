@@ -6,14 +6,14 @@ import (
 )
 
 type Agent struct {
-	logger     *zap.SugaredLogger
-	dutyClient *duty.Duty
+	logger *zap.SugaredLogger
+	duty   *duty.Duty
 }
 
-func NewAgent(logger *zap.SugaredLogger, dutyClient *duty.Duty) *Agent {
+func NewAgent(logger *zap.SugaredLogger, duty *duty.Duty) *Agent {
 	return &Agent{
-		logger:     logger,
-		dutyClient: dutyClient,
+		logger: logger,
+		duty:   duty,
 	}
 }
 
