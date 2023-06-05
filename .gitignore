@@ -1,0 +1,7 @@
+/catpaw*
+/nohup.out
+
+.idea
+.DS_Store
+.vscode
+.log

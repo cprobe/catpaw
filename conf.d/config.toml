@@ -1,0 +1,12 @@
+[global]
+print_configs = false
+
+# [log]
+# level = "info"
+# format = "json"
+# output = "stdout"
+# fields = {}
+
+[flashduty]
+url = "https://api.flashcat.cloud/event/push/alert/standard?integration_key=xx"
+timeout = "10s"
