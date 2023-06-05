@@ -4,12 +4,17 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"path/filepath"
+	"os/signal"
+	"runtime"
+	"syscall"
 
+	"flashcat.cloud/catpaw/agent"
 	"flashcat.cloud/catpaw/config"
+	"flashcat.cloud/catpaw/duty"
 	"flashcat.cloud/catpaw/logger"
 	"flashcat.cloud/catpaw/winx"
 	"github.com/chai2010/winsvc"
+	"github.com/toolkits/pkg/runner"
 )
 
 var (
@@ -22,12 +27,8 @@ var (
 )
 
 func init() {
-	// change to current dir
 	var err error
 	if appPath, err = winsvc.GetAppPath(); err != nil {
-		panic(err)
-	}
-	if err := os.Chdir(filepath.Dir(appPath)); err != nil {
 		panic(err)
 	}
 }
@@ -49,7 +50,47 @@ func main() {
 	logger := logger.Build().Sugar()
 	defer logger.Sync()
 
-	logger.Debug("Debug: Hello from zap logger")
-	logger.Info("Info: Hello from zap logger")
-	logger.Warn("Warn: Hello from zap logger")
+	runner.Init()
+	logger.Info("runner.binarydir: ", runner.Cwd)
+	logger.Info("runner.configdir: ", *configDir)
+	logger.Info("runner.hostname: ", runner.Hostname)
+	logger.Info("runner.fd_limits: ", runner.FdLimits())
+	logger.Info("runner.vm_limits: ", runner.VMLimits())
+
+	dutyClient := duty.NewDutyClient(logger)
+	dutyClient.Start()
+
+	agent := agent.NewAgent(logger, dutyClient)
+
+	if runtime.GOOS == "windows" && !winsvc.IsAnInteractiveSession() {
+		if err := winsvc.RunAsService(winx.GetServiceName(), agent.Start, agent.Stop, false); err != nil {
+			fmt.Println("failed to run windows service:", err)
+			os.Exit(1)
+		}
+		return
+	} else {
+		agent.Start()
+	}
+
+	sc := make(chan os.Signal, 1)
+	// syscall.SIGUSR2 == 0xc , not available on windows
+	signal.Notify(sc, syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT, syscall.SIGPIPE)
+
+EXIT:
+	for {
+		sig := <-sc
+		logger.Info("received signal: ", sig.String())
+		switch sig {
+		case syscall.SIGQUIT, syscall.SIGTERM, syscall.SIGINT:
+			break EXIT
+		case syscall.SIGHUP:
+			agent.Reload()
+		case syscall.SIGPIPE:
+			// https://pkg.go.dev/os/signal#hdr-SIGPIPE
+			// do nothing
+		}
+	}
+
+	agent.Stop()
+	logger.Info("agent exited")
 }

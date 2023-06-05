@@ -1,5 +1,6 @@
 /catpaw*
 /nohup.out
+/vendor
 
 .idea
 .DS_Store

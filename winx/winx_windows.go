@@ -19,6 +19,10 @@ var (
 	flagWinSvcStop      = flag.Bool("win-service-stop", false, "Stop windows service")
 )
 
+func GetServiceName() string {
+	return *flagWinSvcName
+}
+
 func Args(appPath string) {
 	// install service
 	if *flagWinSvcInstall {
