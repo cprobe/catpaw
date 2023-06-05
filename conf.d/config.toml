@@ -1,6 +1,9 @@
 [global]
 print_configs = false
 
+# [global.labels]
+# collagent = "catpaw"
+
 # [log]
 # level = "info"
 # format = "json"

@@ -1,0 +1,51 @@
+[[instances]]
+targets = [
+    "https://flashcat.cloud"
+]
+
+## Optional substring match in body of the response (case sensitive)
+# expect_response_substring = "ok"
+
+## Optional expected response status code.
+# expect_response_status_code = 0
+
+# # gather interval (default 15 seconds)
+# interval = "15s"
+
+# # Optional append labels
+# labels = { env="production", collagent="catpaw" }
+
+## Set http_proxy (catpaw uses the system wide proxy settings if it's is not set)
+# http_proxy = "http://localhost:8888"
+
+## Interface to use when dialing an address
+# interface = "eth0"
+
+## HTTP Request Method
+# method = "GET"
+
+## Set timeout (default 5 seconds)
+# timeout = "5s"
+
+## Whether to follow redirects from the server (defaults to false)
+# follow_redirects = false
+
+## Optional HTTP Basic Auth Credentials
+# basic_auth_user = "username"
+# basic_auth_pass = "pa$$word"
+
+## Optional headers
+# headers = ["Header-Key-1", "Header-Value-1", "Header-Key-2", "Header-Value-2"]
+
+## Optional HTTP Request Body
+# body = '''
+# {'fake':'data'}
+# '''
+
+## Optional TLS Config
+# use_tls = false
+# tls_ca = "/etc/catpaw/ca.pem"
+# tls_cert = "/etc/catpaw/cert.pem"
+# tls_key = "/etc/catpaw/key.pem"
+## Use TLS but skip chain & host verification
+# insecure_skip_verify = false

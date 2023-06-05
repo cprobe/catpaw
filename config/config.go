@@ -10,8 +10,9 @@ import (
 )
 
 type Global struct {
-	PrintConfigs bool     `toml:"print_configs"`
-	Interval     Duration `toml:"interval"`
+	PrintConfigs bool              `toml:"print_configs"`
+	Interval     Duration          `toml:"interval"`
+	Labels       map[string]string `toml:"labels"`
 }
 
 type LogConfig struct {
@@ -76,6 +77,10 @@ func InitConfig(configDir string, testMode bool, interval int64, plugins string)
 
 	if Config.Flashduty.Timeout == 0 {
 		Config.Flashduty.Timeout = Duration(10 * time.Second)
+	}
+
+	if Config.Global.Labels == nil {
+		Config.Global.Labels = make(map[string]string)
 	}
 
 	return nil
