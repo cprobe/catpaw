@@ -41,3 +41,10 @@ func (hc *HTTPConfig) GetTimeout() Duration {
 	}
 	return hc.Timeout
 }
+
+func (hc *HTTPConfig) GetMethod() string {
+	if hc.Method == "" {
+		return "GET"
+	}
+	return hc.Method
+}

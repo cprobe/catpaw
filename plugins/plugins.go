@@ -11,7 +11,7 @@ type Instance interface {
 	SetInitialized()
 
 	GetLabels() map[string]string
-	GetInterval() int64
+	GetInterval() config.Duration
 	InitInternalConfig() error
 	Process(*safe.Queue[*types.Event]) *safe.Queue[*types.Event]
 }
