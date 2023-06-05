@@ -57,10 +57,10 @@ func main() {
 	logger.Info("runner.fd_limits: ", runner.FdLimits())
 	logger.Info("runner.vm_limits: ", runner.VMLimits())
 
-	dutyClient := duty.NewDutyClient(logger)
-	dutyClient.Start()
+	duty := duty.NewDuty(logger)
+	duty.Start()
 
-	agent := agent.NewAgent(logger, dutyClient)
+	agent := agent.NewAgent(logger, duty)
 
 	if runtime.GOOS == "windows" && !winsvc.IsAnInteractiveSession() {
 		if err := winsvc.RunAsService(winx.GetServiceName(), agent.Start, agent.Stop, false); err != nil {

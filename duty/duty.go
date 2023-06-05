@@ -10,33 +10,33 @@ import (
 	"go.uber.org/zap"
 )
 
-type DutyClient struct {
+type Duty struct {
 	logger *zap.SugaredLogger
 	queue  *safe.Queue[*types.Event]
 	client *http.Client
 }
 
-func NewDutyClient(logger *zap.SugaredLogger) *DutyClient {
+func NewDuty(logger *zap.SugaredLogger) *Duty {
 	client := &http.Client{
 		Timeout: time.Duration(config.Config.Flashduty.Timeout),
 	}
 
-	return &DutyClient{
+	return &Duty{
 		logger: logger,
 		queue:  safe.NewQueue[*types.Event](),
 		client: client,
 	}
 }
 
-func (d *DutyClient) Push(event *types.Event) {
+func (d *Duty) Push(event *types.Event) {
 	d.queue.PushFront(event)
 }
 
-func (d *DutyClient) Start() {
+func (d *Duty) Start() {
 	go d.consume()
 }
 
-func (d *DutyClient) consume() {
+func (d *Duty) consume() {
 	for {
 		events := d.queue.PopBackN(1)
 		if len(events) == 0 {
@@ -50,6 +50,6 @@ func (d *DutyClient) consume() {
 	}
 }
 
-func (d *DutyClient) push(event *types.Event) {
+func (d *Duty) push(event *types.Event) {
 
 }
