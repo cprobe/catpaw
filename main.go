@@ -57,6 +57,10 @@ func main() {
 	logger.Info("runner.fd_limits: ", runner.FdLimits())
 	logger.Info("runner.vm_limits: ", runner.VMLimits())
 
+	for k, v := range config.Config.Global.Labels {
+		logger.Info("runner.labels: ", k, "=", v)
+	}
+
 	duty := duty.NewDuty(logger)
 	duty.Start()
 

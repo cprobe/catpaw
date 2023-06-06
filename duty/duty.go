@@ -38,7 +38,7 @@ func (d *Duty) Start() {
 
 func (d *Duty) consume() {
 	for {
-		events := d.queue.PopBackN(1)
+		events := d.queue.PopBackAll()
 		if len(events) == 0 {
 			time.Sleep(time.Millisecond * 400)
 			continue

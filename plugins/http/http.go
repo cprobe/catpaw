@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"flashcat.cloud/catpaw/config"
+	"flashcat.cloud/catpaw/pkg/filter"
 	"flashcat.cloud/catpaw/pkg/netx"
 	"flashcat.cloud/catpaw/pkg/safe"
 	"flashcat.cloud/catpaw/plugins"
@@ -19,10 +20,11 @@ import (
 type Instance struct {
 	config.InternalConfig
 
-	Targets                  []string `toml:"targets"`
-	Concurrency              int      `toml:"concurrency"`
-	ExpectResponseSubstring  string   `toml:"expect_response_substring"`
-	ExpectResponseStatusCode *int     `toml:"expect_response_status_code"`
+	Targets                        []string      `toml:"targets"`
+	Concurrency                    int           `toml:"concurrency"`
+	ExpectResponseSubstring        string        `toml:"expect_response_substring"`
+	ExpectResponseStatusCode       []string      `toml:"expect_response_status_code"`
+	ExpectResponseStatusCodeFilter filter.Filter `toml:"-"`
 
 	Interface       string          `toml:"interface"`
 	Method          string          `toml:"method"`
@@ -55,6 +57,18 @@ type httpClient interface {
 func (ins *Instance) Init() error {
 	if len(ins.Targets) == 0 {
 		return types.ErrInstancesEmpty
+	}
+
+	if ins.Concurrency == 0 {
+		ins.Concurrency = 10
+	}
+
+	var err error
+	if len(ins.ExpectResponseStatusCode) > 0 {
+		ins.ExpectResponseStatusCodeFilter, err = filter.Compile(ins.ExpectResponseStatusCode)
+		if err != nil {
+			return err
+		}
 	}
 
 	client, err := ins.createHTTPClient()

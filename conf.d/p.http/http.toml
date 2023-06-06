@@ -3,11 +3,11 @@ targets = [
     "https://flashcat.cloud"
 ]
 
+## Optional expected response status code.
+expect_response_status_code = ["20*"]
+
 ## Optional substring match in body of the response (case sensitive)
 # expect_response_substring = "ok"
-
-## Optional expected response status code.
-# expect_response_status_code = 0
 
 # # Concurrent requests to make per target
 # concurrency = 10

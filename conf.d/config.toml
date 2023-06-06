@@ -1,8 +1,10 @@
 [global]
-print_configs = false
+interval = "15s"
 
-# [global.labels]
-# collagent = "catpaw"
+[global.labels]
+from_agent = "catpaw"
+from_hostname = "$hostname"
+from_hostip= "$ip"
 
 # [log]
 # level = "info"
