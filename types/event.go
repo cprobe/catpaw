@@ -15,3 +15,12 @@ type Event struct {
 	TitleRule   string            `json:"title_rule"` // $a::b::$c
 	Description string            `json:"description"`
 }
+
+func EventStatusValid(status string) bool {
+	switch status {
+	case EventStatusCritical, EventStatusWarning, EventStatusInfo, EventStatusOk:
+		return true
+	default:
+		return false
+	}
+}

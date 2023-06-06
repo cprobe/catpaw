@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"net"
+	"net/http"
 	"os"
 	"path"
 	"strings"
@@ -27,8 +28,9 @@ type LogConfig struct {
 }
 
 type Flashduty struct {
-	Url     string   `toml:"url"`
-	Timeout Duration `toml:"timeout"`
+	Url     string       `toml:"url"`
+	Timeout Duration     `toml:"timeout"`
+	Client  *http.Client `toml:"-"`
 }
 
 type ConfigType struct {
@@ -85,6 +87,10 @@ func InitConfig(configDir string, testMode bool, interval int64, plugins string)
 
 	if Config.Flashduty.Timeout == 0 {
 		Config.Flashduty.Timeout = Duration(10 * time.Second)
+	}
+
+	Config.Flashduty.Client = &http.Client{
+		Timeout: time.Duration(Config.Flashduty.Timeout),
 	}
 
 	if Config.Global.Labels == nil {
