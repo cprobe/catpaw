@@ -56,8 +56,6 @@ type httpClient interface {
 }
 
 func (ins *Instance) Init() error {
-	logger.Logger.Info("http plugin initing...")
-
 	if ins.Concurrency == 0 {
 		ins.Concurrency = 10
 	}
