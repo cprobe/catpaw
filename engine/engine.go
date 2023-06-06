@@ -94,8 +94,6 @@ func handleAlertEvent(ins plugins.Instance, event *types.Event) {
 
 	// old != nil 这已经不是第一次产生告警事件了
 	// 如果 ForDuration 没有满足，则不能继续发送
-	forDur := int64(alerting.ForDuration / config.Duration(time.Second))
-	fmt.Println("........forDurInSeconds:", forDur)
 	if alerting.ForDuration > 0 && event.EventTime-old.FirstFireTime < int64(alerting.ForDuration/config.Duration(time.Second)) {
 		return
 	}

@@ -214,8 +214,10 @@ func (ins *Instance) gather(q *safe.Queue[*types.Event], target string) {
 	// check connection
 	resp, err := ins.client.Do(request)
 	es := types.EventStatusOk
+	errString := "null. everything is ok"
 	if err != nil {
 		es = types.EventStatusWarning
+		errString = err.Error()
 	}
 
 	e := types.BuildEvent(es, map[string]string{
@@ -225,7 +227,7 @@ func (ins *Instance) gather(q *safe.Queue[*types.Event], target string) {
 	e.SetTitleRule("$check").SetDescription(`
 - **target**: ` + target + `
 - **method**: ` + ins.Method + `
-- **error**: ` + err.Error() + `
+- **error**: ` + errString + `
 	`)
 
 	q.PushFront(e)
