@@ -1,6 +1,7 @@
 [[instances]]
 targets = [
-    "https://baidu.com",
+    # "https://baidu.com",
+    # "https://google.com",
 ]
 
 ## Optional expected response status code.

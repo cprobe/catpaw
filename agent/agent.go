@@ -2,21 +2,23 @@ package agent
 
 import (
 	"fmt"
-	"path"
-	"sort"
 	"strings"
+	"sync"
 
 	"flashcat.cloud/catpaw/config"
 	"flashcat.cloud/catpaw/logger"
+	"flashcat.cloud/catpaw/pkg/choice"
 	"flashcat.cloud/catpaw/plugins"
 	"github.com/BurntSushi/toml"
 	"github.com/toolkits/pkg/file"
 
 	// auto registry
+	_ "flashcat.cloud/catpaw/plugins/exec"
 	_ "flashcat.cloud/catpaw/plugins/http"
 )
 
 type PluginConfig struct {
+	Source      string // file || http
 	Digest      string
 	FileContent []byte
 }
@@ -25,6 +27,7 @@ type Agent struct {
 	pluginFilters map[string]struct{}
 	pluginConfigs map[string]*PluginConfig
 	pluginRunners map[string]*PluginRunner
+	sync.RWMutex
 }
 
 func New() *Agent {
@@ -38,125 +41,200 @@ func New() *Agent {
 func (a *Agent) Start() {
 	logger.Logger.Info("agent starting")
 
-	pcs, err := a.LoadFileConfigs()
+	pcs, err := loadFileConfigs()
 	if err != nil {
 		logger.Logger.Error("load file configs fail:", err)
 		return
 	}
 
-	a.pluginConfigs = pcs
-
-	for name, pc := range a.pluginConfigs {
-		creator, has := plugins.PluginCreators[name]
-		if !has {
-			logger.Logger.Infof("plugin %s not supported", name)
-			continue
-		}
-
-		pluginObject := creator()
-		err = toml.Unmarshal(pc.FileContent, pluginObject)
-		if err != nil {
-			logger.Logger.Error("unmarshal plugin config fail:", err)
-			continue
-		}
-
-		runner := newPluginRunner(name, pluginObject)
-		go runner.start()
-		a.pluginRunners[name] = runner
+	for name, pc := range pcs {
+		a.LoadPlugin(name, pc)
 	}
 
 	logger.Logger.Info("agent started")
 }
 
+func (a *Agent) LoadPlugin(name string, pc *PluginConfig) {
+	if len(a.pluginFilters) > 0 {
+		// need filter by --plugins
+		_, has := a.pluginFilters[name]
+		if !has {
+			return
+		}
+	}
+
+	logger.Logger.Infof("loading plugin %s", name)
+
+	creator, has := plugins.PluginCreators[name]
+	if !has {
+		logger.Logger.Infof("plugin %s not supported", name)
+		return
+	}
+
+	pluginObject := creator()
+	err := toml.Unmarshal(pc.FileContent, pluginObject)
+	if err != nil {
+		logger.Logger.Error("unmarshal plugin config fail:", err)
+		return
+	}
+
+	runner := newPluginRunner(name, pluginObject)
+	runner.start()
+
+	a.Lock()
+	a.pluginRunners[name] = runner
+	a.pluginConfigs[name] = pc
+	a.Unlock()
+}
+
+func (a *Agent) DelPlugin(name string) {
+	a.Lock()
+	defer a.Unlock()
+
+	if runner, has := a.pluginRunners[name]; has {
+		runner.stop()
+		delete(a.pluginRunners, name)
+		delete(a.pluginConfigs, name)
+	}
+}
+
+func (a *Agent) RunningPlugins() []string {
+	a.RLock()
+	defer a.RUnlock()
+
+	cnt := len(a.pluginRunners)
+	ret := make([]string, 0, cnt)
+
+	for name := range a.pluginRunners {
+		ret = append(ret, name)
+	}
+
+	return ret
+}
+
+func (a *Agent) GetPluginConfig(name string) *PluginConfig {
+	a.RLock()
+	defer a.RUnlock()
+
+	return a.pluginConfigs[name]
+}
+
 func (a *Agent) Stop() {
 	logger.Logger.Info("agent stopping")
+
+	a.Lock()
+	defer a.Unlock()
+
+	for name := range a.pluginRunners {
+		a.pluginRunners[name].stop()
+		delete(a.pluginRunners, name)
+		delete(a.pluginConfigs, name)
+	}
+
 	logger.Logger.Info("agent stopped")
+}
+
+func (a *Agent) HandleChangedPlugin(names []string) {
+	for _, name := range names {
+		pc := a.GetPluginConfig(name)
+		if pc.Source != "file" {
+			// not supported
+			continue
+		}
+
+		mtime, err := getMTime(name)
+		if err != nil {
+			logger.Logger.Errorw("get mtime fail:"+err.Error(), "plugin:", name)
+			continue
+		}
+
+		if mtime == -1 {
+			// files deleted
+			a.DelPlugin(name)
+			continue
+		}
+
+		if pc.Digest == fmt.Sprint(mtime) {
+			// not changed
+			continue
+		}
+
+		// configuration changed
+		// delete old plugin
+		a.DelPlugin(name)
+
+		bs, err := getFileContent(name)
+		if err != nil {
+			logger.Logger.Errorw("get file content fail:"+err.Error(), "plugin:", name)
+			continue
+		}
+
+		if bs == nil {
+			// files deleted
+			continue
+		}
+
+		a.LoadPlugin(name, &PluginConfig{
+			Source:      "file",
+			Digest:      fmt.Sprint(mtime),
+			FileContent: bs,
+		})
+	}
 }
 
 func (a *Agent) Reload() {
 	logger.Logger.Info("agent reloading")
+
+	names := a.RunningPlugins()
+	a.HandleChangedPlugin(names)
+	a.HandleNewPlugin(names)
+
 	logger.Logger.Info("agent reloaded")
 }
 
-func parseFilter(filterStr string) map[string]struct{} {
-	filters := strings.Split(filterStr, ":")
-	filtermap := make(map[string]struct{})
-	for i := 0; i < len(filters); i++ {
-		if strings.TrimSpace(filters[i]) == "" {
-			continue
-		}
-		filtermap[filters[i]] = struct{}{}
-	}
-	return filtermap
-}
-
-func (a *Agent) LoadFileConfigs() (map[string]*PluginConfig, error) {
+func (a *Agent) HandleNewPlugin(names []string) {
 	dirs, err := file.DirsUnder(config.Config.ConfigDir)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get config dirs: %v", err)
+		logger.Logger.Error("failed to get config dirs:", err)
+		return
 	}
-
-	ret := make(map[string]*PluginConfig)
 
 	for _, dir := range dirs {
 		if !strings.HasPrefix(dir, "p.") {
 			continue
 		}
 
-		// use this as map key
 		name := dir[len("p."):]
 
-		if len(a.pluginFilters) > 0 {
-			// need filter by --plugins
-			_, has := a.pluginFilters[name]
-			if !has {
-				continue
-			}
-		}
-
-		pluginDir := path.Join(config.Config.ConfigDir, dir)
-		files, err := file.FilesUnder(pluginDir)
-		if err != nil {
-			return nil, fmt.Errorf("failed to list files under %s: %v", pluginDir, err)
-		}
-
-		if len(files) == 0 {
+		if choice.Contains(name, names) {
+			// already running
 			continue
 		}
 
-		sort.Strings(files)
-
-		var maxmt int64
-		var bytes []byte
-		for i := 0; i < len(files); i++ {
-			filepath := path.Join(pluginDir, files[i])
-			mtime, err := file.FileMTime(filepath)
-			if err != nil {
-				return nil, fmt.Errorf("failed to get mtime of %s: %v", filepath, err)
-			}
-
-			if mtime > maxmt {
-				maxmt = mtime
-			}
-
-			if i > 0 {
-				bytes = append(bytes, '\n')
-				bytes = append(bytes, '\n')
-			}
-
-			bs, err := file.ReadBytes(filepath)
-			if err != nil {
-				return nil, fmt.Errorf("failed to read %s: %v", filepath, err)
-			}
-
-			bytes = append(bytes, bs...)
+		mtime, err := getMTime(name)
+		if err != nil {
+			logger.Logger.Error("get mtime fail:", err)
+			continue
 		}
 
-		ret[name] = &PluginConfig{
-			Digest:      fmt.Sprint(maxmt),
-			FileContent: bytes,
+		if mtime == -1 {
+			continue
 		}
+
+		bs, err := getFileContent(name)
+		if err != nil {
+			logger.Logger.Error("get file content fail:", err)
+			continue
+		}
+
+		if bs == nil {
+			continue
+		}
+
+		a.LoadPlugin(name, &PluginConfig{
+			Source:      "file",
+			Digest:      fmt.Sprint(mtime),
+			FileContent: bs,
+		})
 	}
-
-	return ret, nil
 }

@@ -43,7 +43,7 @@ func (r *PluginRunner) stop() {
 func (r *PluginRunner) start() {
 	if r.pluginObject.IsSystemPlugin() {
 		r.quitChanForSys = make(chan struct{}, 1)
-		r.startSystemPlugin()
+		go r.startSystemPlugin()
 		return
 	}
 
@@ -51,7 +51,7 @@ func (r *PluginRunner) start() {
 	r.quitChanForIns = make([]chan struct{}, len(r.Instances))
 	for i := 0; i < len(r.Instances); i++ {
 		r.quitChanForIns[i] = make(chan struct{}, 1)
-		r.startInstancePlugin(r.Instances[i], r.quitChanForIns[i])
+		go r.startInstancePlugin(r.Instances[i], r.quitChanForIns[i])
 	}
 }
 

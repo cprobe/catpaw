@@ -1,1 +1,32 @@
+# script stdout example:
+# 1. It's an array
+# 2. event_status choice: Critical, Warning, Info, Ok
+# [
+#     {
+#         "event_time": 1686032592,
+#         "event_status": "Critical",
+#         "alert_key": "dc9f9c60056f27e74c9a383b480b5ca4d9f2c966",
+#         "labels": {
+#             "alertname": "oom",
+#         },
+#         "title_rule": "$from_hostname::$alertname",
+#         "description": "kernel: Out of memory: Kill process 9163 (mysqld) score 511 or sacrifice child"
+#     }
+# ]
+
 [[instances]]
+# # commands, support glob
+commands = [
+    # "/opt/catpaw/scripts/*.sh"
+]
+
+# timeout = "10s"
+
+# # Concurrent requests to make per target
+# concurrency = 5
+
+# # gather interval
+# interval = "30s"
+
+# # Optional append labels
+# labels = { env="production", collagent="catpaw" }
