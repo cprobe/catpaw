@@ -30,7 +30,7 @@ func PushRawEvents(pluginName string, ins plugins.Instance, queue *safe.Queue[*t
 			continue
 		}
 
-		err := clean(events[i], now, pluginName)
+		err := clean(events[i], now, pluginName, ins)
 		if err != nil {
 			logger.Logger.Errorf("clean raw event fail: %v, event: %v", err.Error(), events[i])
 			continue
@@ -49,24 +49,27 @@ func PushRawEvents(pluginName string, ins plugins.Instance, queue *safe.Queue[*t
 				continue
 			}
 
+			old := Events.Get(events[i].AlertKey)
+
 			repeatNumber := int64(ins.GetAlerting().RepeatNumber)
-			if repeatNumber > 0 && events[i].NotifyCount >= repeatNumber {
+			if repeatNumber > 0 && old.NotifyCount >= repeatNumber {
 				// repeat number reached
 				continue
 			}
 
+			fmt.Println(">>>>> repeatnumber:", repeatNumber, "notifycount:", old.NotifyCount)
+
 			repeatInterval := ins.GetAlerting().RepeatInterval
-			if events[i].LastSent > 0 && repeatInterval > 0 && now-events[i].LastSent < int64(repeatInterval/config.Duration(time.Second)) {
+			if old.LastSent > 0 && repeatInterval > 0 && now-old.LastSent < int64(repeatInterval/config.Duration(time.Second)) {
 				// repeat interval not reached
 				continue
 			}
 
-			events[i].LastSent = now
-			events[i].NotifyCount++
-			Events.Set(events[i])
+			old.LastSent = now
+			old.NotifyCount++
 
-			if err = forward(events[i]); err != nil {
-				logger.Logger.Errorf("event:%s forward fail: %v", events[i].AlertKey, err)
+			if err = forward(old); err != nil {
+				logger.Logger.Errorf("event:%s forward fail: %v", old.AlertKey, err)
 			}
 		}
 	}
@@ -84,25 +87,23 @@ func alertingCompute(pluginName string, ins plugins.Instance, event *types.Event
 	old := Events.Get(event.AlertKey)
 
 	if old == nil {
-		event.FirstFireTime = event.EventTime
-
 		// new event
 		if event.EventStatus == types.EventStatusOk {
 			return false
 		}
 
-		if alertingRule.ForDuration == 0 {
-			// no need waiting
-			return true
-		}
-
-		// waiting for duration
+		event.FirstFireTime = event.EventTime
 		Events.Set(event)
-		return false
+
+		return alertingRule.ForDuration == 0
 	}
 
 	// compare old event
 	if event.EventStatus == types.EventStatusOk {
+		return true
+	}
+
+	if alertingRule.ForDuration == 0 {
 		return true
 	}
 
@@ -113,7 +114,7 @@ func alertingCompute(pluginName string, ins plugins.Instance, event *types.Event
 	return false
 }
 
-func clean(event *types.Event, now int64, pluginName string) error {
+func clean(event *types.Event, now int64, pluginName string, ins plugins.Instance) error {
 	if event.EventTime == 0 {
 		event.EventTime = now
 	}
@@ -132,6 +133,12 @@ func clean(event *types.Event, now int64, pluginName string) error {
 
 	// append label: from_plugin
 	event.Labels["from_plugin"] = pluginName
+
+	// append label: from_instance
+	insLabels := ins.GetLabels()
+	for k, v := range insLabels {
+		event.Labels[k] = v
+	}
 
 	// append label: global labels
 	var (
