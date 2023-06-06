@@ -226,7 +226,7 @@ func (ins *Instance) gather(q *safe.Queue[*types.Event], target string) {
 
 	e.SetTitleRule("$check").SetDescription(`
 - **target**: ` + target + `
-- **method**: ` + ins.Method + `
+- **method**: ` + ins.GetMethod() + `
 - **error**: ` + errString + `
 	`)
 
@@ -250,7 +250,7 @@ func (ins *Instance) gather(q *safe.Queue[*types.Event], target string) {
 
 		e.SetTitleRule("$check").SetDescription(`
 - **target**: ` + target + `
-- **method**: ` + ins.Method + `
+- **method**: ` + ins.GetMethod() + `
 - **expire**: TLS cert will expire at: ` + time.Unix(certExpireTimestamp, 0).Format("2006-01-02 15:04:05") + `
 			`)
 
@@ -280,7 +280,7 @@ func (ins *Instance) gather(q *safe.Queue[*types.Event], target string) {
 
 		e.SetTitleRule("$check").SetDescription(`
 - **target**: ` + target + `
-- **method**: ` + ins.Method + `
+- **method**: ` + ins.GetMethod() + `
 - **status code**: ` + statusCode + `
 - **body**: ` + string(body) + `
 		`)
@@ -299,7 +299,7 @@ func (ins *Instance) gather(q *safe.Queue[*types.Event], target string) {
 
 		e.SetTitleRule("$check").SetDescription(`
 - **target**: ` + target + `
-- **method**: ` + ins.Method + `
+- **method**: ` + ins.GetMethod() + `
 - **status code**: ` + statusCode + `
 - **body**: ` + string(body) + `
 		`)
