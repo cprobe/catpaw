@@ -213,42 +213,46 @@ func (ins *Instance) gather(q *safe.Queue[*types.Event], target string) {
 
 	// check connection
 	resp, err := ins.client.Do(request)
+	es := types.EventStatusOk
+	if err != nil {
+		es = types.EventStatusWarning
+	}
+
+	e := types.BuildEvent(es, map[string]string{
+		"check": "HTTP check failed",
+	}, labels)
+
+	e.SetTitleRule("$check").SetDescription(`
+- **target**: ` + target + `
+- **method**: ` + ins.Method + `
+- **error**: ` + err.Error() + `
+	`)
+
+	q.PushFront(e)
+
 	if err != nil {
 		logger.Logger.Errorw("failed to send http request", "error", err, "plugin", pluginName, "target", target)
-
-		e := types.BuildEvent(types.EventStatusWarning, map[string]string{
-			"check": "HTTP check failed",
-		}, labels)
-
-		e.SetTitleRule("$check").SetDescription(`
-		- **target**: ` + target + `
-		- **method**: ` + ins.Method + `
-		- **error**: ` + err.Error() + `
-		`)
-
-		q.PushFront(e)
 		return
 	}
 
 	// check tls cert
-	if ins.CertExpireThreshold > 0 {
-		if strings.HasPrefix(target, "https://") && resp.TLS != nil {
-			certExpireTimestamp := getEarliestCertExpiry(resp.TLS).Unix()
-
-			if certExpireTimestamp < time.Now().Add(time.Duration(ins.CertExpireThreshold)).Unix() {
-				e := types.BuildEvent(types.EventStatusWarning, map[string]string{
-					"check": "TLS cert will expire soon",
-				}, labels)
-
-				e.SetTitleRule("$check").SetDescription(`
-				- **target**: ` + target + `
-				- **method**: ` + ins.Method + `
-				- **expire**: TLS cert will expire at: ` + time.Unix(certExpireTimestamp, 0).Format("2006-01-02 15:04:05") + `
-				`)
-
-				q.PushFront(e)
-			}
+	if ins.CertExpireThreshold > 0 && strings.HasPrefix(target, "https://") && resp.TLS != nil {
+		certExpireTimestamp := getEarliestCertExpiry(resp.TLS).Unix()
+		es := types.EventStatusOk
+		if certExpireTimestamp < time.Now().Add(time.Duration(ins.CertExpireThreshold)).Unix() {
+			es = types.EventStatusWarning
 		}
+		e := types.BuildEvent(es, map[string]string{
+			"check": "TLS cert will expire soon",
+		}, labels)
+
+		e.SetTitleRule("$check").SetDescription(`
+- **target**: ` + target + `
+- **method**: ` + ins.Method + `
+- **expire**: TLS cert will expire at: ` + time.Unix(certExpireTimestamp, 0).Format("2006-01-02 15:04:05") + `
+			`)
+
+		q.PushFront(e)
 	}
 
 	var body []byte
@@ -264,36 +268,40 @@ func (ins *Instance) gather(q *safe.Queue[*types.Event], target string) {
 	statusCode := fmt.Sprint(resp.StatusCode)
 
 	if len(ins.ExpectResponseStatusCode) > 0 {
+		es := types.EventStatusOk
 		if !ins.ExpectResponseStatusCodeFilter.Match(statusCode) {
-			e := types.BuildEvent(types.EventStatusWarning, map[string]string{
-				"check": "HTTP response status code not match",
-			}, labels)
-
-			e.SetTitleRule("$check").SetDescription(`
-			- **target**: ` + target + `
-			- **method**: ` + ins.Method + `
-			- **status code**: ` + statusCode + `
-			- **body**: ` + string(body) + `
-			`)
-
-			q.PushFront(e)
+			es = types.EventStatusWarning
 		}
+		e := types.BuildEvent(es, map[string]string{
+			"check": "HTTP response status code not match",
+		}, labels)
+
+		e.SetTitleRule("$check").SetDescription(`
+- **target**: ` + target + `
+- **method**: ` + ins.Method + `
+- **status code**: ` + statusCode + `
+- **body**: ` + string(body) + `
+		`)
+
+		q.PushFront(e)
 	}
 
 	if len(ins.ExpectResponseSubstring) > 0 {
+		es := types.EventStatusOk
 		if !strings.Contains(string(body), ins.ExpectResponseSubstring) {
-			e := types.BuildEvent(types.EventStatusWarning, map[string]string{
-				"check": "HTTP response body not match",
-			}, labels)
-
-			e.SetTitleRule("$check").SetDescription(`
-			- **target**: ` + target + `
-			- **method**: ` + ins.Method + `
-			- **status code**: ` + statusCode + `
-			- **body**: ` + string(body) + `
-			`)
-
-			q.PushFront(e)
+			es = types.EventStatusWarning
 		}
+		e := types.BuildEvent(es, map[string]string{
+			"check": "HTTP response body not match",
+		}, labels)
+
+		e.SetTitleRule("$check").SetDescription(`
+- **target**: ` + target + `
+- **method**: ` + ins.Method + `
+- **status code**: ` + statusCode + `
+- **body**: ` + string(body) + `
+		`)
+
+		q.PushFront(e)
 	}
 }

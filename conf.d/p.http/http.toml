@@ -1,13 +1,12 @@
 [[instances]]
 targets = [
     # "https://baidu.com",
-    # "https://google.com",
+    "http://a.cn",
 ]
 
 ## Optional expected response status code.
 expect_response_status_code = ["20*"]
-
-cert_expire_threshold = "7d"
+cert_expire_threshold = "72h"
 
 ## Optional substring match in body of the response (case sensitive)
 # expect_response_substring = "ok"
@@ -58,7 +57,7 @@ cert_expire_threshold = "7d"
 
 [instances.alerting]
 enabled = true
-for_duration = 0
+for_duration = "20s"
 repeat_interval = "1m"
 # Maximum number of notifications
 repeat_number = 3
