@@ -186,7 +186,7 @@ func (ins *Instance) gather(q *safe.Queue[*types.Event], target string) {
 
 	labels := map[string]string{
 		"target": target,
-		"method": ins.Method,
+		"method": ins.GetMethod(),
 	}
 
 	var payload io.Reader
@@ -231,21 +231,23 @@ func (ins *Instance) gather(q *safe.Queue[*types.Event], target string) {
 	}
 
 	// check tls cert
-	if strings.HasPrefix(target, "https://") && resp.TLS != nil {
-		certExpireTimestamp := getEarliestCertExpiry(resp.TLS).Unix()
+	if ins.CertExpireThreshold > 0 {
+		if strings.HasPrefix(target, "https://") && resp.TLS != nil {
+			certExpireTimestamp := getEarliestCertExpiry(resp.TLS).Unix()
 
-		if certExpireTimestamp < time.Now().Add(time.Duration(ins.CertExpireThreshold)).Unix() {
-			e := types.BuildEvent(types.EventStatusWarning, map[string]string{
-				"check": "TLS cert will expire soon",
-			}, labels)
+			if certExpireTimestamp < time.Now().Add(time.Duration(ins.CertExpireThreshold)).Unix() {
+				e := types.BuildEvent(types.EventStatusWarning, map[string]string{
+					"check": "TLS cert will expire soon",
+				}, labels)
 
-			e.SetTitleRule("$check").SetDescription(`
-			- **target**: ` + target + `
-			- **method**: ` + ins.Method + `
-			- **expire**: TLS cert will expire at: ` + time.Unix(certExpireTimestamp, 0).Format("2006-01-02 15:04:05") + `
-			`)
+				e.SetTitleRule("$check").SetDescription(`
+				- **target**: ` + target + `
+				- **method**: ` + ins.Method + `
+				- **expire**: TLS cert will expire at: ` + time.Unix(certExpireTimestamp, 0).Format("2006-01-02 15:04:05") + `
+				`)
 
-			q.PushFront(e)
+				q.PushFront(e)
+			}
 		}
 	}
 
@@ -260,33 +262,38 @@ func (ins *Instance) gather(q *safe.Queue[*types.Event], target string) {
 	}
 
 	statusCode := fmt.Sprint(resp.StatusCode)
-	if !ins.ExpectResponseStatusCodeFilter.Match(statusCode) {
-		e := types.BuildEvent(types.EventStatusWarning, map[string]string{
-			"check": "HTTP response status code not match",
-		}, labels)
 
-		e.SetTitleRule("$check").SetDescription(`
-		- **target**: ` + target + `
-		- **method**: ` + ins.Method + `
-		- **status code**: ` + statusCode + `
-		- **body**: ` + string(body) + `
-		`)
+	if len(ins.ExpectResponseStatusCode) > 0 {
+		if !ins.ExpectResponseStatusCodeFilter.Match(statusCode) {
+			e := types.BuildEvent(types.EventStatusWarning, map[string]string{
+				"check": "HTTP response status code not match",
+			}, labels)
 
-		q.PushFront(e)
+			e.SetTitleRule("$check").SetDescription(`
+			- **target**: ` + target + `
+			- **method**: ` + ins.Method + `
+			- **status code**: ` + statusCode + `
+			- **body**: ` + string(body) + `
+			`)
+
+			q.PushFront(e)
+		}
 	}
 
-	if !strings.Contains(string(body), ins.ExpectResponseSubstring) {
-		e := types.BuildEvent(types.EventStatusWarning, map[string]string{
-			"check": "HTTP response body not match",
-		}, labels)
+	if len(ins.ExpectResponseSubstring) > 0 {
+		if !strings.Contains(string(body), ins.ExpectResponseSubstring) {
+			e := types.BuildEvent(types.EventStatusWarning, map[string]string{
+				"check": "HTTP response body not match",
+			}, labels)
 
-		e.SetTitleRule("$check").SetDescription(`
-		- **target**: ` + target + `
-		- **method**: ` + ins.Method + `
-		- **status code**: ` + statusCode + `
-		- **body**: ` + string(body) + `
-		`)
+			e.SetTitleRule("$check").SetDescription(`
+			- **target**: ` + target + `
+			- **method**: ` + ins.Method + `
+			- **status code**: ` + statusCode + `
+			- **body**: ` + string(body) + `
+			`)
 
-		q.PushFront(e)
+			q.PushFront(e)
+		}
 	}
 }

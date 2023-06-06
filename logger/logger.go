@@ -16,6 +16,7 @@ func Build() func() {
 	loggerConfig := zap.NewProductionConfig()
 	loggerConfig.EncoderConfig.TimeKey = "ts"
 	loggerConfig.EncoderConfig.EncodeTime = zapcore.TimeEncoderOfLayout(time.RFC3339)
+	loggerConfig.DisableStacktrace = true
 
 	switch c.Level {
 	case "debug":

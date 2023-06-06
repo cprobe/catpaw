@@ -51,7 +51,9 @@ func (r *PluginRunner) start() {
 	r.quitChanForIns = make([]chan struct{}, len(r.Instances))
 	for i := 0; i < len(r.Instances); i++ {
 		r.quitChanForIns[i] = make(chan struct{}, 1)
-		go r.startInstancePlugin(r.Instances[i], r.quitChanForIns[i])
+		ins := r.Instances[i]
+		ch := r.quitChanForIns[i]
+		go r.startInstancePlugin(ins, ch)
 	}
 }
 
@@ -148,6 +150,6 @@ func (r *PluginRunner) gatherInstancePlugin(ins plugins.Instance) {
 	queue := safe.NewQueue[*types.Event]()
 	plugins.MayGather(ins, queue)
 	if queue.Len() > 0 {
-		engine.PushRawEvents(r.pluginName, r.pluginObject, queue)
+		engine.PushRawEvents(r.pluginName, ins, queue)
 	}
 }

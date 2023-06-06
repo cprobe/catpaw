@@ -81,6 +81,7 @@ func BuildEvent(status string, labelMaps ...map[string]string) *Event {
 	}
 
 	event.AlertKey = str.MD5(sb.String())
+	event.Labels = labels
 
 	return event
 }

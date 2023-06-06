@@ -17,7 +17,7 @@ import (
 	"flashcat.cloud/catpaw/types"
 )
 
-func PushRawEvents(pluginName string, pluginObject plugins.Plugin, queue *safe.Queue[*types.Event]) {
+func PushRawEvents(pluginName string, ins plugins.Instance, queue *safe.Queue[*types.Event]) {
 	if queue.Len() == 0 {
 		return
 	}
@@ -32,30 +32,30 @@ func PushRawEvents(pluginName string, pluginObject plugins.Plugin, queue *safe.Q
 
 		err := clean(events[i], now, pluginName)
 		if err != nil {
-			logger.Logger.Error("clean raw event fail: "+err.Error(), "event", events[i])
+			logger.Logger.Errorf("clean raw event fail: %v, event: %v", err.Error(), events[i])
 			continue
 		}
 
-		logger.Logger.Debugf("event:%s: raw data received. status: %s, labels: %v", events[i].AlertKey, events[i].EventStatus, events[i].Labels)
+		logger.Logger.Debugf("event:%s: raw data received. event object: %v", events[i].AlertKey, events[i])
 
 		// engine logic
-		if alertingCompute(pluginName, pluginObject, events[i]) {
+		if alertingCompute(pluginName, ins, events[i]) {
 			if events[i].EventStatus == types.EventStatusOk {
 				// ok event
 				Events.Del(events[i].AlertKey)
-				if pluginObject.GetAlerting().RecoveryNotification {
+				if ins.GetAlerting().RecoveryNotification {
 					forward(events[i])
 				}
 				continue
 			}
 
-			repeatNumber := int64(pluginObject.GetAlerting().RepeatNumber)
+			repeatNumber := int64(ins.GetAlerting().RepeatNumber)
 			if repeatNumber > 0 && events[i].NotifyCount >= repeatNumber {
 				// repeat number reached
 				continue
 			}
 
-			repeatInterval := pluginObject.GetAlerting().RepeatInterval
+			repeatInterval := ins.GetAlerting().RepeatInterval
 			if events[i].LastSent > 0 && repeatInterval > 0 && now-events[i].LastSent < int64(repeatInterval/config.Duration(time.Second)) {
 				// repeat interval not reached
 				continue
@@ -65,15 +65,17 @@ func PushRawEvents(pluginName string, pluginObject plugins.Plugin, queue *safe.Q
 			events[i].NotifyCount++
 			Events.Set(events[i])
 
-			forward(events[i])
+			if err = forward(events[i]); err != nil {
+				logger.Logger.Errorf("event:%s forward fail: %v", events[i].AlertKey, err)
+			}
 		}
 	}
 }
 
 // forward if return true
 // status changed? reach for_duration?
-func alertingCompute(pluginName string, pluginObject plugins.Plugin, event *types.Event) bool {
-	alertingRule := pluginObject.GetAlerting()
+func alertingCompute(pluginName string, ins plugins.Instance, event *types.Event) bool {
+	alertingRule := ins.GetAlerting()
 
 	if !alertingRule.Enabled {
 		return false
@@ -120,15 +122,16 @@ func clean(event *types.Event, now int64, pluginName string) error {
 		return fmt.Errorf("alert key is blank")
 	}
 
-	if types.EventStatusValid(event.EventStatus) {
+	if !types.EventStatusValid(event.EventStatus) {
 		return fmt.Errorf("invalid event_status: %s", event.EventStatus)
 	}
 
-	// append label: from_plugin
-	if event.Labels != nil {
+	if event.Labels == nil {
 		event.Labels = make(map[string]string)
-		event.Labels["from_plugin"] = pluginName
 	}
+
+	// append label: from_plugin
+	event.Labels["from_plugin"] = pluginName
 
 	// append label: global labels
 	var (
@@ -145,7 +148,9 @@ func clean(event *types.Event, now int64, pluginName string) error {
 
 	for key := range config.Config.Global.Labels {
 		if strings.Contains(config.Config.Global.Labels[key], "$hostname") {
-			config.Config.Global.Labels[key] = strings.ReplaceAll(config.Config.Global.Labels[key], "$hostname", hostname)
+			event.Labels[key] = strings.ReplaceAll(config.Config.Global.Labels[key], "$hostname", hostname)
+		} else {
+			event.Labels[key] = config.Config.Global.Labels[key]
 		}
 	}
 
@@ -167,6 +172,8 @@ func forward(event *types.Event) error {
 	if err != nil {
 		return fmt.Errorf("event:%s: new request fail: %s", event.AlertKey, err.Error())
 	}
+
+	req.Header.Set("Content-Type", "application/json")
 
 	res, err := config.Config.Flashduty.Client.Do(req)
 	if err != nil {
@@ -212,8 +219,6 @@ func printStdout(event *types.Event) {
 		}
 	}
 
-	sb.WriteString(" ")
-	sb.WriteString(event.TitleRule)
 	sb.WriteString(" ")
 	sb.WriteString(event.TitleRule)
 	sb.WriteString(" ")
