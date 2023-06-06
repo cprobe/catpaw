@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"flashcat.cloud/catpaw/config"
+	"flashcat.cloud/catpaw/logger"
 	"flashcat.cloud/catpaw/pkg/filter"
 	"flashcat.cloud/catpaw/pkg/netx"
 	"flashcat.cloud/catpaw/pkg/safe"
@@ -55,9 +56,7 @@ type httpClient interface {
 }
 
 func (ins *Instance) Init() error {
-	if len(ins.Targets) == 0 {
-		return types.ErrInstancesEmpty
-	}
+	logger.Logger.Info("http plugin initing...")
 
 	if ins.Concurrency == 0 {
 		ins.Concurrency = 10
@@ -137,6 +136,10 @@ func (ins *Instance) createHTTPClient() (*http.Client, error) {
 	return client, nil
 }
 
+func (h *Http) IsSystemPlugin() bool {
+	return false
+}
+
 func (h *Http) GetInstances() []plugins.Instance {
 	ret := make([]plugins.Instance, len(h.Instances))
 	for i := 0; i < len(h.Instances); i++ {
@@ -148,6 +151,15 @@ func (h *Http) GetInstances() []plugins.Instance {
 func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
 	if len(ins.Targets) == 0 {
 		return
+	}
+
+	if !ins.GetInitialized() {
+		if err := ins.Init(); err != nil {
+			logger.Logger.Errorf("failed to init http instance: %v", err)
+			return
+		} else {
+			ins.SetInitialized()
+		}
 	}
 
 	wg := new(sync.WaitGroup)
@@ -167,5 +179,5 @@ func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
 }
 
 func (ins *Instance) gather(q *safe.Queue[*types.Event], target string) {
-
+	logger.Logger.Info("target:", target)
 }

@@ -7,33 +7,30 @@ import (
 	"flashcat.cloud/catpaw/config"
 	"flashcat.cloud/catpaw/pkg/safe"
 	"flashcat.cloud/catpaw/types"
-	"go.uber.org/zap"
 )
 
 type Duty struct {
-	logger *zap.SugaredLogger
 	queue  *safe.Queue[*types.Event]
 	client *http.Client
 }
 
-func NewDuty(logger *zap.SugaredLogger) *Duty {
+var Flashduty *Duty
+
+func Init() {
 	client := &http.Client{
 		Timeout: time.Duration(config.Config.Flashduty.Timeout),
 	}
 
-	return &Duty{
-		logger: logger,
+	Flashduty = &Duty{
 		queue:  safe.NewQueue[*types.Event](),
 		client: client,
 	}
+
+	go Flashduty.consume()
 }
 
 func (d *Duty) Push(event *types.Event) {
 	d.queue.PushFront(event)
-}
-
-func (d *Duty) Start() {
-	go d.consume()
 }
 
 func (d *Duty) consume() {

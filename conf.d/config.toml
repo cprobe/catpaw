@@ -1,10 +1,9 @@
 [global]
-interval = "15s"
+interval = "30s"
 
 [global.labels]
 from_agent = "catpaw"
 from_hostname = "$hostname"
-from_hostip= "$ip"
 
 # [log]
 # level = "info"

@@ -47,24 +47,20 @@ func main() {
 		panic(err)
 	}
 
-	logger := logger.Build().Sugar()
-	defer logger.Sync()
+	closefn := logger.Build()
+	defer closefn()
 
 	runner.Init()
-	logger.Info("runner.binarydir: ", runner.Cwd)
-	logger.Info("runner.configdir: ", *configDir)
-	logger.Info("runner.hostname: ", runner.Hostname)
-	logger.Info("runner.fd_limits: ", runner.FdLimits())
-	logger.Info("runner.vm_limits: ", runner.VMLimits())
+	logger.Logger.Info("runner.binarydir: ", runner.Cwd)
+	logger.Logger.Info("runner.configdir: ", *configDir)
+	logger.Logger.Info("runner.hostname: ", runner.Hostname)
+	logger.Logger.Info("runner.fd_limits: ", runner.FdLimits())
+	logger.Logger.Info("runner.vm_limits: ", runner.VMLimits())
 
-	for k, v := range config.Config.Global.Labels {
-		logger.Info("runner.labels: ", k, "=", v)
-	}
+	// prepare queue and consumer
+	duty.Init()
 
-	duty := duty.NewDuty(logger)
-	duty.Start()
-
-	agent := agent.NewAgent(logger, duty)
+	agent := agent.New()
 
 	if runtime.GOOS == "windows" && !winsvc.IsAnInteractiveSession() {
 		if err := winsvc.RunAsService(winx.GetServiceName(), agent.Start, agent.Stop, false); err != nil {
@@ -83,7 +79,7 @@ func main() {
 EXIT:
 	for {
 		sig := <-sc
-		logger.Info("received signal: ", sig.String())
+		logger.Logger.Info("received signal: ", sig.String())
 		switch sig {
 		case syscall.SIGQUIT, syscall.SIGTERM, syscall.SIGINT:
 			break EXIT
@@ -96,5 +92,5 @@ EXIT:
 	}
 
 	agent.Stop()
-	logger.Info("agent exited")
+	logger.Logger.Info("agent exited")
 }

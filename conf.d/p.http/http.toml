@@ -1,6 +1,6 @@
 [[instances]]
 targets = [
-    "https://flashcat.cloud"
+    "https://baidu.com",
 ]
 
 ## Optional expected response status code.
@@ -12,8 +12,8 @@ expect_response_status_code = ["20*"]
 # # Concurrent requests to make per target
 # concurrency = 10
 
-# # gather interval (default 15 seconds)
-# interval = "15s"
+# # gather interval
+# interval = "30s"
 
 # # Optional append labels
 # labels = { env="production", collagent="catpaw" }

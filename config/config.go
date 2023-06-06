@@ -60,7 +60,11 @@ func InitConfig(configDir string, testMode bool, interval int64, plugins string)
 	}
 
 	if interval > 0 {
-		Config.Global.Interval = Duration(time.Duration(interval) * time.Second)
+		Config.Global.Interval = Duration(time.Second * time.Duration(interval))
+	}
+
+	if Config.Global.Interval == 0 {
+		Config.Global.Interval = Duration(30 * time.Second)
 	}
 
 	if Config.LogConfig.Level == "" {

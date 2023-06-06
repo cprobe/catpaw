@@ -8,7 +8,9 @@ import (
 	"go.uber.org/zap/zapcore"
 )
 
-func Build() *zap.Logger {
+var Logger *zap.SugaredLogger
+
+func Build() func() {
 	c := config.Config.LogConfig
 
 	loggerConfig := zap.NewProductionConfig()
@@ -39,5 +41,7 @@ func Build() *zap.Logger {
 		panic(err)
 	}
 
-	return logger
+	Logger = logger.Sugar()
+
+	return func() { Logger.Sync() }
 }

@@ -7,24 +7,16 @@ import (
 )
 
 type Instance interface {
-	Initialized() bool
-	SetInitialized()
-
 	GetLabels() map[string]string
 	GetInterval() config.Duration
 	InitInternalConfig() error
-	Process(*safe.Queue[*types.Event]) *safe.Queue[*types.Event]
 }
 
 type Plugin interface {
 	GetLabels() map[string]string
 	GetInterval() config.Duration
 	InitInternalConfig() error
-	Process(*safe.Queue[*types.Event]) *safe.Queue[*types.Event]
-}
-
-type Initializer interface {
-	Init() error
+	IsSystemPlugin() bool
 }
 
 type Gatherer interface {
@@ -37,13 +29,6 @@ type Dropper interface {
 
 type InstancesGetter interface {
 	GetInstances() []Instance
-}
-
-func MayInit(t interface{}) error {
-	if initializer, ok := t.(Initializer); ok {
-		return initializer.Init()
-	}
-	return nil
 }
 
 func MayGather(t interface{}, q *safe.Queue[*types.Event]) {
