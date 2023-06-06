@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"os"
 	"strings"
@@ -13,10 +13,11 @@ import (
 	"flashcat.cloud/catpaw/config"
 	"flashcat.cloud/catpaw/logger"
 	"flashcat.cloud/catpaw/pkg/safe"
+	"flashcat.cloud/catpaw/plugins"
 	"flashcat.cloud/catpaw/types"
 )
 
-func PushRawEvents(pluginName string, queue *safe.Queue[*types.Event]) {
+func PushRawEvents(pluginName string, pluginObject plugins.Plugin, queue *safe.Queue[*types.Event]) {
 	if queue.Len() == 0 {
 		return
 	}
@@ -38,11 +39,76 @@ func PushRawEvents(pluginName string, queue *safe.Queue[*types.Event]) {
 		logger.Logger.Debugf("event:%s: raw data received. status: %s, labels: %v", events[i].AlertKey, events[i].EventStatus, events[i].Labels)
 
 		// engine logic
-		// TODO
+		if alertingCompute(pluginName, pluginObject, events[i]) {
+			if events[i].EventStatus == types.EventStatusOk {
+				// ok event
+				Events.Del(events[i].AlertKey)
+				if pluginObject.GetAlerting().RecoveryNotification {
+					forward(events[i])
+				}
+				continue
+			}
 
-		// forward event
-		forward(events[i])
+			repeatNumber := int64(pluginObject.GetAlerting().RepeatNumber)
+			if repeatNumber > 0 && events[i].NotifyCount >= repeatNumber {
+				// repeat number reached
+				continue
+			}
+
+			repeatInterval := pluginObject.GetAlerting().RepeatInterval
+			if events[i].LastSent > 0 && repeatInterval > 0 && now-events[i].LastSent < int64(repeatInterval/config.Duration(time.Second)) {
+				// repeat interval not reached
+				continue
+			}
+
+			events[i].LastSent = now
+			events[i].NotifyCount++
+			Events.Set(events[i])
+
+			forward(events[i])
+		}
 	}
+}
+
+// forward if return true
+// status changed? reach for_duration?
+func alertingCompute(pluginName string, pluginObject plugins.Plugin, event *types.Event) bool {
+	alertingRule := pluginObject.GetAlerting()
+
+	if !alertingRule.Enabled {
+		return false
+	}
+
+	old := Events.Get(event.AlertKey)
+
+	if old == nil {
+		event.FirstFireTime = event.EventTime
+
+		// new event
+		if event.EventStatus == types.EventStatusOk {
+			return false
+		}
+
+		if alertingRule.ForDuration == 0 {
+			// no need waiting
+			return true
+		}
+
+		// waiting for duration
+		Events.Set(event)
+		return false
+	}
+
+	// compare old event
+	if event.EventStatus == types.EventStatusOk {
+		return true
+	}
+
+	if event.EventTime-old.FirstFireTime > int64(alertingRule.ForDuration/config.Duration(time.Second)) {
+		return true
+	}
+
+	return false
 }
 
 func clean(event *types.Event, now int64, pluginName string) error {
@@ -110,7 +176,7 @@ func forward(event *types.Event) error {
 	var body []byte
 	if res.Body != nil {
 		defer res.Body.Close()
-		body, err = ioutil.ReadAll(res.Body)
+		body, err = io.ReadAll(res.Body)
 		if err != nil {
 			return fmt.Errorf("event:%s: read response fail: %s", event.AlertKey, err.Error())
 		}
@@ -152,4 +218,6 @@ func printStdout(event *types.Event) {
 	sb.WriteString(event.TitleRule)
 	sb.WriteString(" ")
 	sb.WriteString(event.Description)
+
+	fmt.Println(sb.String())
 }

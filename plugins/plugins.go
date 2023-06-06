@@ -9,12 +9,14 @@ import (
 type Instance interface {
 	GetLabels() map[string]string
 	GetInterval() config.Duration
+	GetAlerting() config.Alerting
 	InitInternalConfig() error
 }
 
 type Plugin interface {
 	GetLabels() map[string]string
 	GetInterval() config.Duration
+	GetAlerting() config.Alerting
 	InitInternalConfig() error
 	IsSystemPlugin() bool
 }

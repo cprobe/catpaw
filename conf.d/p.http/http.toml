@@ -7,6 +7,8 @@ targets = [
 ## Optional expected response status code.
 expect_response_status_code = ["20*"]
 
+cert_expire_threshold = "7d"
+
 ## Optional substring match in body of the response (case sensitive)
 # expect_response_substring = "ok"
 
@@ -53,3 +55,12 @@ expect_response_status_code = ["20*"]
 # tls_key = "/etc/catpaw/key.pem"
 ## Use TLS but skip chain & host verification
 # insecure_skip_verify = false
+
+[instances.alerting]
+enabled = true
+for_duration = 0
+repeat_interval = "1m"
+# Maximum number of notifications
+repeat_number = 3
+# Whether notify recovery event
+recovery_notification = true

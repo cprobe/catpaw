@@ -2,9 +2,11 @@ package http
 
 import (
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"net/url"
+	"strings"
 	"sync"
 	"time"
 
@@ -18,14 +20,17 @@ import (
 	"github.com/toolkits/pkg/concurrent/semaphore"
 )
 
+const pluginName = "http"
+
 type Instance struct {
 	config.InternalConfig
 
-	Targets                        []string      `toml:"targets"`
-	Concurrency                    int           `toml:"concurrency"`
-	ExpectResponseSubstring        string        `toml:"expect_response_substring"`
-	ExpectResponseStatusCode       []string      `toml:"expect_response_status_code"`
-	ExpectResponseStatusCodeFilter filter.Filter `toml:"-"`
+	Targets                        []string        `toml:"targets"`
+	Concurrency                    int             `toml:"concurrency"`
+	ExpectResponseSubstring        string          `toml:"expect_response_substring"`
+	ExpectResponseStatusCode       []string        `toml:"expect_response_status_code"`
+	ExpectResponseStatusCodeFilter filter.Filter   `toml:"-"`
+	CertExpireThreshold            config.Duration `toml:"cert_expire_threshold"`
 
 	Interface       string          `toml:"interface"`
 	Method          string          `toml:"method"`
@@ -46,7 +51,7 @@ type Http struct {
 }
 
 func init() {
-	plugins.Add("http", func() plugins.Plugin {
+	plugins.Add(pluginName, func() plugins.Plugin {
 		return &Http{}
 	})
 }
@@ -177,5 +182,111 @@ func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
 }
 
 func (ins *Instance) gather(q *safe.Queue[*types.Event], target string) {
-	logger.Logger.Info("target:", target)
+	logger.Logger.Debug("http target: ", target)
+
+	labels := map[string]string{
+		"target": target,
+		"method": ins.Method,
+	}
+
+	var payload io.Reader
+	if ins.Payload != "" {
+		payload = strings.NewReader(ins.Payload)
+	}
+
+	request, err := http.NewRequest(ins.Method, target, payload)
+	if err != nil {
+		logger.Logger.Errorw("failed to create http request", "error", err, "plugin", pluginName)
+		return
+	}
+
+	for i := 0; i < len(ins.Headers); i += 2 {
+		request.Header.Add(ins.Headers[i], ins.Headers[i+1])
+		if ins.Headers[i] == "Host" {
+			request.Host = ins.Headers[i+1]
+		}
+	}
+
+	if ins.BasicAuthUser != "" || ins.BasicAuthPass != "" {
+		request.SetBasicAuth(ins.BasicAuthUser, ins.BasicAuthPass)
+	}
+
+	// check connection
+	resp, err := ins.client.Do(request)
+	if err != nil {
+		logger.Logger.Errorw("failed to send http request", "error", err, "plugin", pluginName, "target", target)
+
+		e := types.BuildEvent(types.EventStatusWarning, map[string]string{
+			"check": "HTTP check failed",
+		}, labels)
+
+		e.SetTitleRule("$check").SetDescription(`
+		- **target**: ` + target + `
+		- **method**: ` + ins.Method + `
+		- **error**: ` + err.Error() + `
+		`)
+
+		q.PushFront(e)
+		return
+	}
+
+	// check tls cert
+	if strings.HasPrefix(target, "https://") && resp.TLS != nil {
+		certExpireTimestamp := getEarliestCertExpiry(resp.TLS).Unix()
+
+		if certExpireTimestamp < time.Now().Add(time.Duration(ins.CertExpireThreshold)).Unix() {
+			e := types.BuildEvent(types.EventStatusWarning, map[string]string{
+				"check": "TLS cert will expire soon",
+			}, labels)
+
+			e.SetTitleRule("$check").SetDescription(`
+			- **target**: ` + target + `
+			- **method**: ` + ins.Method + `
+			- **expire**: TLS cert will expire at: ` + time.Unix(certExpireTimestamp, 0).Format("2006-01-02 15:04:05") + `
+			`)
+
+			q.PushFront(e)
+		}
+	}
+
+	var body []byte
+	if resp.Body != nil {
+		defer resp.Body.Close()
+		body, err = io.ReadAll(resp.Body)
+		if err != nil {
+			logger.Logger.Errorw("failed to read http response body", "error", err, "plugin", pluginName, "target", target)
+			return
+		}
+	}
+
+	statusCode := fmt.Sprint(resp.StatusCode)
+	if !ins.ExpectResponseStatusCodeFilter.Match(statusCode) {
+		e := types.BuildEvent(types.EventStatusWarning, map[string]string{
+			"check": "HTTP response status code not match",
+		}, labels)
+
+		e.SetTitleRule("$check").SetDescription(`
+		- **target**: ` + target + `
+		- **method**: ` + ins.Method + `
+		- **status code**: ` + statusCode + `
+		- **body**: ` + string(body) + `
+		`)
+
+		q.PushFront(e)
+	}
+
+	if !strings.Contains(string(body), ins.ExpectResponseSubstring) {
+		e := types.BuildEvent(types.EventStatusWarning, map[string]string{
+			"check": "HTTP response body not match",
+		}, labels)
+
+		e.SetTitleRule("$check").SetDescription(`
+		- **target**: ` + target + `
+		- **method**: ` + ins.Method + `
+		- **status code**: ` + statusCode + `
+		- **body**: ` + string(body) + `
+		`)
+
+		q.PushFront(e)
+	}
 }
