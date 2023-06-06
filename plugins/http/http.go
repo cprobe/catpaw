@@ -107,7 +107,7 @@ func (ins *Instance) createHTTPClient() (*http.Client, error) {
 		}
 	}
 
-	proxy, err := ins.Proxy()
+	proxy, err := ins.GetProxy()
 	if err != nil {
 		return nil, err
 	}

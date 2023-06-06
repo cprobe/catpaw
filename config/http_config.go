@@ -24,7 +24,7 @@ type HTTPConfig struct {
 
 type proxyFunc func(req *http.Request) (*url.URL, error)
 
-func (hc *HTTPConfig) Proxy() (proxyFunc, error) {
+func (hc *HTTPConfig) GetProxy() (proxyFunc, error) {
 	if len(hc.HTTPProxy) > 0 {
 		address, err := url.Parse(hc.HTTPProxy)
 		if err != nil {
