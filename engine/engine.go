@@ -38,80 +38,84 @@ func PushRawEvents(pluginName string, ins plugins.Instance, queue *safe.Queue[*t
 
 		logger.Logger.Debugf("event:%s: raw data received. event object: %v", events[i].AlertKey, events[i])
 
-		// engine logic
-		if alertingCompute(pluginName, ins, events[i]) {
-			if events[i].EventStatus == types.EventStatusOk {
-				// ok event
-				Events.Del(events[i].AlertKey)
-				if ins.GetAlerting().RecoveryNotification {
-					forward(events[i])
-				}
-				continue
-			}
+		if !ins.GetAlerting().Enabled {
+			continue
+		}
 
-			old := Events.Get(events[i].AlertKey)
-
-			repeatNumber := int64(ins.GetAlerting().RepeatNumber)
-			if repeatNumber > 0 && old.NotifyCount >= repeatNumber {
-				// repeat number reached
-				continue
-			}
-
-			fmt.Println(">>>>> repeatnumber:", repeatNumber, "notifycount:", old.NotifyCount)
-
-			repeatInterval := ins.GetAlerting().RepeatInterval
-			if old.LastSent > 0 && repeatInterval > 0 && now-old.LastSent < int64(repeatInterval/config.Duration(time.Second)) {
-				// repeat interval not reached
-				continue
-			}
-
-			old.LastSent = now
-			old.NotifyCount++
-
-			if err = forward(old); err != nil {
-				logger.Logger.Errorf("event:%s forward fail: %v", old.AlertKey, err)
-			}
+		if events[i].EventStatus == types.EventStatusOk {
+			handleRecoveryEvent(ins, events[i])
+		} else {
+			handleAlertEvent(ins, events[i])
 		}
 	}
 }
 
-// forward if return true
-// status changed? reach for_duration?
-func alertingCompute(pluginName string, ins plugins.Instance, event *types.Event) bool {
-	alertingRule := ins.GetAlerting()
-
-	if !alertingRule.Enabled {
-		return false
+// 处理恢复事件
+func handleRecoveryEvent(ins plugins.Instance, event *types.Event) {
+	old := Events.Get(event.AlertKey)
+	if old == nil {
+		// 之前没有产生Event，当下的情况也是正常的，这是大多数场景，忽略即可，无需做任何处理
+		return
 	}
 
+	// 之前产生了告警，现在恢复了，事件就可以从缓存删除了
+	Events.Del(old.AlertKey)
+
+	// 不过，也得看具体 alerting 的配置，如果不需要发送恢复通知，则忽略
+	if ins.GetAlerting().RecoveryNotification {
+		event.LastSent = event.EventTime
+		event.FirstFireTime = old.FirstFireTime
+		event.NotifyCount = old.NotifyCount + 1
+		forward(event)
+	}
+}
+
+// 处理告警事件
+func handleAlertEvent(ins plugins.Instance, event *types.Event) {
+	alerting := ins.GetAlerting()
 	old := Events.Get(event.AlertKey)
-
 	if old == nil {
-		// new event
-		if event.EventStatus == types.EventStatusOk {
-			return false
-		}
-
+		// 第一次产生告警事件
 		event.FirstFireTime = event.EventTime
+
+		// 无论如何，这个事件都得缓存起来
 		Events.Set(event)
 
-		return alertingRule.ForDuration == 0
+		// 要不要发？分两种情况。ForDuration 是 0 则立马发，否则等待 ForDuration 时间后再发
+		if alerting.ForDuration == 0 {
+			event.LastSent = event.EventTime
+			event.NotifyCount++
+			forward(event)
+			return
+		}
+
+		return
 	}
 
-	// compare old event
-	if event.EventStatus == types.EventStatusOk {
-		return true
+	// old != nil 这已经不是第一次产生告警事件了
+	// 如果 ForDuration 没有满足，则不能继续发送
+	forDur := int64(alerting.ForDuration / config.Duration(time.Second))
+	fmt.Println("........forDurInSeconds:", forDur)
+	if alerting.ForDuration > 0 && event.EventTime-old.FirstFireTime < int64(alerting.ForDuration/config.Duration(time.Second)) {
+		return
 	}
 
-	if alertingRule.ForDuration == 0 {
-		return true
+	// ForDuration 满足了，可以继续发送了
+	// 首先看是否达到最大发送次数
+	if alerting.RepeatNumber > 0 && old.NotifyCount >= int64(alerting.RepeatNumber) {
+		return
 	}
 
-	if event.EventTime-old.FirstFireTime > int64(alertingRule.ForDuration/config.Duration(time.Second)) {
-		return true
+	// 其次看发送频率，不能发的太快了
+	if alerting.RepeatInterval > 0 && event.EventTime-old.LastSent < int64(alerting.RepeatInterval/config.Duration(time.Second)) {
+		return
 	}
 
-	return false
+	// 最后，可以发了
+	event.LastSent = event.EventTime
+	event.NotifyCount = old.NotifyCount + 1
+	Events.Set(event)
+	forward(event)
 }
 
 func clean(event *types.Event, now int64, pluginName string, ins plugins.Instance) error {
@@ -164,27 +168,29 @@ func clean(event *types.Event, now int64, pluginName string, ins plugins.Instanc
 	return nil
 }
 
-func forward(event *types.Event) error {
+func forward(event *types.Event) {
 	if config.Config.TestMode {
 		printStdout(event)
-		return nil
+		return
 	}
 
 	bs, err := json.Marshal(event)
 	if err != nil {
-		return fmt.Errorf("event:%s: marshal fail: %s", event.AlertKey, err.Error())
+		logger.Logger.Errorf("event:%s: forward: marshal fail: %s", event.AlertKey, err.Error())
 	}
 
 	req, err := http.NewRequest("POST", config.Config.Flashduty.Url, bytes.NewReader(bs))
 	if err != nil {
-		return fmt.Errorf("event:%s: new request fail: %s", event.AlertKey, err.Error())
+		logger.Logger.Errorf("event:%s: forward: new request fail: %s", event.AlertKey, err.Error())
+		return
 	}
 
 	req.Header.Set("Content-Type", "application/json")
 
 	res, err := config.Config.Flashduty.Client.Do(req)
 	if err != nil {
-		return fmt.Errorf("event:%s: do request fail: %s", event.AlertKey, err.Error())
+		logger.Logger.Errorf("event:%s: forward: do request fail: %s", event.AlertKey, err.Error())
+		return
 	}
 
 	var body []byte
@@ -192,17 +198,17 @@ func forward(event *types.Event) error {
 		defer res.Body.Close()
 		body, err = io.ReadAll(res.Body)
 		if err != nil {
-			return fmt.Errorf("event:%s: read response fail: %s", event.AlertKey, err.Error())
+			logger.Logger.Errorf("event:%s: forward: read response fail: %s", event.AlertKey, err.Error())
+			return
 		}
 	}
 
 	if res.StatusCode != http.StatusOK {
-		return fmt.Errorf("event:%s: request fail: %s, response: %s", event.AlertKey, res.Status, string(body))
+		logger.Logger.Errorf("event:%s: forward: request fail: %s, response: %s", event.AlertKey, res.Status, string(body))
+		return
 	}
 
-	logger.Logger.Debugf("event:%s: forwarded", event.AlertKey)
-
-	return nil
+	logger.Logger.Debugf("event:%s: forward: done", event.AlertKey)
 }
 
 func printStdout(event *types.Event) {
