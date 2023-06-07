@@ -136,7 +136,7 @@ func (ins *Instance) gather(q *safe.Queue[*types.Event], command string) {
 
 	var events []*types.Event
 	if err := json.Unmarshal(outbuf, &events); err != nil {
-		logger.Logger.Errorw("failed to unmarshal exec command output", "command", command, "error", err, "output", string(outbuf))
+		logger.Logger.Errorw("failed to unmarshal command output", "command", command, "error", err, "output", string(outbuf))
 		return
 	}
 
