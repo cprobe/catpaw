@@ -27,6 +27,7 @@ type Expect struct {
 	ResponseStatusCode       []string        `toml:"response_status_code"`
 	ResponseStatusCodeFilter filter.Filter   `toml:"-"` // compiled filter
 	CertExpireThreshold      config.Duration `toml:"cert_expire_threshold"`
+	AlertSeverity            string          `toml:"alert_severity"`
 }
 
 type Instance struct {
@@ -224,7 +225,7 @@ func (ins *Instance) gather(q *safe.Queue[*types.Event], target string) {
 
 	errString := "null. everything is ok"
 	if err != nil {
-		e.SetEventStatus(types.EventStatusWarning)
+		e.SetEventStatus(ins.Expect.AlertSeverity)
 		errString = err.Error()
 	}
 
@@ -249,7 +250,7 @@ func (ins *Instance) gather(q *safe.Queue[*types.Event], target string) {
 
 		certExpireTimestamp := getEarliestCertExpiry(resp.TLS).Unix()
 		if certExpireTimestamp < time.Now().Add(time.Duration(ins.Expect.CertExpireThreshold)).Unix() {
-			e.SetEventStatus(types.EventStatusWarning)
+			e.SetEventStatus(ins.Expect.AlertSeverity)
 		}
 
 		e.SetTitleRule("$check").SetDescription(`
@@ -280,7 +281,7 @@ func (ins *Instance) gather(q *safe.Queue[*types.Event], target string) {
 		}, labels)
 
 		if !ins.Expect.ResponseStatusCodeFilter.Match(statusCode) {
-			e.SetEventStatus(types.EventStatusWarning)
+			e.SetEventStatus(ins.Expect.AlertSeverity)
 		}
 
 		e.SetTitleRule("$check").SetDescription(fmt.Sprintf(ExpectResponseStatusCodeDesn, target, ins.GetMethod(), statusCode, ins.Expect.ResponseStatusCode, string(body)))
@@ -293,7 +294,7 @@ func (ins *Instance) gather(q *safe.Queue[*types.Event], target string) {
 		}, labels)
 
 		if !strings.Contains(string(body), ins.Expect.ResponseSubstring) {
-			e.SetEventStatus(types.EventStatusWarning)
+			e.SetEventStatus(ins.Expect.AlertSeverity)
 		}
 
 		e.SetTitleRule("$check").SetDescription(fmt.Sprintf(ExpectResponseSubstringDesn, target, ins.GetMethod(), statusCode, ins.Expect.ResponseSubstring, string(body)))

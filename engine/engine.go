@@ -62,7 +62,7 @@ func handleRecoveryEvent(ins plugins.Instance, event *types.Event) {
 	Events.Del(old.AlertKey)
 
 	// 不过，也得看具体 alerting 的配置，如果不需要发送恢复通知，则忽略
-	if ins.GetAlerting().RecoveryNotification {
+	if ins.GetAlerting().RecoveryNotification && old.LastSent > 0 {
 		event.LastSent = event.EventTime
 		event.FirstFireTime = old.FirstFireTime
 		event.NotifyCount = old.NotifyCount + 1

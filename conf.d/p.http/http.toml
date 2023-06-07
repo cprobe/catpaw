@@ -54,6 +54,8 @@ response_status_code = ["20*", "30*"]
 response_substring = "html"
 ## Optional alert when cert will expire in x hours
 cert_expire_threshold = "72h"
+## Choice: Critical, Warning, Info
+alert_severity = "Warning"
 
 [instances.alerting]
 ## Enable alerting or not
