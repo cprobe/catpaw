@@ -10,6 +10,7 @@ fi
 version=$(./catpaw -version)
 echo "version: $version"
 
+rm -rf dist/catpaw-v${version}-linux-amd64
 mkdir -p dist/catpaw-v${version}-linux-amd64
 
 cp catpaw dist/catpaw-v${version}-linux-amd64/
