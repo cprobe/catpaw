@@ -14,6 +14,9 @@ type Alerting struct {
 
 	// whether send recovery notification
 	RecoveryNotification bool `toml:"recovery_notification"`
+
+	// alert severity
+	Severity string `toml:"severity"`
 }
 
 type InternalConfig struct {

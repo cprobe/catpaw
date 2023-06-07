@@ -1,6 +1,7 @@
 [[instances]]
 targets = [
     "https://baidu.com",
+    "http://a.cn",
 ]
 
 # # Concurrent requests to make per instance
@@ -54,8 +55,6 @@ response_status_code = ["20*", "30*"]
 response_substring = "html"
 ## Optional alert when cert will expire in x hours
 cert_expire_threshold = "72h"
-## Choice: Critical, Warning, Info
-alert_severity = "Warning"
 
 [instances.alerting]
 ## Enable alerting or not
@@ -68,3 +67,5 @@ repeat_interval = "5m"
 repeat_number = 3
 ## Whether notify recovery event
 recovery_notification = true
+## Choice: Critical, Warning, Info
+severity = "Warning"
