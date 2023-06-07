@@ -25,7 +25,7 @@ var (
 	showVersion = flag.Bool("version", false, "Show version.")
 	plugins     = flag.String("plugins", "", "e.g. plugin1:plugin2")
 	Url         = flag.String("url", "", "e.g. https://api.flashcat.cloud/event/push/alert/standard?integration_key=x")
-	Loglevel    = flag.String("loglevel", "", "e.g. debug, info, warning, error, fatal")
+	Loglevel    = flag.String("loglevel", "", "e.g. debug, info, warn, error, fatal")
 )
 
 func init() {
