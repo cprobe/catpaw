@@ -3,13 +3,11 @@
 # 2. event_status choice: Critical, Warning, Info, Ok
 # [
 #     {
-#         "event_time": 1686032592,
-#         "event_status": "Critical",
-#         "alert_key": "dc9f9c60056f27e74c9a383b480b5ca4d9f2c966",
+#         "event_status": "Warning",
 #         "labels": {
-#             "alertname": "oom",
+#             "check": "oom killed",
 #         },
-#         "title_rule": "$from_hostname::$alertname",
+#         "title_rule": "$check",
 #         "description": "kernel: Out of memory: Kill process 9163 (mysqld) score 511 or sacrifice child"
 #     }
 # ]
@@ -20,6 +18,7 @@ commands = [
     # "/opt/catpaw/scripts/*.sh"
 ]
 
+# # script timeout
 # timeout = "10s"
 
 # # Concurrent requests to make per target
@@ -29,4 +28,16 @@ commands = [
 # interval = "30s"
 
 # # Optional append labels
-# labels = { env="production", collagent="catpaw" }
+# labels = { env="production", team="devops" }
+
+[instances.alerting]
+## Enable alerting or not
+enabled = true
+## Same functionality as Prometheus keyword 'for'
+for_duration = 0
+## Minimum interval duration between notifications
+repeat_interval = "5m"
+## Maximum number of notifications
+repeat_number = 3
+## Whether notify recovery event
+recovery_notification = true

@@ -1,12 +1,5 @@
 package types
 
-import (
-	"sort"
-	"strings"
-
-	"github.com/toolkits/pkg/str"
-)
-
 const (
 	EventStatusCritical = "Critical"
 	EventStatusWarning  = "Warning"
@@ -62,31 +55,12 @@ func BuildEvent(labelMaps ...map[string]string) *Event {
 		EventStatus: EventStatusOk,
 	}
 
-	labels := make(map[string]string)
+	event.Labels = make(map[string]string)
 	for _, labelMap := range labelMaps {
 		for k, v := range labelMap {
-			labels[k] = v
+			event.Labels[k] = v
 		}
 	}
-
-	count := len(labels)
-	keys := make([]string, 0, count)
-	for k := range labels {
-		keys = append(keys, k)
-	}
-
-	sort.Strings(keys)
-
-	var sb strings.Builder
-	for _, k := range keys {
-		sb.WriteString(k)
-		sb.WriteString(":")
-		sb.WriteString(labels[k])
-		sb.WriteString(":")
-	}
-
-	event.AlertKey = str.MD5(sb.String())
-	event.Labels = labels
 
 	return event
 }

@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"sort"
 	"strings"
 	"time"
 
@@ -15,6 +16,7 @@ import (
 	"flashcat.cloud/catpaw/pkg/safe"
 	"flashcat.cloud/catpaw/plugins"
 	"flashcat.cloud/catpaw/types"
+	"github.com/toolkits/pkg/str"
 )
 
 func PushRawEvents(pluginName string, ins plugins.Instance, queue *safe.Queue[*types.Event]) {
@@ -121,10 +123,6 @@ func clean(event *types.Event, now int64, pluginName string, ins plugins.Instanc
 		event.EventTime = now
 	}
 
-	if event.AlertKey == "" {
-		return fmt.Errorf("alert key is blank")
-	}
-
 	if !types.EventStatusValid(event.EventStatus) {
 		return fmt.Errorf("invalid event_status: %s", event.EventStatus)
 	}
@@ -162,6 +160,24 @@ func clean(event *types.Event, now int64, pluginName string, ins plugins.Instanc
 			event.Labels[key] = config.Config.Global.Labels[key]
 		}
 	}
+
+	count := len(event.Labels)
+	keys := make([]string, 0, count)
+	for k := range event.Labels {
+		keys = append(keys, k)
+	}
+
+	sort.Strings(keys)
+
+	var sb strings.Builder
+	for _, k := range keys {
+		sb.WriteString(k)
+		sb.WriteString(":")
+		sb.WriteString(event.Labels[k])
+		sb.WriteString(":")
+	}
+
+	event.AlertKey = str.MD5(sb.String())
 
 	return nil
 }
@@ -201,12 +217,7 @@ func forward(event *types.Event) {
 		}
 	}
 
-	if res.StatusCode != http.StatusOK {
-		logger.Logger.Errorf("event:%s: forward: request fail: %s, response: %s", event.AlertKey, res.Status, string(body))
-		return
-	}
-
-	logger.Logger.Debugf("event:%s: forward: done", event.AlertKey)
+	logger.Logger.Infof("event:%s: forward: done, request payload: %s, response status code: %d, response body: %s", event.AlertKey, string(bs), res.StatusCode, string(body))
 }
 
 func printStdout(event *types.Event) {

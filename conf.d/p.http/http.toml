@@ -10,7 +10,7 @@ targets = [
 # interval = "30s"
 
 # # Optional append labels
-# labels = { env="production", collagent="catpaw" }
+# labels = { env="production", team="devops" }
 
 ## Set http_proxy (catpaw uses the system wide proxy settings if it's is not set)
 # http_proxy = "http://localhost:8888"
@@ -61,7 +61,7 @@ alert_severity = "Warning"
 ## Enable alerting or not
 enabled = true
 ## Same functionality as Prometheus keyword 'for'
-for_duration = "1m"
+for_duration = 0
 ## Minimum interval duration between notifications
 repeat_interval = "5m"
 ## Maximum number of notifications
