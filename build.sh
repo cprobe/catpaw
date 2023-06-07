@@ -7,7 +7,7 @@ if ! go build; then
     exit 1
 fi
 
-version=$(./catpaw -v)
+version=$(./catpaw -version)
 echo "version: $version"
 
 mkdir -p dist/catpaw-v${version}-linux-amd64
