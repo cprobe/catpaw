@@ -22,15 +22,19 @@ import (
 
 const pluginName = "http"
 
+type Expect struct {
+	ResponseSubstring        string          `toml:"response_substring"`
+	ResponseStatusCode       []string        `toml:"response_status_code"`
+	ResponseStatusCodeFilter filter.Filter   `toml:"-"` // compiled filter
+	CertExpireThreshold      config.Duration `toml:"cert_expire_threshold"`
+}
+
 type Instance struct {
 	config.InternalConfig
 
-	Targets                        []string        `toml:"targets"`
-	Concurrency                    int             `toml:"concurrency"`
-	ExpectResponseSubstring        string          `toml:"expect_response_substring"`
-	ExpectResponseStatusCode       []string        `toml:"expect_response_status_code"`
-	ExpectResponseStatusCodeFilter filter.Filter   `toml:"-"`
-	CertExpireThreshold            config.Duration `toml:"cert_expire_threshold"`
+	Targets     []string `toml:"targets"`
+	Concurrency int      `toml:"concurrency"`
+	Expect      Expect   `toml:"expect"`
 
 	Interface       string          `toml:"interface"`
 	Method          string          `toml:"method"`
@@ -66,8 +70,8 @@ func (ins *Instance) Init() error {
 	}
 
 	var err error
-	if len(ins.ExpectResponseStatusCode) > 0 {
-		ins.ExpectResponseStatusCodeFilter, err = filter.Compile(ins.ExpectResponseStatusCode)
+	if len(ins.Expect.ResponseStatusCode) > 0 {
+		ins.Expect.ResponseStatusCodeFilter, err = filter.Compile(ins.Expect.ResponseStatusCode)
 		if err != nil {
 			return err
 		}
@@ -213,16 +217,16 @@ func (ins *Instance) gather(q *safe.Queue[*types.Event], target string) {
 
 	// check connection
 	resp, err := ins.client.Do(request)
-	es := types.EventStatusOk
-	errString := "null. everything is ok"
-	if err != nil {
-		es = types.EventStatusWarning
-		errString = err.Error()
-	}
 
-	e := types.BuildEvent(es, map[string]string{
+	e := types.BuildEvent(map[string]string{
 		"check": "HTTP check failed",
 	}, labels)
+
+	errString := "null. everything is ok"
+	if err != nil {
+		e.SetEventStatus(types.EventStatusWarning)
+		errString = err.Error()
+	}
 
 	e.SetTitleRule("$check").SetDescription(`
 - **target**: ` + target + `
@@ -238,20 +242,20 @@ func (ins *Instance) gather(q *safe.Queue[*types.Event], target string) {
 	}
 
 	// check tls cert
-	if ins.CertExpireThreshold > 0 && strings.HasPrefix(target, "https://") && resp.TLS != nil {
-		certExpireTimestamp := getEarliestCertExpiry(resp.TLS).Unix()
-		es := types.EventStatusOk
-		if certExpireTimestamp < time.Now().Add(time.Duration(ins.CertExpireThreshold)).Unix() {
-			es = types.EventStatusWarning
-		}
-		e := types.BuildEvent(es, map[string]string{
+	if ins.Expect.CertExpireThreshold > 0 && strings.HasPrefix(target, "https://") && resp.TLS != nil {
+		e := types.BuildEvent(map[string]string{
 			"check": "TLS cert will expire soon",
 		}, labels)
+
+		certExpireTimestamp := getEarliestCertExpiry(resp.TLS).Unix()
+		if certExpireTimestamp < time.Now().Add(time.Duration(ins.Expect.CertExpireThreshold)).Unix() {
+			e.SetEventStatus(types.EventStatusWarning)
+		}
 
 		e.SetTitleRule("$check").SetDescription(`
 - **target**: ` + target + `
 - **method**: ` + ins.GetMethod() + `
-- **cert expire threshold**: ` + ins.CertExpireThreshold.HumanString() + `
+- **cert expire threshold**: ` + ins.Expect.CertExpireThreshold.HumanString() + `
 - **cert expire at**: ` + time.Unix(certExpireTimestamp, 0).Format("2006-01-02 15:04:05") + `
 			`)
 
@@ -270,29 +274,29 @@ func (ins *Instance) gather(q *safe.Queue[*types.Event], target string) {
 
 	statusCode := fmt.Sprint(resp.StatusCode)
 
-	if len(ins.ExpectResponseStatusCode) > 0 {
-		es := types.EventStatusOk
-		if !ins.ExpectResponseStatusCodeFilter.Match(statusCode) {
-			es = types.EventStatusWarning
-		}
-		e := types.BuildEvent(es, map[string]string{
+	if len(ins.Expect.ResponseStatusCode) > 0 {
+		e := types.BuildEvent(map[string]string{
 			"check": "HTTP response status code not match",
 		}, labels)
 
-		e.SetTitleRule("$check").SetDescription(fmt.Sprintf(ExpectResponseStatusCodeDesn, target, ins.GetMethod(), statusCode, ins.ExpectResponseStatusCode, string(body)))
+		if !ins.Expect.ResponseStatusCodeFilter.Match(statusCode) {
+			e.SetEventStatus(types.EventStatusWarning)
+		}
+
+		e.SetTitleRule("$check").SetDescription(fmt.Sprintf(ExpectResponseStatusCodeDesn, target, ins.GetMethod(), statusCode, ins.Expect.ResponseStatusCode, string(body)))
 		q.PushFront(e)
 	}
 
-	if len(ins.ExpectResponseSubstring) > 0 {
-		es := types.EventStatusOk
-		if !strings.Contains(string(body), ins.ExpectResponseSubstring) {
-			es = types.EventStatusWarning
-		}
-		e := types.BuildEvent(es, map[string]string{
+	if len(ins.Expect.ResponseSubstring) > 0 {
+		e := types.BuildEvent(map[string]string{
 			"check": "HTTP response body not match",
 		}, labels)
 
-		e.SetTitleRule("$check").SetDescription(fmt.Sprintf(ExpectResponseSubstringDesn, target, ins.GetMethod(), statusCode, ins.ExpectResponseSubstring, string(body)))
+		if !strings.Contains(string(body), ins.Expect.ResponseSubstring) {
+			e.SetEventStatus(types.EventStatusWarning)
+		}
+
+		e.SetTitleRule("$check").SetDescription(fmt.Sprintf(ExpectResponseSubstringDesn, target, ins.GetMethod(), statusCode, ins.Expect.ResponseSubstring, string(body)))
 		q.PushFront(e)
 	}
 }

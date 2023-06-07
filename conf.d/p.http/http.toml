@@ -3,16 +3,7 @@ targets = [
     "https://baidu.com",
 ]
 
-## Optional expected response status code.
-expect_response_status_code = ["20*", "30*"]
-
-## Optional substring match in body of the response (case sensitive)
-expect_response_substring = "html"
-
-## Optional alert when cert will expire in x hours
-cert_expire_threshold = "72h"
-
-# # Concurrent requests to make per target
+# # Concurrent requests to make per instance
 # concurrency = 10
 
 # # gather interval
@@ -55,6 +46,14 @@ cert_expire_threshold = "72h"
 # tls_key = "/etc/catpaw/key.pem"
 ## Use TLS but skip chain & host verification
 # insecure_skip_verify = false
+
+[instances.expect]
+## Optional expected response status code.
+response_status_code = ["20*", "30*"]
+## Optional substring match in body of the response (case sensitive)
+response_substring = "html"
+## Optional alert when cert will expire in x hours
+cert_expire_threshold = "72h"
 
 [instances.alerting]
 ## Enable alerting or not

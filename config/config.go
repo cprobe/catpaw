@@ -37,6 +37,8 @@ type ConfigType struct {
 	ConfigDir string `toml:"-"`
 	TestMode  bool   `toml:"-"`
 	Plugins   string `toml:"-"`
+	Url       string `toml:"-"`
+	Loglevel  string `toml:"-"`
 
 	Global    Global    `toml:"global"`
 	LogConfig LogConfig `toml:"log"`
@@ -45,7 +47,7 @@ type ConfigType struct {
 
 var Config *ConfigType
 
-func InitConfig(configDir string, testMode bool, interval int64, plugins string) error {
+func InitConfig(configDir string, testMode bool, interval int64, plugins, url, loglevel string) error {
 	configFile := path.Join(configDir, "config.toml")
 	if !file.IsExist(configFile) {
 		return fmt.Errorf("configuration file(%s) not found", configFile)
@@ -55,6 +57,8 @@ func InitConfig(configDir string, testMode bool, interval int64, plugins string)
 		ConfigDir: configDir,
 		TestMode:  testMode,
 		Plugins:   plugins,
+		Url:       url,
+		Loglevel:  loglevel,
 	}
 
 	if err := cfg.LoadConfigByDir(configDir, Config); err != nil {
@@ -67,6 +71,10 @@ func InitConfig(configDir string, testMode bool, interval int64, plugins string)
 
 	if Config.Global.Interval == 0 {
 		Config.Global.Interval = Duration(30 * time.Second)
+	}
+
+	if Config.Loglevel != "" {
+		Config.LogConfig.Level = Config.Loglevel
 	}
 
 	if Config.LogConfig.Level == "" {
@@ -87,6 +95,10 @@ func InitConfig(configDir string, testMode bool, interval int64, plugins string)
 
 	if Config.Flashduty.Timeout == 0 {
 		Config.Flashduty.Timeout = Duration(10 * time.Second)
+	}
+
+	if Config.Url != "" {
+		Config.Flashduty.Url = Config.Url
 	}
 
 	Config.Flashduty.Client = &http.Client{

@@ -24,6 +24,8 @@ var (
 	interval    = flag.Int64("interval", 0, "Global interval(unit:Second).")
 	showVersion = flag.Bool("version", false, "Show version.")
 	plugins     = flag.String("plugins", "", "e.g. plugin1:plugin2")
+	Url         = flag.String("url", "", "e.g. https://api.flashcat.cloud/event/push/alert/standard?integration_key=x")
+	Loglevel    = flag.String("loglevel", "", "e.g. debug, info, warning, error, fatal")
 )
 
 func init() {
@@ -43,7 +45,7 @@ func main() {
 
 	winx.Args(appPath)
 
-	if err := config.InitConfig(*configDir, *testMode, *interval, *plugins); err != nil {
+	if err := config.InitConfig(*configDir, *testMode, *interval, *plugins, *Url, *Loglevel); err != nil {
 		panic(err)
 	}
 

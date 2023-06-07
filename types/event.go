@@ -37,6 +37,11 @@ func EventStatusValid(status string) bool {
 	}
 }
 
+func (e *Event) SetEventStatus(status string) *Event {
+	e.EventStatus = status
+	return e
+}
+
 func (e *Event) SetEventTime(t int64) *Event {
 	e.EventTime = t
 	return e
@@ -52,9 +57,9 @@ func (e *Event) SetDescription(desc string) *Event {
 	return e
 }
 
-func BuildEvent(status string, labelMaps ...map[string]string) *Event {
+func BuildEvent(labelMaps ...map[string]string) *Event {
 	event := &Event{
-		EventStatus: status,
+		EventStatus: EventStatusOk,
 	}
 
 	labels := make(map[string]string)
