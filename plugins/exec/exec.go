@@ -125,7 +125,7 @@ func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
 func (ins *Instance) gather(q *safe.Queue[*types.Event], command string) {
 	outbuf, errbuf, err := commandRun(command, time.Duration(ins.Timeout))
 	if err != nil || len(errbuf) > 0 {
-		logger.Logger.Errorw("failed to exec command", "command", command, "error", err, "stderr", string(errbuf))
+		logger.Logger.Errorw("failed to exec command", "command", command, "error", err, "stderr", string(errbuf), "stdout", string(outbuf))
 		return
 	}
 
@@ -165,17 +165,13 @@ func commandRun(command string, timeout time.Duration) ([]byte, []byte, error) {
 		return nil, nil, fmt.Errorf("exec %s timeout", command)
 	}
 
-	if runError != nil {
-		return nil, nil, runError
-	}
-
 	out = removeWindowsCarriageReturns(out)
 	if stderr.Len() > 0 {
 		stderr = removeWindowsCarriageReturns(stderr)
 		stderr = truncate(stderr)
 	}
 
-	return out.Bytes(), stderr.Bytes(), nil
+	return out.Bytes(), stderr.Bytes(), runError
 }
 
 func truncate(buf bytes.Buffer) bytes.Buffer {
