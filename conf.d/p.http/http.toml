@@ -1,15 +1,16 @@
 [[instances]]
 targets = [
-    # "https://baidu.com",
-    "http://a.cn",
+    "https://baidu.com",
 ]
 
 ## Optional expected response status code.
-expect_response_status_code = ["20*"]
-cert_expire_threshold = "72h"
+expect_response_status_code = ["20*", "30*"]
 
 ## Optional substring match in body of the response (case sensitive)
-# expect_response_substring = "ok"
+expect_response_substring = "html"
+
+## Optional alert when cert will expire in x hours
+cert_expire_threshold = "72h"
 
 # # Concurrent requests to make per target
 # concurrency = 10
@@ -56,10 +57,13 @@ cert_expire_threshold = "72h"
 # insecure_skip_verify = false
 
 [instances.alerting]
+## Enable alerting or not
 enabled = true
-for_duration = "20s"
-repeat_interval = "1m"
-# Maximum number of notifications
+## Same functionality as Prometheus keyword 'for'
+for_duration = "1m"
+## Minimum interval duration between notifications
+repeat_interval = "5m"
+## Maximum number of notifications
 repeat_number = 3
-# Whether notify recovery event
+## Whether notify recovery event
 recovery_notification = true

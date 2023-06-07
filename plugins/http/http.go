@@ -251,7 +251,8 @@ func (ins *Instance) gather(q *safe.Queue[*types.Event], target string) {
 		e.SetTitleRule("$check").SetDescription(`
 - **target**: ` + target + `
 - **method**: ` + ins.GetMethod() + `
-- **expire**: TLS cert will expire at: ` + time.Unix(certExpireTimestamp, 0).Format("2006-01-02 15:04:05") + `
+- **cert expire threshold**: ` + ins.CertExpireThreshold.HumanString() + `
+- **cert expire at**: ` + time.Unix(certExpireTimestamp, 0).Format("2006-01-02 15:04:05") + `
 			`)
 
 		q.PushFront(e)
@@ -278,13 +279,7 @@ func (ins *Instance) gather(q *safe.Queue[*types.Event], target string) {
 			"check": "HTTP response status code not match",
 		}, labels)
 
-		e.SetTitleRule("$check").SetDescription(`
-- **target**: ` + target + `
-- **method**: ` + ins.GetMethod() + `
-- **status code**: ` + statusCode + `
-- **body**: ` + string(body) + `
-		`)
-
+		e.SetTitleRule("$check").SetDescription(fmt.Sprintf(ExpectResponseStatusCodeDesn, target, ins.GetMethod(), statusCode, ins.ExpectResponseStatusCode, string(body)))
 		q.PushFront(e)
 	}
 
@@ -297,13 +292,33 @@ func (ins *Instance) gather(q *safe.Queue[*types.Event], target string) {
 			"check": "HTTP response body not match",
 		}, labels)
 
-		e.SetTitleRule("$check").SetDescription(`
-- **target**: ` + target + `
-- **method**: ` + ins.GetMethod() + `
-- **status code**: ` + statusCode + `
-- **body**: ` + string(body) + `
-		`)
-
+		e.SetTitleRule("$check").SetDescription(fmt.Sprintf(ExpectResponseSubstringDesn, target, ins.GetMethod(), statusCode, ins.ExpectResponseSubstring, string(body)))
 		q.PushFront(e)
 	}
 }
+
+var ExpectResponseStatusCodeDesn = `
+- **target**: %s
+- **method**: %s
+- **status code**: %s
+- **expect code**: %v
+
+**response body**:
+
+` + "```" + `
+%s
+` + "```" + `
+`
+
+var ExpectResponseSubstringDesn = `
+- **target**: %s
+- **method**: %s
+- **status code**: %s
+- **expect substring**: %v
+
+**response body**:
+
+` + "```" + `
+%s
+` + "```" + `
+`

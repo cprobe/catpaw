@@ -4,13 +4,14 @@ interval = "30s"
 [global.labels]
 from_agent = "catpaw"
 from_hostname = "$hostname"
+from_hostip = "$ip"
 
-# [log]
-# level = "info"
+[log]
+level = "info"
 # format = "json"
 # output = "stdout"
 # fields = {}
 
 [flashduty]
-url = "https://api.flashcat.cloud/event/push/alert/standard?integration_key=xx"
+url = "https://api.flashcat.cloud/event/push/alert/standard?integration_key=x"
 timeout = "10s"
