@@ -123,6 +123,16 @@ func clean(event *types.Event, now int64, pluginName string, ins plugins.Instanc
 		event.EventTime = now
 	}
 
+	if pluginName != "exec" {
+		// exec 特殊对待，因为它的 severity 是由用户自己定义的，不是插件生成的
+		event.EventStatus = ins.GetAlerting().Severity
+	}
+
+	// 如果用户没有定义 severity，则默认为 Warning
+	if event.EventStatus == "" {
+		event.EventStatus = types.EventStatusWarning
+	}
+
 	if !types.EventStatusValid(event.EventStatus) {
 		return fmt.Errorf("invalid event_status: %s", event.EventStatus)
 	}
