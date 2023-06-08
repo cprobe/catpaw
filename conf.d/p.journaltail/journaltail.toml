@@ -5,8 +5,6 @@ time_span = "1m"
 keywords = ["Out of memory"]
 # check rule name
 check = "oom killed"
-# # Concurrent requests to make per instance
-concurrency = 5
 # # gather interval
 interval = "30s"
 

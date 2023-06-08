@@ -19,10 +19,9 @@ const (
 type Instance struct {
 	config.InternalConfig
 
-	TimeSpan    string   `toml:"time_span"`
-	Keywords    []string `toml:"keywords"`
-	Check       string   `toml:"check"`
-	Concurrency int      `toml:"concurrency"`
+	TimeSpan string   `toml:"time_span"`
+	Keywords []string `toml:"keywords"`
+	Check    string   `toml:"check"`
 }
 
 type Journaltail struct {
@@ -61,10 +60,6 @@ func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
 	if ins.Check == "" {
 		logger.Logger.Error("check is empty")
 		return
-	}
-
-	if ins.Concurrency == 0 {
-		ins.Concurrency = 5
 	}
 
 	// go go go
