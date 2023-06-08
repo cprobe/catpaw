@@ -1,5 +1,7 @@
 package config
 
+import "flashcat.cloud/catpaw/types"
+
 type Alerting struct {
 	Enabled bool `toml:"enabled"`
 
@@ -16,7 +18,7 @@ type Alerting struct {
 	RecoveryNotification bool `toml:"recovery_notification"`
 
 	// alert severity
-	Severity string `toml:"severity"`
+	DefaultSeverity string `toml:"default_severity"`
 }
 
 type InternalConfig struct {
@@ -60,4 +62,12 @@ func (ic *InternalConfig) InitInternalConfig() error {
 
 func (ic *InternalConfig) GetAlerting() Alerting {
 	return ic.Alerting
+}
+
+func (ic *InternalConfig) GetDefaultSeverity() string {
+	if ic.Alerting.DefaultSeverity == "" {
+		return types.EventStatusWarning
+	}
+
+	return ic.Alerting.DefaultSeverity
 }

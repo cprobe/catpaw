@@ -68,4 +68,4 @@ repeat_number = 3
 ## Whether notify recovery event
 recovery_notification = true
 ## Choice: Critical, Warning, Info
-severity = "Warning"
+default_severity = "Warning"

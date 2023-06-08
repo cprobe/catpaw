@@ -105,7 +105,7 @@ func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
 		"check": ins.Check,
 	})
 
-	e.SetEventStatus(types.EventStatusWarning)
+	e.SetEventStatus(ins.GetDefaultSeverity())
 	e.SetTitleRule("$check")
 	e.SetDescription(bs.String())
 	q.PushFront(e)

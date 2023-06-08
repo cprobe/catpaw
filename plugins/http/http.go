@@ -224,7 +224,7 @@ func (ins *Instance) gather(q *safe.Queue[*types.Event], target string) {
 
 	errString := "null. everything is ok"
 	if err != nil {
-		e.SetEventStatus(ins.Alerting.Severity)
+		e.SetEventStatus(ins.GetDefaultSeverity())
 		errString = err.Error()
 	}
 
@@ -249,7 +249,7 @@ func (ins *Instance) gather(q *safe.Queue[*types.Event], target string) {
 
 		certExpireTimestamp := getEarliestCertExpiry(resp.TLS).Unix()
 		if certExpireTimestamp < time.Now().Add(time.Duration(ins.Expect.CertExpireThreshold)).Unix() {
-			e.SetEventStatus(ins.Alerting.Severity)
+			e.SetEventStatus(ins.GetDefaultSeverity())
 		}
 
 		e.SetTitleRule("$check").SetDescription(`[MD]
@@ -280,7 +280,7 @@ func (ins *Instance) gather(q *safe.Queue[*types.Event], target string) {
 		}, labels)
 
 		if !ins.Expect.ResponseStatusCodeFilter.Match(statusCode) {
-			e.SetEventStatus(ins.Alerting.Severity)
+			e.SetEventStatus(ins.GetDefaultSeverity())
 		}
 
 		e.SetTitleRule("$check").SetDescription(fmt.Sprintf(ExpectResponseStatusCodeDesn, target, ins.GetMethod(), statusCode, ins.Expect.ResponseStatusCode, string(body)))
@@ -293,7 +293,7 @@ func (ins *Instance) gather(q *safe.Queue[*types.Event], target string) {
 		}, labels)
 
 		if !strings.Contains(string(body), ins.Expect.ResponseSubstring) {
-			e.SetEventStatus(ins.Alerting.Severity)
+			e.SetEventStatus(ins.GetDefaultSeverity())
 		}
 
 		e.SetTitleRule("$check").SetDescription(fmt.Sprintf(ExpectResponseSubstringDesn, target, ins.GetMethod(), statusCode, ins.Expect.ResponseSubstring, string(body)))
