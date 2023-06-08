@@ -15,6 +15,7 @@ import (
 	// auto registry
 	_ "flashcat.cloud/catpaw/plugins/exec"
 	_ "flashcat.cloud/catpaw/plugins/http"
+	_ "flashcat.cloud/catpaw/plugins/journaltail"
 )
 
 type PluginConfig struct {

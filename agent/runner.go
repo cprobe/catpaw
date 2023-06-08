@@ -54,6 +54,7 @@ func (r *PluginRunner) start() {
 		ins := r.Instances[i]
 		ch := r.quitChanForIns[i]
 		go r.startInstancePlugin(ins, ch)
+		time.Sleep(50 * time.Millisecond)
 	}
 }
 

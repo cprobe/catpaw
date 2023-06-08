@@ -1,0 +1,25 @@
+[[instances]]
+# journalctl -S -${time_span}
+time_span = "1m"
+# relationship: or
+keywords = ["Out of memory"]
+# check rule name
+check = "oom killed"
+# # Concurrent requests to make per instance
+concurrency = 5
+# # gather interval
+interval = "30s"
+
+[instances.alerting]
+## Enable alerting or not
+enabled = true
+## Same functionality as Prometheus keyword 'for'
+for_duration = 0
+## Minimum interval duration between notifications
+repeat_interval = "5m"
+## Maximum number of notifications
+repeat_number = 3
+## Whether notify recovery event
+recovery_notification = true
+## Choice: Critical, Warning, Info
+severity = "Warning"
