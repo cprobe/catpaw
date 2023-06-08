@@ -53,6 +53,8 @@ func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
 		ins.TimeSpan = "1m"
 	}
 
+	ins.TimeSpan = fmt.Sprintf("-%s", ins.TimeSpan)
+
 	if len(ins.Keywords) == 0 {
 		logger.Logger.Error("keywords is empty")
 		return

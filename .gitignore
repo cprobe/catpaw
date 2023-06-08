@@ -1,6 +1,7 @@
 /catpaw*
 /nohup.out
 /vendor
+/dist
 
 .idea
 .DS_Store
