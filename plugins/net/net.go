@@ -56,6 +56,10 @@ func (p *NET) GetInstances() []plugins.Instance {
 }
 
 func (ins *Instance) Init() error {
+	if ins.Concurrency == 0 {
+		ins.Concurrency = 5
+	}
+
 	if ins.Timeout == 0 {
 		ins.Timeout = config.Duration(time.Second)
 	}
