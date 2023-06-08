@@ -162,7 +162,7 @@ func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
 
 	if !ins.GetInitialized() {
 		if err := ins.Init(); err != nil {
-			logger.Logger.Errorf("failed to init http instance: %v", err)
+			logger.Logger.Errorf("failed to init http plugin instance: %v", err)
 			return
 		} else {
 			ins.SetInitialized()
