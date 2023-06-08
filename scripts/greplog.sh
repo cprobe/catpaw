@@ -5,6 +5,8 @@
 # commands = [
 #     "/opt/catpaw/scripts/greplog.sh 'Out of memory'"
 # ]
+#
+# deprecated, use plugin journaltail instead
 
 if [ "$1" ]; then
     keyword=$1
