@@ -53,8 +53,6 @@ func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
 		ins.TimeSpan = "1m"
 	}
 
-	ins.TimeSpan = fmt.Sprintf("-%s", ins.TimeSpan)
-
 	if len(ins.Keywords) == 0 {
 		logger.Logger.Error("keywords is empty")
 		return
@@ -81,7 +79,7 @@ func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
 		return
 	}
 
-	out, err := exec.Command(bin, "--since", ins.TimeSpan, "--no-pager", "--no-tail").Output()
+	out, err := exec.Command(bin, "--since", fmt.Sprintf("-%s", ins.TimeSpan), "--no-pager", "--no-tail").Output()
 	if err != nil {
 		logger.Logger.Error("exec journalctl fail: ", err)
 		return
