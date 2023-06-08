@@ -85,12 +85,33 @@ func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
 		return
 	}
 
+	var bs bytes.Buffer
+
 	for _, line := range bytes.Split(out, []byte("\n")) {
 		for _, keyword := range ins.Keywords {
 			if bytes.Contains(line, []byte(keyword)) {
-				fmt.Println(string(line))
+				bs.Write(line)
+				bs.Write([]byte("\n"))
 			}
 		}
 	}
 
+	if bs.Len() == 0 {
+		e := types.BuildEvent(map[string]string{
+			"check": ins.Check,
+		})
+		e.SetEventStatus(types.EventStatusOk)
+		e.SetTitleRule("$check")
+		q.PushFront(e)
+		return
+	}
+
+	e := types.BuildEvent(map[string]string{
+		"check": ins.Check,
+	})
+
+	e.SetEventStatus(types.EventStatusWarning)
+	e.SetTitleRule("$check")
+	e.SetDescription(bs.String())
+	q.PushFront(e)
 }
