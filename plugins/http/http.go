@@ -228,7 +228,7 @@ func (ins *Instance) gather(q *safe.Queue[*types.Event], target string) {
 		errString = err.Error()
 	}
 
-	e.SetTitleRule("$check").SetDescription(`
+	e.SetTitleRule("$check").SetDescription(`[MD]
 - **target**: ` + target + `
 - **method**: ` + ins.GetMethod() + `
 - **error**: ` + errString + `
@@ -252,7 +252,7 @@ func (ins *Instance) gather(q *safe.Queue[*types.Event], target string) {
 			e.SetEventStatus(ins.Alerting.Severity)
 		}
 
-		e.SetTitleRule("$check").SetDescription(`
+		e.SetTitleRule("$check").SetDescription(`[MD]
 - **target**: ` + target + `
 - **method**: ` + ins.GetMethod() + `
 - **cert expire threshold**: ` + ins.Expect.CertExpireThreshold.HumanString() + `
@@ -301,7 +301,7 @@ func (ins *Instance) gather(q *safe.Queue[*types.Event], target string) {
 	}
 }
 
-var ExpectResponseStatusCodeDesn = `
+var ExpectResponseStatusCodeDesn = `[MD]
 - **target**: %s
 - **method**: %s
 - **status code**: %s
@@ -314,7 +314,7 @@ var ExpectResponseStatusCodeDesn = `
 ` + "```" + `
 `
 
-var ExpectResponseSubstringDesn = `
+var ExpectResponseSubstringDesn = `[MD]
 - **target**: %s
 - **method**: %s
 - **status code**: %s
