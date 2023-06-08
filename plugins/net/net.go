@@ -101,6 +101,8 @@ func (ins *Instance) Init() error {
 }
 
 func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
+	logger.Logger.Debug("net gather, targets: ", ins.Targets)
+
 	if len(ins.Targets) == 0 {
 		return
 	}
