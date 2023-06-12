@@ -1,9 +1,10 @@
-package newfile
+package mtime
 
 import (
 	"fmt"
 	"io/fs"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"flashcat.cloud/catpaw/config"
@@ -15,7 +16,7 @@ import (
 )
 
 const (
-	pluginName string = "newfile"
+	pluginName string = "mtime"
 )
 
 type Instance struct {
@@ -61,13 +62,13 @@ func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
 		return
 	}
 
-	event := types.BuildEvent(map[string]string{"directory": ins.Directory, "check": ins.Check}).SetTitleRule("$check")
 	if !file.IsExist(ins.Directory) {
-		q.PushFront(event.SetEventStatus(ins.GetDefaultSeverity()).SetDescription(fmt.Sprintf("directory %s not exist", ins.Directory)))
+		logger.Logger.Warnf("directory %s not exist", ins.Directory)
 		return
 	}
 
 	now := time.Now()
+	files := make(map[string]time.Time)
 
 	if err := filepath.WalkDir(ins.Directory, func(path string, di fs.DirEntry, err error) error {
 		if err != nil {
@@ -85,14 +86,42 @@ func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
 
 		mtime := fileinfo.ModTime()
 		if now.Sub(mtime) < ins.MTimeSpan {
-			fmt.Println("path:", path, "mtime:", mtime, "----", now.Sub(mtime))
+			files[path] = mtime
 		}
 
 		return nil
 	}); err != nil {
-		q.PushFront(event.SetEventStatus(ins.GetDefaultSeverity()).SetDescription(fmt.Sprintf("walk directory %s error: %v", ins.Directory, err)))
+		q.PushFront(buildEvent(ins.Directory, ins.Check, fmt.Sprintf("walk directory %s error: %v", ins.Directory, err)))
 		return
 	}
 
-	q.PushFront(event.SetDescription(fmt.Sprintf("files not changed or created in directory %s", ins.Directory)))
+	if len(files) == 0 {
+		q.PushFront(buildEvent(ins.Directory, ins.Check, fmt.Sprintf("files not changed or created in directory %s", ins.Directory)))
+		return
+	}
+
+	var body strings.Builder
+	body.WriteString(head)
+
+	for fp, mtime := range files {
+		body.WriteString("| ")
+		body.WriteString(fp)
+		body.WriteString(" | ")
+		body.WriteString(mtime.Format("2006-01-02 15:04:05"))
+		body.WriteString(" |\n")
+	}
+
+	q.PushFront(buildEvent(ins.Directory, ins.Check, body.String()))
 }
+
+func buildEvent(dir, check string, desc ...string) *types.Event {
+	event := types.BuildEvent(map[string]string{"directory": dir, "check": check}).SetTitleRule("$check")
+	if len(desc) > 0 {
+		event.SetDescription(desc[0])
+	}
+	return event
+}
+
+var head = `| File | MTime |
+| :--: | :--: |
+`
