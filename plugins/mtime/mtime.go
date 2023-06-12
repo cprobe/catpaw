@@ -53,7 +53,6 @@ func init() {
 func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
 	if ins.TimeSpan == 0 {
 		ins.TimeSpan = 3 * time.Minute
-		return
 	}
 
 	if ins.Check == "" {
