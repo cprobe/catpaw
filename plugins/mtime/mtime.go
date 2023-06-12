@@ -89,12 +89,12 @@ func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
 
 		return nil
 	}); err != nil {
-		q.PushFront(buildEvent(ins.Directory, ins.Check, fmt.Sprintf("walk directory %s error: %v", ins.Directory, err)))
+		q.PushFront(ins.buildEvent(ins.Directory, ins.Check, fmt.Sprintf("walk directory %s error: %v", ins.Directory, err)).SetEventStatus(ins.GetDefaultSeverity()))
 		return
 	}
 
 	if len(files) == 0 {
-		q.PushFront(buildEvent(ins.Directory, ins.Check, fmt.Sprintf("files not changed or created in directory %s", ins.Directory)))
+		q.PushFront(ins.buildEvent(ins.Directory, ins.Check, fmt.Sprintf("files not changed or created in directory %s", ins.Directory)))
 		return
 	}
 
@@ -109,10 +109,10 @@ func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
 		body.WriteString(" |\n")
 	}
 
-	q.PushFront(buildEvent(ins.Directory, ins.Check, body.String()))
+	q.PushFront(ins.buildEvent(ins.Directory, ins.Check, body.String()).SetEventStatus(ins.GetDefaultSeverity()))
 }
 
-func buildEvent(dir, check string, desc ...string) *types.Event {
+func (ins *Instance) buildEvent(dir, check string, desc ...string) *types.Event {
 	event := types.BuildEvent(map[string]string{"directory": dir, "check": check}).SetTitleRule("$check")
 	if len(desc) > 0 {
 		event.SetDescription(desc[0])
@@ -120,6 +120,6 @@ func buildEvent(dir, check string, desc ...string) *types.Event {
 	return event
 }
 
-var head = `| File | MTime |
+var head = `[MD]| File | MTime |
 | :--: | :--: |
 `
