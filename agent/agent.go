@@ -17,6 +17,7 @@ import (
 	_ "flashcat.cloud/catpaw/plugins/http"
 	_ "flashcat.cloud/catpaw/plugins/journaltail"
 	_ "flashcat.cloud/catpaw/plugins/net"
+	_ "flashcat.cloud/catpaw/plugins/newfile"
 )
 
 type PluginConfig struct {
