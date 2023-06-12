@@ -22,8 +22,7 @@ const (
 type Instance struct {
 	config.InternalConfig
 
-	MTimeSpan time.Duration `toml:"mtime_span"`
-	CTimeSpan string        `toml:"ctime_span"`
+	TimeSpan  time.Duration `toml:"time_span"`
 	Directory string        `toml:"directory"`
 	Check     string        `toml:"check"`
 }
@@ -52,8 +51,8 @@ func init() {
 }
 
 func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
-	if ins.MTimeSpan == 0 && ins.CTimeSpan == "" {
-		logger.Logger.Error("ctime_span and mtime_span is empty")
+	if ins.TimeSpan == 0 {
+		ins.TimeSpan = 3 * time.Minute
 		return
 	}
 
@@ -85,7 +84,7 @@ func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
 		}
 
 		mtime := fileinfo.ModTime()
-		if now.Sub(mtime) < ins.MTimeSpan {
+		if now.Sub(mtime) < ins.TimeSpan {
 			files[path] = mtime
 		}
 

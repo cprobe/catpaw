@@ -1,5 +1,5 @@
 [[instances]]
-time_span = "10h"
+time_span = "3m"
 directory = "/tmp"
 check = "file changed or created"
 interval = "30s"
