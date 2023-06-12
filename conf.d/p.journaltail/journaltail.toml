@@ -2,9 +2,9 @@
 # journalctl -S -${time_span}
 time_span = "1m"
 # relationship: or
-keywords = ["Out of memory"]
+keywords = ["Out of memory", "nf_conntrack: table full, dropping packets"]
 # check rule name
-check = "oom killed"
+check = "Critical System Errors"
 # # gather interval
 interval = "30s"
 
