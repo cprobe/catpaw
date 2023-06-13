@@ -102,6 +102,14 @@ func (ins *Instance) gather(q *safe.Queue[*types.Event], command string) {
 	}
 
 	var bs bytes.Buffer
+	var triggered bool
+
+	bs.WriteString(fmt.Sprintf("[MD]- filter_include: `%s`\n", ins.FilterInclude))
+	bs.WriteString(fmt.Sprintf("- filter_exclude: `%s`\n", ins.FilterExclude))
+	bs.WriteString("\n")
+	bs.WriteString("\n")
+	bs.WriteString("**matched lines**:\n")
+	bs.WriteString("\n")
 
 	for _, line := range bytes.Split(outbuf, []byte("\n")) {
 		if len(line) == 0 {
@@ -112,11 +120,12 @@ func (ins *Instance) gather(q *safe.Queue[*types.Event], command string) {
 			continue
 		}
 
+		triggered = true
 		bs.Write(line)
 		bs.Write([]byte("\n"))
 	}
 
-	if bs.Len() == 0 {
+	if !triggered {
 		q.PushFront(types.BuildEvent(map[string]string{"check": ins.Check}).SetTitleRule("$check").SetDescription("everything is ok"))
 	} else {
 		q.PushFront(types.BuildEvent(map[string]string{"check": ins.Check}).SetTitleRule("$check").SetDescription(bs.String()).SetEventStatus(ins.GetDefaultSeverity()))
