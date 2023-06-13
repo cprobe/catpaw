@@ -1,50 +1,50 @@
-package exec
+package sfilter
 
 import (
 	"bytes"
-	"encoding/json"
 	"fmt"
 	"io"
 	osExec "os/exec"
-	"path/filepath"
 	"runtime"
-	"strings"
-	"sync"
 	"time"
 
 	"flashcat.cloud/catpaw/config"
 	"flashcat.cloud/catpaw/logger"
 	"flashcat.cloud/catpaw/pkg/cmdx"
+	"flashcat.cloud/catpaw/pkg/filter"
 	"flashcat.cloud/catpaw/pkg/safe"
 	"flashcat.cloud/catpaw/pkg/shell"
 	"flashcat.cloud/catpaw/plugins"
 	"flashcat.cloud/catpaw/types"
-	"github.com/toolkits/pkg/concurrent/semaphore"
 )
 
 const (
-	pluginName     string = "exec"
+	pluginName     string = "sfilter"
 	maxStderrBytes int    = 512
 )
 
 type Instance struct {
 	config.InternalConfig
 
-	Commands    []string        `toml:"commands"`
-	Timeout     config.Duration `toml:"timeout"`
-	Concurrency int             `toml:"concurrency"`
+	Command       string          `toml:"command"`
+	Timeout       config.Duration `toml:"timeout"`
+	Check         string          `toml:"check"`
+	FilterInclude []string        `toml:"filter_include"`
+	FilterExclude []string        `toml:"filter_exclude"`
+
+	filter filter.Filter
 }
 
-type Exec struct {
+type SFilter struct {
 	config.InternalConfig
 	Instances []*Instance `toml:"instances"`
 }
 
-func (p *Exec) IsSystemPlugin() bool {
+func (p *SFilter) IsSystemPlugin() bool {
 	return false
 }
 
-func (p *Exec) GetInstances() []plugins.Instance {
+func (p *SFilter) GetInstances() []plugins.Instance {
 	ret := make([]plugins.Instance, len(p.Instances))
 	for i := 0; i < len(p.Instances); i++ {
 		ret[i] = p.Instances[i]
@@ -54,12 +54,17 @@ func (p *Exec) GetInstances() []plugins.Instance {
 
 func init() {
 	plugins.Add(pluginName, func() plugins.Plugin {
-		return &Exec{}
+		return &SFilter{}
 	})
 }
 
 func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
-	if len(ins.Commands) == 0 {
+	if len(ins.Command) == 0 {
+		return
+	}
+
+	if ins.Check == "" {
+		logger.Logger.Warnln("configuration check is empty")
 		return
 	}
 
@@ -67,60 +72,21 @@ func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
 		ins.Timeout = config.Duration(10 * time.Second)
 	}
 
-	if ins.Concurrency == 0 {
-		ins.Concurrency = 5
-	}
-
-	var commands []string
-	for _, pattern := range ins.Commands {
-		cmdAndArgs := strings.SplitN(pattern, " ", 2)
-		if len(cmdAndArgs) == 0 {
-			continue
+	if ins.filter == nil {
+		if len(ins.FilterInclude) == 0 && len(ins.FilterExclude) == 0 {
+			logger.Logger.Error("filter_include and filter_exclude are empty")
+			return
 		}
 
-		matches, err := filepath.Glob(cmdAndArgs[0])
+		var err error
+		ins.filter, err = filter.NewIncludeExcludeFilter(ins.FilterInclude, ins.FilterExclude)
 		if err != nil {
-			logger.Logger.Errorw("failed to get filepath glob", "error", err, "pattern", cmdAndArgs[0])
-			continue
-		}
-
-		if len(matches) == 0 {
-			// There were no matches with the glob pattern, so let's assume
-			// that the command is in PATH and just run it as it is
-			commands = append(commands, pattern)
-		} else {
-			// There were matches, so we'll append each match together with
-			// the arguments to the commands slice
-			for _, match := range matches {
-				if len(cmdAndArgs) == 1 {
-					commands = append(commands, match)
-				} else {
-					commands = append(commands,
-						strings.Join([]string{match, cmdAndArgs[1]}, " "))
-				}
-			}
+			logger.Logger.Warnf("failed to create filter: %s", err)
+			return
 		}
 	}
 
-	if len(commands) == 0 {
-		logger.Logger.Warnln("no commands after parse")
-		return
-	}
-
-	wg := new(sync.WaitGroup)
-	se := semaphore.NewSemaphore(ins.Concurrency)
-	for _, command := range commands {
-		wg.Add(1)
-		se.Acquire()
-		go func(command string) {
-			defer func() {
-				se.Release()
-				wg.Done()
-			}()
-			ins.gather(q, command)
-		}(command)
-	}
-	wg.Wait()
+	ins.gather(q, ins.Command)
 }
 
 func (ins *Instance) gather(q *safe.Queue[*types.Event], command string) {
@@ -135,14 +101,25 @@ func (ins *Instance) gather(q *safe.Queue[*types.Event], command string) {
 		return
 	}
 
-	var events []*types.Event
-	if err := json.Unmarshal(outbuf, &events); err != nil {
-		logger.Logger.Errorw("failed to unmarshal command output", "command", command, "error", err, "output", string(outbuf))
-		return
+	var bs bytes.Buffer
+
+	for _, line := range bytes.Split(outbuf, []byte("\n")) {
+		if len(line) == 0 {
+			continue
+		}
+
+		if !ins.filter.Match(string(line)) {
+			continue
+		}
+
+		bs.Write(line)
+		bs.Write([]byte("\n"))
 	}
 
-	for i := range events {
-		q.PushFront(events[i])
+	if bs.Len() == 0 {
+		q.PushFront(types.BuildEvent(map[string]string{"check": ins.Check}).SetTitleRule("$check").SetDescription("everything is ok"))
+	} else {
+		q.PushFront(types.BuildEvent(map[string]string{"check": ins.Check}).SetTitleRule("$check").SetDescription(bs.String()).SetEventStatus(ins.GetDefaultSeverity()))
 	}
 }
 

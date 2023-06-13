@@ -7,6 +7,7 @@ import (
 
 	"flashcat.cloud/catpaw/config"
 	"flashcat.cloud/catpaw/logger"
+	"flashcat.cloud/catpaw/pkg/filter"
 	"flashcat.cloud/catpaw/pkg/safe"
 	"flashcat.cloud/catpaw/plugins"
 	"flashcat.cloud/catpaw/types"
@@ -19,9 +20,12 @@ const (
 type Instance struct {
 	config.InternalConfig
 
-	TimeSpan string   `toml:"time_span"`
-	Keywords []string `toml:"keywords"`
-	Check    string   `toml:"check"`
+	TimeSpan      string   `toml:"time_span"`
+	Check         string   `toml:"check"`
+	FilterInclude []string `toml:"filter_include"`
+	FilterExclude []string `toml:"filter_exclude"`
+
+	filter filter.Filter
 }
 
 type Journaltail struct {
@@ -52,9 +56,18 @@ func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
 		ins.TimeSpan = "1m"
 	}
 
-	if len(ins.Keywords) == 0 {
-		logger.Logger.Error("keywords is empty")
-		return
+	if ins.filter == nil {
+		if len(ins.FilterInclude) == 0 && len(ins.FilterExclude) == 0 {
+			logger.Logger.Error("filter_include and filter_exclude are empty")
+			return
+		}
+
+		var err error
+		ins.filter, err = filter.NewIncludeExcludeFilter(ins.FilterInclude, ins.FilterExclude)
+		if err != nil {
+			logger.Logger.Warnf("failed to create filter: %s", err)
+			return
+		}
 	}
 
 	if ins.Check == "" {
@@ -83,12 +96,16 @@ func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
 	var bs bytes.Buffer
 
 	for _, line := range bytes.Split(out, []byte("\n")) {
-		for _, keyword := range ins.Keywords {
-			if bytes.Contains(line, []byte(keyword)) {
-				bs.Write(line)
-				bs.Write([]byte("\n"))
-			}
+		if len(line) == 0 {
+			continue
 		}
+
+		if !ins.filter.Match(string(line)) {
+			continue
+		}
+
+		bs.Write(line)
+		bs.Write([]byte("\n"))
 	}
 
 	if bs.Len() == 0 {
