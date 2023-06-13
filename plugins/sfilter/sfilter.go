@@ -109,7 +109,7 @@ func (ins *Instance) gather(q *safe.Queue[*types.Event], command string) {
 	bs.WriteString("\n")
 	bs.WriteString("\n")
 	bs.WriteString("**matched lines**:\n")
-	bs.WriteString("\n")
+	bs.WriteString("\n```")
 
 	for _, line := range bytes.Split(outbuf, []byte("\n")) {
 		if len(line) == 0 {
@@ -124,6 +124,8 @@ func (ins *Instance) gather(q *safe.Queue[*types.Event], command string) {
 		bs.Write(line)
 		bs.Write([]byte("\n"))
 	}
+
+	bs.WriteString("```")
 
 	if !triggered {
 		q.PushFront(types.BuildEvent(map[string]string{"check": ins.Check}).SetTitleRule("$check").SetDescription("everything is ok"))
