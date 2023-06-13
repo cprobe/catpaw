@@ -1,13 +1,14 @@
 [[instances]]
+# # e.g. /path/to/sfilter-scripts/system-health.sh
 command = ""
 # # script timeout
 timeout = "10s"
 # check rule name
-check = "Check name"
+check = "Check system health state"
 
 # support glob
-filter_include = ["xxx", "yyy"]
-filter_exclude = ["aaa", "bbb"]
+filter_include = ["*WARNING*", "*CRITICAL*"]
+filter_exclude = []
 
 # # gather interval
 interval = "30s"
