@@ -121,5 +121,5 @@ func (ins *Instance) buildEvent(dir, check string, desc ...string) *types.Event 
 }
 
 var head = `[MD]| File | MTime |
-| :--: | :--: |
+| :--| --: |
 `
