@@ -18,6 +18,7 @@ import (
 	_ "flashcat.cloud/catpaw/plugins/journaltail"
 	_ "flashcat.cloud/catpaw/plugins/mtime"
 	_ "flashcat.cloud/catpaw/plugins/net"
+	_ "flashcat.cloud/catpaw/plugins/ping"
 	_ "flashcat.cloud/catpaw/plugins/sfilter"
 )
 

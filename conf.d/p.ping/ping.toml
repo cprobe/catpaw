@@ -1,0 +1,54 @@
+[[instances]]
+targets = [
+    "baidu.com",
+    "127.0.0.1",
+]
+
+# # Concurrent requests to make per instance
+# concurrency = 5
+
+# # gather interval
+# interval = "30s"
+
+# # Optional append labels
+# labels = { env="production", team="devops" }
+
+## Number of ping packets to send per interval.  Corresponds to the "-c"
+## option of the ping command.
+# count = 5
+
+## Time to wait between sending ping packets in seconds.  Operates like the
+## "-i" option of the ping command.
+# ping_interval = 0.2
+
+## If set, the time to wait for a ping response in seconds.  Operates like
+## the "-W" option of the ping command.
+# timeout = 3.0
+
+## Interface or source address to send ping from.  Operates like the -I or -S
+## option of the ping command.
+# interface = ""
+
+## Use only IPv6 addresses when resolving a hostname.
+# ipv6 = false
+
+## Number of data bytes to be sent. Corresponds to the "-s"
+## option of the ping command.
+# size = 56
+
+# alert if packet loss is above this threshold
+expect_max_packet_loss_percent = 1
+
+[instances.alerting]
+## Enable alerting or not
+enabled = true
+## Same functionality as Prometheus keyword 'for'
+for_duration = 0
+## Minimum interval duration between notifications
+repeat_interval = "5m"
+## Maximum number of notifications
+repeat_number = 3
+## Whether notify recovery event
+recovery_notification = true
+## Choice: Critical, Warning, Info
+default_severity = "Warning"
