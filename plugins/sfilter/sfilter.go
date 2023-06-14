@@ -104,7 +104,8 @@ func (ins *Instance) gather(q *safe.Queue[*types.Event], command string) {
 	var bs bytes.Buffer
 	var triggered bool
 
-	bs.WriteString(fmt.Sprintf("[MD]- filter_include: `%s`\n", ins.FilterInclude))
+	bs.WriteString("[MD]")
+	bs.WriteString(fmt.Sprintf("- filter_include: `%s`\n", ins.FilterInclude))
 	bs.WriteString(fmt.Sprintf("- filter_exclude: `%s`\n", ins.FilterExclude))
 	bs.WriteString("\n")
 	bs.WriteString("\n")
