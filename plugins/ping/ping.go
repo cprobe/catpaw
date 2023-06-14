@@ -152,28 +152,28 @@ func (ins *Instance) gather(q *safe.Queue[*types.Event], target string) {
 	if err != nil {
 		message := fmt.Sprintf("ping %s failed: %v", target, err)
 		logger.Logger.Error(message)
-		q.PushFront(event.SetEventStatus(ins.GetDefaultSeverity()).SetDescription(message))
+		q.PushFront(event.SetEventStatus(ins.GetDefaultSeverity()).SetDescription(ins.buildDesc(target, message)))
 		return
 	}
 
 	if stats.PacketsSent == 0 {
 		message := fmt.Sprintf("no packets sent to %s", target)
 		logger.Logger.Error(message)
-		q.PushFront(event.SetEventStatus(ins.GetDefaultSeverity()).SetDescription(message))
+		q.PushFront(event.SetEventStatus(ins.GetDefaultSeverity()).SetDescription(ins.buildDesc(target, message)))
 		return
 	}
 
 	if stats.PacketsRecv == 0 {
 		message := fmt.Sprintf("no packets received to %s", target)
 		logger.Logger.Error(message)
-		q.PushFront(event.SetEventStatus(ins.GetDefaultSeverity()).SetDescription(message))
+		q.PushFront(event.SetEventStatus(ins.GetDefaultSeverity()).SetDescription(ins.buildDesc(target, message)))
 		return
 	}
 
 	if stats.PacketLoss > float64(ins.ExpectMaxPacketLossPercent) {
 		message := fmt.Sprintf("packet loss is %f%%", stats.PacketLoss)
 		logger.Logger.Error(message)
-		q.PushFront(event.SetEventStatus(ins.GetDefaultSeverity()).SetDescription(message))
+		q.PushFront(event.SetEventStatus(ins.GetDefaultSeverity()).SetDescription(ins.buildDesc(target, message)))
 		return
 	}
 
@@ -235,13 +235,15 @@ func (ins *Instance) ping(destination string) (*pingStats, error) {
 }
 
 func (ins *Instance) buildDesc(target, message string) string {
-	return `
-target: ` + target + `
-expect_max_packet_loss_percent: ` + fmt.Sprint(ins.ExpectMaxPacketLossPercent) + `
+	return `[MD]
+- target: ` + target + `
+- expect_max_packet_loss_percent: ` + fmt.Sprint(ins.ExpectMaxPacketLossPercent) + `
 
 
-message:
+**message**:
 
+` + "```" + `
 ` + message + `
+` + "```" + `
 `
 }

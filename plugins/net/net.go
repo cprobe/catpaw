@@ -264,11 +264,16 @@ func (ins *Instance) UDPGather(address string, labels map[string]string, q *safe
 
 func (ins *Instance) buildDesc(target, message string) string {
 	return `[MD]
-` + message + `
-
 - **target**: ` + target + `
 - **protocol**: ` + ins.Protocol + `
 - **config.send**: ` + ins.Send + `
 - **config.expect**:` + ins.Expect + `
+
+
+**message**:
+
+` + "```" + `
+` + message + `
+` + "```" + `
 `
 }
