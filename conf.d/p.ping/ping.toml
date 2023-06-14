@@ -15,7 +15,7 @@ targets = [
 
 ## Number of ping packets to send per interval.  Corresponds to the "-c"
 ## option of the ping command.
-# count = 5
+# count = 3
 
 ## Time to wait between sending ping packets in seconds.  Operates like the
 ## "-i" option of the ping command.
