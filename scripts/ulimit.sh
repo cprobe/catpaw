@@ -1,4 +1,5 @@
 #!/bin/sh
+# use plugin exec
 
 if [ "$1" ]; then
     threshhold=$1

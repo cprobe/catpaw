@@ -1,5 +1,5 @@
 #!/bin/sh
-#
+# use plugin exec
 # exec.toml example:
 # [[instances]]
 # commands = [

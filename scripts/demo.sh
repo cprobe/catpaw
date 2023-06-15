@@ -1,5 +1,5 @@
 #!/bin/sh
-
+# use plugin exec
 echo '[
     {
         "event_status": "Warning",
