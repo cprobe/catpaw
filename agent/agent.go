@@ -14,6 +14,7 @@ import (
 
 	// auto registry
 	_ "flashcat.cloud/catpaw/plugins/exec"
+	_ "flashcat.cloud/catpaw/plugins/filechange"
 	_ "flashcat.cloud/catpaw/plugins/http"
 	_ "flashcat.cloud/catpaw/plugins/journaltail"
 	_ "flashcat.cloud/catpaw/plugins/mtime"

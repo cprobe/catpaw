@@ -27,16 +27,16 @@ type Instance struct {
 	Check     string        `toml:"check"`
 }
 
-type NewFile struct {
+type MTime struct {
 	config.InternalConfig
 	Instances []*Instance `toml:"instances"`
 }
 
-func (p *NewFile) IsSystemPlugin() bool {
+func (p *MTime) IsSystemPlugin() bool {
 	return false
 }
 
-func (p *NewFile) GetInstances() []plugins.Instance {
+func (p *MTime) GetInstances() []plugins.Instance {
 	ret := make([]plugins.Instance, len(p.Instances))
 	for i := 0; i < len(p.Instances); i++ {
 		ret[i] = p.Instances[i]
@@ -46,7 +46,7 @@ func (p *NewFile) GetInstances() []plugins.Instance {
 
 func init() {
 	plugins.Add(pluginName, func() plugins.Plugin {
-		return &NewFile{}
+		return &MTime{}
 	})
 }
 

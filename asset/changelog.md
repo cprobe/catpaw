@@ -11,3 +11,7 @@
 
 - New: add sfilter plugin
 - Fix: remove configuration keywords of plugin journaltail
+
+## v0.6.0
+
+- New: add filechange plugin

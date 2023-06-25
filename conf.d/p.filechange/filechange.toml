@@ -1,7 +1,7 @@
 [[instances]]
 time_span = "3m"
-directory = "/tmp"
-check = "file changed or created under directory"
+filepaths = ["/etc/shadow"]
+check = "file changed"
 interval = "30s"
 
 [instances.alerting]
