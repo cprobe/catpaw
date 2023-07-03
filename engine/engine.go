@@ -19,7 +19,7 @@ import (
 	"github.com/toolkits/pkg/str"
 )
 
-func PushRawEvents(pluginName string, ins plugins.Instance, queue *safe.Queue[*types.Event]) {
+func PushRawEvents(pluginName string, pluginObj plugins.Plugin, ins plugins.Instance, queue *safe.Queue[*types.Event]) {
 	if queue.Len() == 0 {
 		return
 	}
@@ -32,7 +32,7 @@ func PushRawEvents(pluginName string, ins plugins.Instance, queue *safe.Queue[*t
 			continue
 		}
 
-		err := clean(events[i], now, pluginName, ins)
+		err := clean(events[i], now, pluginName, pluginObj, ins)
 		if err != nil {
 			logger.Logger.Errorf("clean raw event fail: %v, event: %v", err.Error(), events[i])
 			continue
@@ -118,7 +118,7 @@ func handleAlertEvent(ins plugins.Instance, event *types.Event) {
 	forward(event)
 }
 
-func clean(event *types.Event, now int64, pluginName string, ins plugins.Instance) error {
+func clean(event *types.Event, now int64, pluginName string, pluginObj plugins.Plugin, ins plugins.Instance) error {
 	if event.EventTime == 0 {
 		event.EventTime = now
 	}
@@ -134,9 +134,15 @@ func clean(event *types.Event, now int64, pluginName string, ins plugins.Instanc
 	// append label: from_plugin
 	event.Labels["from_plugin"] = pluginName
 
-	// append label: from_instance
+	// append label from instance
 	insLabels := ins.GetLabels()
 	for k, v := range insLabels {
+		event.Labels[k] = v
+	}
+
+	// append label from plugin
+	plLabels := pluginObj.GetLabels()
+	for k, v := range plLabels {
 		event.Labels[k] = v
 	}
 

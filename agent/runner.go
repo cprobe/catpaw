@@ -91,6 +91,6 @@ func (r *PluginRunner) gatherInstancePlugin(ins plugins.Instance) {
 	queue := safe.NewQueue[*types.Event]()
 	plugins.MayGather(ins, queue)
 	if queue.Len() > 0 {
-		engine.PushRawEvents(r.pluginName, ins, queue)
+		engine.PushRawEvents(r.pluginName, r.pluginObject, ins, queue)
 	}
 }
