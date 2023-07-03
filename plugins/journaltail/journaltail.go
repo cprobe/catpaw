@@ -33,10 +33,6 @@ type Journaltail struct {
 	Instances []*Instance `toml:"instances"`
 }
 
-func (p *Journaltail) IsSystemPlugin() bool {
-	return false
-}
-
 func (p *Journaltail) GetInstances() []plugins.Instance {
 	ret := make([]plugins.Instance, len(p.Instances))
 	for i := 0; i < len(p.Instances); i++ {

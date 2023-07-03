@@ -28,12 +28,6 @@ func newPluginRunner(pluginName string, p plugins.Plugin) *PluginRunner {
 }
 
 func (r *PluginRunner) stop() {
-	if r.pluginObject.IsSystemPlugin() {
-		r.quitChanForSys <- struct{}{}
-		plugins.MayDrop(r.pluginObject)
-		return
-	}
-
 	for i := 0; i < len(r.Instances); i++ {
 		r.quitChanForIns[i] <- struct{}{}
 		plugins.MayDrop(r.Instances[i])
@@ -41,12 +35,6 @@ func (r *PluginRunner) stop() {
 }
 
 func (r *PluginRunner) start() {
-	if r.pluginObject.IsSystemPlugin() {
-		r.quitChanForSys = make(chan struct{}, 1)
-		go r.startSystemPlugin()
-		return
-	}
-
 	r.Instances = plugins.MayGetInstances(r.pluginObject)
 	r.quitChanForIns = make([]chan struct{}, len(r.Instances))
 	for i := 0; i < len(r.Instances); i++ {

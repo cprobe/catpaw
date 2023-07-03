@@ -32,10 +32,6 @@ type MTime struct {
 	Instances []*Instance `toml:"instances"`
 }
 
-func (p *MTime) IsSystemPlugin() bool {
-	return false
-}
-
 func (p *MTime) GetInstances() []plugins.Instance {
 	ret := make([]plugins.Instance, len(p.Instances))
 	for i := 0; i < len(p.Instances); i++ {

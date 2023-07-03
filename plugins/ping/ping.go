@@ -44,10 +44,6 @@ type Ping struct {
 	Instances []*Instance `toml:"instances"`
 }
 
-func (p *Ping) IsSystemPlugin() bool {
-	return false
-}
-
 func init() {
 	plugins.Add(pluginName, func() plugins.Plugin {
 		return &Ping{}

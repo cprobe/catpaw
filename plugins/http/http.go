@@ -143,10 +143,6 @@ func (ins *Instance) createHTTPClient() (*http.Client, error) {
 	return client, nil
 }
 
-func (h *Http) IsSystemPlugin() bool {
-	return false
-}
-
 func (h *Http) GetInstances() []plugins.Instance {
 	ret := make([]plugins.Instance, len(h.Instances))
 	for i := 0; i < len(h.Instances); i++ {

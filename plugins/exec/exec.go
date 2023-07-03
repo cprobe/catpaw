@@ -40,10 +40,6 @@ type Exec struct {
 	Instances []*Instance `toml:"instances"`
 }
 
-func (p *Exec) IsSystemPlugin() bool {
-	return false
-}
-
 func (p *Exec) GetInstances() []plugins.Instance {
 	ret := make([]plugins.Instance, len(p.Instances))
 	for i := 0; i < len(p.Instances); i++ {

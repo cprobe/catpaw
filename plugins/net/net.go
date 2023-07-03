@@ -37,10 +37,6 @@ type NET struct {
 	Instances []*Instance `toml:"instances"`
 }
 
-func (p *NET) IsSystemPlugin() bool {
-	return false
-}
-
 func init() {
 	plugins.Add(pluginName, func() plugins.Plugin {
 		return &NET{}

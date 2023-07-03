@@ -18,7 +18,6 @@ type Plugin interface {
 	GetInterval() config.Duration
 	GetAlerting() config.Alerting
 	InitInternalConfig() error
-	IsSystemPlugin() bool
 }
 
 type Gatherer interface {

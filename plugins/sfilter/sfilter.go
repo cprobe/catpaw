@@ -40,10 +40,6 @@ type SFilter struct {
 	Instances []*Instance `toml:"instances"`
 }
 
-func (p *SFilter) IsSystemPlugin() bool {
-	return false
-}
-
 func (p *SFilter) GetInstances() []plugins.Instance {
 	ret := make([]plugins.Instance, len(p.Instances))
 	for i := 0; i < len(p.Instances); i++ {

@@ -31,10 +31,6 @@ type FileChange struct {
 	Instances []*Instance `toml:"instances"`
 }
 
-func (p *FileChange) IsSystemPlugin() bool {
-	return false
-}
-
 func (p *FileChange) GetInstances() []plugins.Instance {
 	ret := make([]plugins.Instance, len(p.Instances))
 	for i := 0; i < len(p.Instances); i++ {
