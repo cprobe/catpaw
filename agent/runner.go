@@ -46,53 +46,6 @@ func (r *PluginRunner) start() {
 	}
 }
 
-func (r *PluginRunner) startSystemPlugin() {
-	interval := r.pluginObject.GetInterval()
-	if interval == 0 {
-		interval = config.Config.Global.Interval
-	}
-
-	if err := r.pluginObject.InitInternalConfig(); err != nil {
-		logger.Logger.Errorw("init internal config fail: "+err.Error(), "plugin", r.pluginName)
-		return
-	}
-
-	timer := time.NewTimer(0)
-	defer timer.Stop()
-
-	var start time.Time
-
-	for {
-		select {
-		case <-r.quitChanForSys:
-			close(r.quitChanForSys)
-			return
-		case <-timer.C:
-			start = time.Now()
-			r.gatherSystemPlugin()
-			next := time.Duration(interval) - time.Since(start)
-			if next < 0 {
-				next = 0
-			}
-			timer.Reset(next)
-		}
-	}
-}
-
-func (r *PluginRunner) gatherSystemPlugin() {
-	defer func() {
-		if rc := recover(); rc != nil {
-			logger.Logger.Errorw("gather system plugin panic: "+string(runtimex.Stack(3)), "plugin", r.pluginName)
-		}
-	}()
-
-	queue := safe.NewQueue[*types.Event]()
-	plugins.MayGather(r.pluginObject, queue)
-	if queue.Len() > 0 {
-		engine.PushRawEvents(r.pluginName, r.pluginObject, queue)
-	}
-}
-
 func (r *PluginRunner) startInstancePlugin(instance plugins.Instance, ch chan struct{}) {
 	interval := instance.GetInterval()
 	if interval == 0 {
