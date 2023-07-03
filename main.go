@@ -10,7 +10,6 @@ import (
 
 	"flashcat.cloud/catpaw/agent"
 	"flashcat.cloud/catpaw/config"
-	"flashcat.cloud/catpaw/duty"
 	"flashcat.cloud/catpaw/logger"
 	"flashcat.cloud/catpaw/winx"
 	"github.com/chai2010/winsvc"
@@ -58,9 +57,6 @@ func main() {
 	logger.Logger.Info("runner.hostname: ", runner.Hostname)
 	logger.Logger.Info("runner.fd_limits: ", runner.FdLimits())
 	logger.Logger.Info("runner.vm_limits: ", runner.VMLimits())
-
-	// prepare queue and consumer
-	duty.Init()
 
 	agent := agent.New()
 
