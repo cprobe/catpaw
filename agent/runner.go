@@ -13,11 +13,10 @@ import (
 )
 
 type PluginRunner struct {
-	pluginName     string
-	pluginObject   plugins.Plugin
-	quitChanForSys chan struct{}
-	quitChanForIns []chan struct{}
-	Instances      []plugins.Instance
+	pluginName   string
+	pluginObject plugins.Plugin
+	quitChan     []chan struct{}
+	Instances    []plugins.Instance
 }
 
 func newPluginRunner(pluginName string, p plugins.Plugin) *PluginRunner {
@@ -29,18 +28,18 @@ func newPluginRunner(pluginName string, p plugins.Plugin) *PluginRunner {
 
 func (r *PluginRunner) stop() {
 	for i := 0; i < len(r.Instances); i++ {
-		r.quitChanForIns[i] <- struct{}{}
+		r.quitChan[i] <- struct{}{}
 		plugins.MayDrop(r.Instances[i])
 	}
 }
 
 func (r *PluginRunner) start() {
 	r.Instances = plugins.MayGetInstances(r.pluginObject)
-	r.quitChanForIns = make([]chan struct{}, len(r.Instances))
+	r.quitChan = make([]chan struct{}, len(r.Instances))
 	for i := 0; i < len(r.Instances); i++ {
-		r.quitChanForIns[i] = make(chan struct{}, 1)
+		r.quitChan[i] = make(chan struct{}, 1)
 		ins := r.Instances[i]
-		ch := r.quitChanForIns[i]
+		ch := r.quitChan[i]
 		go r.startInstancePlugin(ins, ch)
 		time.Sleep(50 * time.Millisecond)
 	}
