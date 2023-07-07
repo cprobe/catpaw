@@ -35,12 +35,12 @@ type Instance struct {
 	filter filter.Filter
 }
 
-type SFilter struct {
+type SFilterPlugin struct {
 	config.InternalConfig
 	Instances []*Instance `toml:"instances"`
 }
 
-func (p *SFilter) GetInstances() []plugins.Instance {
+func (p *SFilterPlugin) GetInstances() []plugins.Instance {
 	ret := make([]plugins.Instance, len(p.Instances))
 	for i := 0; i < len(p.Instances); i++ {
 		ret[i] = p.Instances[i]
@@ -50,7 +50,7 @@ func (p *SFilter) GetInstances() []plugins.Instance {
 
 func init() {
 	plugins.Add(pluginName, func() plugins.Plugin {
-		return &SFilter{}
+		return &SFilterPlugin{}
 	})
 }
 

@@ -39,18 +39,18 @@ type Instance struct {
 	sourceAddress string
 }
 
-type Ping struct {
+type PingPlugin struct {
 	config.InternalConfig
 	Instances []*Instance `toml:"instances"`
 }
 
 func init() {
 	plugins.Add(pluginName, func() plugins.Plugin {
-		return &Ping{}
+		return &PingPlugin{}
 	})
 }
 
-func (p *Ping) GetInstances() []plugins.Instance {
+func (p *PingPlugin) GetInstances() []plugins.Instance {
 	ret := make([]plugins.Instance, len(p.Instances))
 	for i := 0; i < len(p.Instances); i++ {
 		ret[i] = p.Instances[i]

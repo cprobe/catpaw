@@ -26,12 +26,12 @@ type Instance struct {
 	Check     string        `toml:"check"`
 }
 
-type FileChange struct {
+type FileChangePlugin struct {
 	config.InternalConfig
 	Instances []*Instance `toml:"instances"`
 }
 
-func (p *FileChange) GetInstances() []plugins.Instance {
+func (p *FileChangePlugin) GetInstances() []plugins.Instance {
 	ret := make([]plugins.Instance, len(p.Instances))
 	for i := 0; i < len(p.Instances); i++ {
 		ret[i] = p.Instances[i]
@@ -41,7 +41,7 @@ func (p *FileChange) GetInstances() []plugins.Instance {
 
 func init() {
 	plugins.Add(pluginName, func() plugins.Plugin {
-		return &FileChange{}
+		return &FileChangePlugin{}
 	})
 }
 

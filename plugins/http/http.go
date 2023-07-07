@@ -49,14 +49,14 @@ type Instance struct {
 	client httpClient
 }
 
-type Http struct {
+type HttpPlugin struct {
 	config.InternalConfig
 	Instances []*Instance `toml:"instances"`
 }
 
 func init() {
 	plugins.Add(pluginName, func() plugins.Plugin {
-		return &Http{}
+		return &HttpPlugin{}
 	})
 }
 
@@ -143,7 +143,7 @@ func (ins *Instance) createHTTPClient() (*http.Client, error) {
 	return client, nil
 }
 
-func (h *Http) GetInstances() []plugins.Instance {
+func (h *HttpPlugin) GetInstances() []plugins.Instance {
 	ret := make([]plugins.Instance, len(h.Instances))
 	for i := 0; i < len(h.Instances); i++ {
 		ret[i] = h.Instances[i]

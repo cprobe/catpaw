@@ -32,18 +32,18 @@ type Instance struct {
 	Expect      string          `toml:"expect"`
 }
 
-type NET struct {
+type NETPlugin struct {
 	config.InternalConfig
 	Instances []*Instance `toml:"instances"`
 }
 
 func init() {
 	plugins.Add(pluginName, func() plugins.Plugin {
-		return &NET{}
+		return &NETPlugin{}
 	})
 }
 
-func (p *NET) GetInstances() []plugins.Instance {
+func (p *NETPlugin) GetInstances() []plugins.Instance {
 	ret := make([]plugins.Instance, len(p.Instances))
 	for i := 0; i < len(p.Instances); i++ {
 		ret[i] = p.Instances[i]
