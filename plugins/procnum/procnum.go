@@ -60,6 +60,15 @@ func (ins *Instance) Init() error {
 }
 
 func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
+	if !ins.GetInitialized() {
+		if err := ins.Init(); err != nil {
+			logger.Logger.Errorf("failed to init procnum plugin instance: %v", err)
+			return
+		} else {
+			ins.SetInitialized()
+		}
+	}
+
 	if ins.searchString == "" {
 		return
 	}
@@ -91,9 +100,15 @@ func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
 		return
 	}
 
+	logger.Logger.Debugf("search string: %s, pids: %v", ins.searchString, pids)
+
 	if len(pids) < ins.AlertIfNumLt {
 		s := fmt.Sprintf("The number of process is less than expected. real: %d, expected: %d", len(pids), ins.AlertIfNumLt)
-		q.PushFront(ins.buildEvent(s).SetEventStatus(ins.GetDefaultSeverity()))
+		q.PushFront(ins.buildEvent("[MD]", s, `
+- search_exec_substring: `+ins.SearchExecSubstring+`
+- search_cmdline_substring: `+ins.SearchCmdlineSubstring+`
+- search_win_service: `+ins.SearchWinService+`
+		`).SetEventStatus(ins.GetDefaultSeverity()))
 		return
 	}
 
