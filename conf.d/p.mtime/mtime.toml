@@ -1,7 +1,7 @@
 [[instances]]
 time_span = "3m"
 directory = "/tmp"
-check = "file changed or created under directory"
+check = "递归检测新文件或文件变化"
 interval = "30s"
 
 [instances.alerting]

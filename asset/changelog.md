@@ -15,3 +15,7 @@
 ## v0.6.0
 
 - New: add filechange plugin
+
+## v0.7.0
+
+- New: add procnum plugin
