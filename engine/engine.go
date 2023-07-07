@@ -238,13 +238,9 @@ func printStdout(event *types.Event) {
 	sb.WriteString(event.EventStatus)
 	sb.WriteString(" ")
 
-	i := 0
 	for k, v := range event.Labels {
 		sb.WriteString(fmt.Sprintf("%s=%s", k, v))
-		i++
-		if i != len(event.Labels)-1 {
-			sb.WriteString(",")
-		}
+		sb.WriteString(",")
 	}
 
 	sb.WriteString(" ")
