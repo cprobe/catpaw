@@ -22,6 +22,8 @@ type Instance struct {
 	SearchCmdlineSubstring string `toml:"search_cmdline_substring"`
 	SearchWinService       string `toml:"search_win_service"`
 
+	searchString string
+
 	AlertIfNumLt int    `toml:"alert_if_num_lt"`
 	Check        string `toml:"check"`
 }
@@ -45,8 +47,20 @@ func init() {
 	})
 }
 
+func (ins *Instance) Init() error {
+	if ins.SearchExecSubstring != "" {
+		ins.searchString = ins.SearchExecSubstring
+	} else if ins.SearchCmdlineSubstring != "" {
+		ins.searchString = ins.SearchCmdlineSubstring
+	} else if ins.SearchWinService != "" {
+		ins.searchString = ins.SearchWinService
+	}
+
+	return nil
+}
+
 func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
-	if ins.SearchExecSubstring == "" && ins.SearchCmdlineSubstring == "" && ins.SearchWinService == "" {
+	if ins.searchString == "" {
 		return
 	}
 
