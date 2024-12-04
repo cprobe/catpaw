@@ -1,0 +1,34 @@
+version: 2
+name: 未命名项目
+description: ""
+global:
+  concurrent: 1
+trigger:
+  webhook: gitlink@1.0.0
+  event:
+    - ref: create_tag
+      ruleset:
+        - param-ref: tag
+          operator: REG_EXP
+          value: '"v.*"'
+      ruleset-operator: AND
+workflow:
+  - ref: git_clone_0
+    name: git clone
+    task: git_clone@1.2.9
+    input:
+      remote_url: '""'
+      ref: '"refs/heads/master"'
+      commit_id: '""'
+      depth: 1
+    needs:
+      - start
+  - ref: start
+    name: 开始
+    task: start
+  - ref: end
+    name: 结束
+    task: end
+    needs:
+      - git_clone_0
+
