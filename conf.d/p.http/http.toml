@@ -1,17 +1,8 @@
-[[instances]]
-targets = [
-    "https://baidu.com",
-    "http://a.cn",
-]
+[[partials]]
+id = "default"
 
 # # Concurrent requests to make per instance
 # concurrency = 10
-
-# # gather interval
-# interval = "30s"
-
-# # Optional append labels
-# labels = { env="production", team="devops" }
 
 ## Set http_proxy (catpaw uses the system wide proxy settings if it's is not set)
 # http_proxy = "http://localhost:8888"
@@ -39,6 +30,20 @@ targets = [
 # payload = '''
 # {'fake':'data'}
 # '''
+
+[[instances]]
+targets = [
+    # "https://baidu.com",
+    # "http://127.0.0.1:8888/request",
+]
+
+partial = "default"
+
+# # gather interval
+# interval = "30s"
+
+# # Optional append labels
+# labels = { env="production", team="devops" }
 
 ## Optional TLS Config
 # use_tls = false

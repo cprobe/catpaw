@@ -13,7 +13,7 @@ type HTTPConfig struct {
 	Interface       string   `toml:"interface"`
 	Method          string   `toml:"method"`
 	Timeout         Duration `toml:"timeout"`
-	FollowRedirects bool     `toml:"follow_redirects"`
+	FollowRedirects *bool    `toml:"follow_redirects"`
 	BasicAuthUser   string   `toml:"basic_auth_user"`
 	BasicAuthPass   string   `toml:"basic_auth_pass"`
 	Headers         []string `toml:"headers"`

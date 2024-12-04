@@ -29,21 +29,19 @@ type Expect struct {
 	CertExpireThreshold      config.Duration `toml:"cert_expire_threshold"`
 }
 
+type Partial struct {
+	ID          string `toml:"id"`
+	Concurrency int    `toml:"concurrency"`
+	config.HTTPConfig
+}
+
 type Instance struct {
 	config.InternalConfig
+	Partial string `toml:"partial"`
 
 	Targets     []string `toml:"targets"`
 	Concurrency int      `toml:"concurrency"`
 	Expect      Expect   `toml:"expect"`
-
-	Interface       string          `toml:"interface"`
-	Method          string          `toml:"method"`
-	Timeout         config.Duration `toml:"timeout"`
-	FollowRedirects bool            `toml:"follow_redirects"`
-	BasicAuthUser   string          `toml:"basic_auth_user"`
-	BasicAuthPass   string          `toml:"basic_auth_pass"`
-	Headers         []string        `toml:"headers"`
-	Payload         string          `toml:"payload"`
 
 	config.HTTPConfig
 	client httpClient
@@ -51,7 +49,63 @@ type Instance struct {
 
 type HttpPlugin struct {
 	config.InternalConfig
+	Partials  []Partial   `toml:"partials"`
 	Instances []*Instance `toml:"instances"`
+}
+
+func (p *HttpPlugin) ApplyPartials() error {
+	for i := 0; i < len(p.Instances); i++ {
+		id := p.Instances[i].Partial
+		if id != "" {
+			for _, partial := range p.Partials {
+				if partial.ID == id {
+					// use partial config as default
+					if p.Instances[i].Concurrency == 0 {
+						p.Instances[i].Concurrency = partial.Concurrency
+					}
+
+					if p.Instances[i].HTTPConfig.HTTPProxy == "" {
+						p.Instances[i].HTTPConfig.HTTPProxy = partial.HTTPProxy
+					}
+
+					if p.Instances[i].HTTPConfig.Interface == "" {
+						p.Instances[i].HTTPConfig.Interface = partial.Interface
+					}
+
+					if p.Instances[i].HTTPConfig.Method == "" {
+						p.Instances[i].HTTPConfig.Method = partial.Method
+					}
+
+					if p.Instances[i].HTTPConfig.Timeout == 0 {
+						p.Instances[i].HTTPConfig.Timeout = partial.Timeout
+					}
+
+					if p.Instances[i].HTTPConfig.FollowRedirects == nil {
+						p.Instances[i].HTTPConfig.FollowRedirects = partial.FollowRedirects
+					}
+
+					if p.Instances[i].HTTPConfig.BasicAuthUser == "" {
+						p.Instances[i].HTTPConfig.BasicAuthUser = partial.BasicAuthUser
+					}
+
+					if p.Instances[i].HTTPConfig.BasicAuthPass == "" {
+						p.Instances[i].HTTPConfig.BasicAuthPass = partial.BasicAuthPass
+					}
+
+					if len(p.Instances[i].HTTPConfig.Headers) == 0 {
+						p.Instances[i].HTTPConfig.Headers = partial.Headers
+					}
+
+					if p.Instances[i].HTTPConfig.Payload == "" {
+						p.Instances[i].HTTPConfig.Payload = partial.Payload
+					}
+
+					break
+				}
+			}
+		}
+	}
+	return nil
 }
 
 func init() {
@@ -134,8 +188,11 @@ func (ins *Instance) createHTTPClient() (*http.Client, error) {
 		Timeout:   time.Duration(ins.GetTimeout()),
 	}
 
-	if !ins.FollowRedirects {
+	if ins.FollowRedirects != nil && *ins.FollowRedirects {
 		client.CheckRedirect = func(req *http.Request, via []*http.Request) error {
+			if len(via) >= 10 {
+				return fmt.Errorf("stopped after 10 redirects")
+			}
 			return http.ErrUseLastResponse
 		}
 	}

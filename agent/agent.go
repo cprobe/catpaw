@@ -70,18 +70,26 @@ func (a *Agent) LoadPlugin(name string, pc *PluginConfig) {
 		}
 	}
 
-	logger.Logger.Infof("loading plugin %s", name)
+	logger.Logger.Infof("%s: loading...", name)
 
 	creator, has := plugins.PluginCreators[name]
 	if !has {
-		logger.Logger.Infof("plugin %s not supported", name)
+		logger.Logger.Infof("%s: plugin not supported", name)
 		return
 	}
 
 	pluginObject := creator()
 	err := toml.Unmarshal(pc.FileContent, pluginObject)
 	if err != nil {
-		logger.Logger.Error("unmarshal plugin config fail:", err)
+		logger.Logger.Errorf("%s: unmarshal plugin config fail: %v", name, err)
+		return
+	}
+
+	// structs will have value after toml.Unmarshal
+	// apply partial configuration if some fields are not set
+	err = plugins.MayApplyPartials(pluginObject)
+	if err != nil {
+		logger.Logger.Errorf("%s: apply partial config fail: %v", name, err)
 		return
 	}
 

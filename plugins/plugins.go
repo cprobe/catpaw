@@ -16,12 +16,23 @@ type Instance interface {
 type Plugin interface {
 	GetLabels() map[string]string
 	GetInterval() config.Duration
-	GetAlerting() config.Alerting
-	InitInternalConfig() error
+	// GetAlerting() config.Alerting
+	// InitInternalConfig() error
+}
+
+type IApplyPartials interface {
+	ApplyPartials() error
 }
 
 type Gatherer interface {
 	Gather(*safe.Queue[*types.Event])
+}
+
+func MayApplyPartials(p interface{}) error {
+	if ap, ok := p.(IApplyPartials); ok {
+		return ap.ApplyPartials()
+	}
+	return nil
 }
 
 type Dropper interface {
