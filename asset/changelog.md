@@ -19,3 +19,8 @@
 ## v0.7.0
 
 - New: add procnum plugin
+
+## v0.8.0
+
+- New: refactor http/net/ping plugin configurations
+

@@ -20,8 +20,19 @@ import (
 
 const pluginName = "net"
 
+type Partial struct {
+	ID          string          `toml:"id"`
+	Concurrency int             `toml:"concurrency"`
+	Timeout     config.Duration `toml:"timeout"`
+	ReadTimeout config.Duration `toml:"read_timeout"`
+	Protocol    string          `toml:"protocol"`
+	Send        string          `toml:"send"`
+	Expect      string          `toml:"expect"`
+}
+
 type Instance struct {
 	config.InternalConfig
+	Partial string `toml:"partial"`
 
 	Targets     []string        `toml:"targets"`
 	Concurrency int             `toml:"concurrency"`
@@ -34,7 +45,47 @@ type Instance struct {
 
 type NETPlugin struct {
 	config.InternalConfig
+	Partials  []Partial   `toml:"partials"`
 	Instances []*Instance `toml:"instances"`
+}
+
+func (p *NETPlugin) ApplyPartials() error {
+	for i := 0; i < len(p.Instances); i++ {
+		id := p.Instances[i].Partial
+		if id != "" {
+			for _, partial := range p.Partials {
+				if partial.ID == id {
+					// use partial config as default
+					if p.Instances[i].Concurrency == 0 {
+						p.Instances[i].Concurrency = partial.Concurrency
+					}
+
+					if p.Instances[i].Timeout == 0 {
+						p.Instances[i].Timeout = partial.Timeout
+					}
+
+					if p.Instances[i].ReadTimeout == 0 {
+						p.Instances[i].ReadTimeout = partial.ReadTimeout
+					}
+
+					if p.Instances[i].Protocol == "" {
+						p.Instances[i].Protocol = partial.Protocol
+					}
+
+					if p.Instances[i].Send == "" {
+						p.Instances[i].Send = partial.Send
+					}
+
+					if p.Instances[i].Expect == "" {
+						p.Instances[i].Expect = partial.Expect
+					}
+
+					break
+				}
+			}
+		}
+	}
+	return nil
 }
 
 func init() {
@@ -53,7 +104,7 @@ func (p *NETPlugin) GetInstances() []plugins.Instance {
 
 func (ins *Instance) Init() error {
 	if ins.Concurrency == 0 {
-		ins.Concurrency = 5
+		ins.Concurrency = 10
 	}
 
 	if ins.Timeout == 0 {

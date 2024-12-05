@@ -1,24 +1,17 @@
-[[instances]]
-targets = [
-#     "127.0.0.1:22",
-#     "localhost:6379",
-#     ":9090"
-]
-
-## Set timeout (default 5 seconds)
-# timeout = "5s"
-
-## Set read timeout (only used if expecting a response)
-# read_timeout = "5s"
+[[partials]]
+id = "default"
 
 # # Concurrent requests to make per instance
 # concurrency = 10
 
-# # gather interval
-# interval = "30s"
+## Set connect timeout (default 5 seconds)
+# timeout = "1s"
 
-# # Optional append labels
-# labels = { env="production", team="devops" }
+## Set read timeout (only used if expecting a response)
+# read_timeout = "1s"
+
+# # Concurrent requests to make per instance
+# concurrency = 10
 
 ## Protocol, must be "tcp" or "udp"
 ## NOTE: because the "udp" protocol does not respond to requests, it requires
@@ -32,6 +25,20 @@ targets = [
 # send = "ssh"
 ## expected string in answer
 # expect = "ssh"
+
+
+[[instances]]
+targets = [
+#     "127.0.0.1:22",
+#     "localhost:6379",
+#     ":9090"
+]
+
+# # gather interval
+# interval = "30s"
+
+# # Optional append labels
+# labels = { env="production", team="devops" }
 
 [instances.alerting]
 ## Enable alerting or not

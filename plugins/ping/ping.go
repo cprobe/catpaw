@@ -21,8 +21,21 @@ const (
 	defaultPingDataBytesSize = 56
 )
 
+type Partial struct {
+	ID                         string  `toml:"id"`
+	Concurrency                int     `toml:"concurrency"`
+	Count                      int     `toml:"count"`         // ping -c <COUNT>
+	PingInterval               float64 `toml:"ping_interval"` // ping -i <INTERVAL>
+	Timeout                    float64 `toml:"timeout"`       // ping -W <TIMEOUT>
+	Interface                  string  `toml:"interface"`     // ping -I/-S <INTERFACE/SRC_ADDR>
+	IPv6                       *bool   `toml:"ipv6"`          // Whether to resolve addresses using ipv6 or not.
+	Size                       *int    `toml:"size"`          // Packet size
+	AlertIfPacketLossPercentGe float64 `toml:"alert_if_packet_loss_percent_ge"`
+}
+
 type Instance struct {
 	config.InternalConfig
+	Partial string `toml:"partial"`
 
 	Targets                    []string `toml:"targets"`
 	Concurrency                int      `toml:"concurrency"`
@@ -30,9 +43,9 @@ type Instance struct {
 	PingInterval               float64  `toml:"ping_interval"` // ping -i <INTERVAL>
 	Timeout                    float64  `toml:"timeout"`       // ping -W <TIMEOUT>
 	Interface                  string   `toml:"interface"`     // ping -I/-S <INTERFACE/SRC_ADDR>
-	IPv6                       bool     `toml:"ipv6"`          // Whether to resolve addresses using ipv6 or not.
+	IPv6                       *bool    `toml:"ipv6"`          // Whether to resolve addresses using ipv6 or not.
 	Size                       *int     `toml:"size"`          // Packet size
-	ExpectMaxPacketLossPercent int      `toml:"expect_max_packet_loss_percent"`
+	AlertIfPacketLossPercentGe float64  `toml:"alert_if_packet_loss_percent_ge"`
 
 	calcInterval  time.Duration
 	calcTimeout   time.Duration
@@ -41,7 +54,55 @@ type Instance struct {
 
 type PingPlugin struct {
 	config.InternalConfig
+	Partials  []Partial   `toml:"partials"`
 	Instances []*Instance `toml:"instances"`
+}
+
+func (p *PingPlugin) ApplyPartials() error {
+	for i := 0; i < len(p.Instances); i++ {
+		id := p.Instances[i].Partial
+		if id != "" {
+			for _, partial := range p.Partials {
+				if partial.ID == id {
+					// use partial config as default
+					if p.Instances[i].Concurrency == 0 {
+						p.Instances[i].Concurrency = partial.Concurrency
+					}
+
+					if p.Instances[i].Count == 0 {
+						p.Instances[i].Count = partial.Count
+					}
+
+					if p.Instances[i].PingInterval == 0 {
+						p.Instances[i].PingInterval = partial.PingInterval
+					}
+
+					if p.Instances[i].Timeout == 0 {
+						p.Instances[i].Timeout = partial.Timeout
+					}
+
+					if p.Instances[i].Interface == "" {
+						p.Instances[i].Interface = partial.Interface
+					}
+
+					if p.Instances[i].IPv6 == nil {
+						p.Instances[i].IPv6 = partial.IPv6
+					}
+
+					if p.Instances[i].Size == nil {
+						p.Instances[i].Size = partial.Size
+					}
+
+					if p.Instances[i].AlertIfPacketLossPercentGe == 0 {
+						p.Instances[i].AlertIfPacketLossPercentGe = partial.AlertIfPacketLossPercentGe
+					}
+
+					break
+				}
+			}
+		}
+	}
+	return nil
 }
 
 func init() {
@@ -60,7 +121,7 @@ func (p *PingPlugin) GetInstances() []plugins.Instance {
 
 func (ins *Instance) Init() error {
 	if ins.Concurrency == 0 {
-		ins.Concurrency = 5
+		ins.Concurrency = 10
 	}
 
 	if ins.Count < 1 {
@@ -166,7 +227,7 @@ func (ins *Instance) gather(q *safe.Queue[*types.Event], target string) {
 		return
 	}
 
-	if stats.PacketLoss > float64(ins.ExpectMaxPacketLossPercent) {
+	if stats.PacketLoss >= float64(ins.AlertIfPacketLossPercentGe) {
 		message := fmt.Sprintf("packet loss is %f%%", stats.PacketLoss)
 		logger.Logger.Error(message)
 		q.PushFront(event.SetEventStatus(ins.GetDefaultSeverity()).SetDescription(ins.buildDesc(target, message)))
@@ -191,7 +252,7 @@ func (ins *Instance) ping(destination string) (*pingStats, error) {
 
 	pinger.SetPrivileged(true)
 
-	if ins.IPv6 {
+	if ins.IPv6 != nil && *ins.IPv6 {
 		pinger.SetNetwork("ip6")
 	}
 
@@ -233,7 +294,7 @@ func (ins *Instance) ping(destination string) (*pingStats, error) {
 func (ins *Instance) buildDesc(target, message string) string {
 	return `[MD]
 - target: ` + target + `
-- expect_max_packet_loss_percent: ` + fmt.Sprint(ins.ExpectMaxPacketLossPercent) + `
+- alert_if_packet_loss_percent_ge: ` + fmt.Sprint(ins.AlertIfPacketLossPercentGe) + `
 
 
 **message**:

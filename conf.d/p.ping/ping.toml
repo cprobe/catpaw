@@ -1,17 +1,8 @@
-[[instances]]
-targets = [
-    "baidu.com",
-    "127.0.0.1",
-]
+[[partials]]
+id = "default"
 
 # # Concurrent requests to make per instance
-# concurrency = 5
-
-# # gather interval
-# interval = "30s"
-
-# # Optional append labels
-# labels = { env="production", team="devops" }
+# concurrency = 10
 
 ## Number of ping packets to send per interval.  Corresponds to the "-c"
 ## option of the ping command.
@@ -37,7 +28,18 @@ targets = [
 # size = 56
 
 # alert if packet loss is above this threshold
-expect_max_packet_loss_percent = 1
+alert_if_packet_loss_percent_ge = 1.0
+
+[[instances]]
+targets = [
+    "127.0.0.1",
+]
+
+# # gather interval
+# interval = "30s"
+
+# # Optional append labels
+# labels = { env="production", team="devops" }
 
 [instances.alerting]
 ## Enable alerting or not
