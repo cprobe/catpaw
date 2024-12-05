@@ -35,6 +35,8 @@ targets = [
     "127.0.0.1",
 ]
 
+partial = "default"
+
 # # gather interval
 # interval = "30s"
 

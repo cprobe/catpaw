@@ -34,6 +34,8 @@ targets = [
 #     ":9090"
 ]
 
+partial = "default"
+
 # # gather interval
 # interval = "30s"
 
