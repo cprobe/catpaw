@@ -1,0 +1,46 @@
+version: 2
+name: workflow01
+description: ""
+global:
+  concurrent: 1
+trigger:
+  webhook: gitlink@1.0.0
+  event:
+    - ref: create_tag
+      ruleset:
+        - param-ref: tag
+          operator: REG_EXP
+          value: '"v.*"'
+      ruleset-operator: AND
+workflow:
+  - ref: git_clone_0
+    name: git clone
+    task: git_clone@1.2.9
+    input:
+      username: ((ns.username))
+      password: ((ns.password))
+      remote_url: '"https://gitlink.org.cn/UlricQin/catpaw.git"'
+      ref: '"refs/heads/master"'
+      commit_id: '""'
+      depth: 1
+    needs:
+      - start
+  - ref: start
+    name: 开始
+    task: start
+  - ref: end
+    name: 结束
+    task: end
+    needs:
+      - golong_build_122_0
+  - ref: golong_build_122_0
+    name: golang build 1.22
+    task: dagege/golong_build_122@1.0.4
+    input:
+      workspace: '""'
+      out_bin_name: '""'
+      GOOS: '""'
+      GOARCH: '""'
+    needs:
+      - git_clone_0
+
