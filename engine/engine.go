@@ -134,15 +134,15 @@ func clean(event *types.Event, now int64, pluginName string, pluginObj plugins.P
 	// append label: from_plugin
 	event.Labels["from_plugin"] = pluginName
 
-	// append label from instance
-	insLabels := ins.GetLabels()
-	for k, v := range insLabels {
-		event.Labels[k] = v
-	}
-
 	// append label from plugin
 	plLabels := pluginObj.GetLabels()
 	for k, v := range plLabels {
+		event.Labels[k] = v
+	}
+
+	// append label from instance
+	insLabels := ins.GetLabels()
+	for k, v := range insLabels {
 		event.Labels[k] = v
 	}
 
