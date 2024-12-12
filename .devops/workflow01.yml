@@ -36,7 +36,7 @@ workflow:
     task: echo/go_build_node@0.0.3
     input:
       workspace: git_clone_0.git_path
-      out_bin_name: '"test"'
+      out_bin_name: '"catpaw_bin"'
       goos: '"linux"'
       goarch: '"amd64"'
     needs:
