@@ -30,15 +30,15 @@ workflow:
     name: 结束
     task: end
     needs:
-      - go_build_node_0
-  - ref: go_build_node_0
-    name: go_build_node
-    task: echo/go_build_node@0.0.3
+      - golong_build_122_0
+  - ref: golong_build_122_0
+    name: golang build 1.22
+    task: dagege/golong_build_122@1.0.4
     input:
       workspace: git_clone_0.git_path
-      out_bin_name: '"catpaw_bin"'
-      goos: '"linux"'
-      goarch: '"amd64"'
+      out_bin_name: '"test-bin"'
+      GOOS: '"linux"'
+      GOARCH: '"amd64"'
     needs:
       - git_clone_0
 
