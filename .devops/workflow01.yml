@@ -37,10 +37,10 @@ workflow:
     name: golang build 1.22
     task: dagege/golong_build_122@1.0.4
     input:
-      workspace: '""'
-      out_bin_name: '""'
-      GOOS: '""'
-      GOARCH: '""'
+      workspace: ${{git_clone_0.git_path}}
+      out_bin_name: '"test_bin"'
+      GOOS: '"linux"'
+      GOARCH: '"amd64"'
     needs:
       - git_clone_0
 
