@@ -38,7 +38,7 @@ workflow:
       workspace: git_clone_0.git_path
       out_bin_name: '"catpaw_bin"'
       goos: '"linux"'
-      goarch: amd64
+      goarch: '"amd64"'
     needs:
       - git_clone_0
 
