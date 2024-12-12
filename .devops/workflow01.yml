@@ -17,8 +17,6 @@ workflow:
     name: git clone
     task: git_clone@1.2.9
     input:
-      username: ((ns.username))
-      password: ((ns.password))
       remote_url: '"https://gitlink.org.cn/UlricQin/catpaw.git"'
       ref: '"refs/heads/master"'
       commit_id: '""'
