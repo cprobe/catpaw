@@ -30,13 +30,13 @@ workflow:
     name: 结束
     task: end
     needs:
-      - golang_build_node_0
-  - ref: golang_build_node_0
-    name: golang_build_node
-    task: yystopf/golang_build_node@0.0.2
+      - golang_build_1_20_0
+  - ref: golang_build_1_20_0
+    name: golang_build_1.20
+    task: Trustie/golang_build_1_20@0.0.1
     input:
       workspace: git_clone_0.git_path
-      out_bin_name: '"tstts"'
+      out_bin_name: '"build_test_bin"'
       goos: '"linux"'
       goarch: '"amd64"'
     needs:
