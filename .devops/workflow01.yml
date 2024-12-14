@@ -30,15 +30,14 @@ workflow:
     name: 结束
     task: end
     needs:
-      - golong_build_122_0
-  - ref: golong_build_122_0
-    name: golang build 1.22
-    task: dagege/golong_build_122@1.0.4
+      - golang_build_20_0
+  - ref: golang_build_20_0
+    name: golang1.20构建
+    task: mafeibai/golang_build_20@0.0.6
     input:
       workspace: git_clone_0.git_path
-      out_bin_name: '"test-bin"'
-      GOOS: '"linux"'
-      GOARCH: '"amd64"'
+      bin_name: '"test"'
+      config_dir: '"linux"'
     needs:
       - git_clone_0
 
