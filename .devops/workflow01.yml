@@ -45,7 +45,7 @@ workflow:
     name: 显示go build bin文件
     image: docker.jianmuhub.com/library/alpine:3.17.0
     script:
-      - ls  -ls  golang_build_node_0.bin_dir
+      - ls  -lsh  ${golang_build_node_0.bin_dir}
     needs:
       - golang_build_node_0
 
