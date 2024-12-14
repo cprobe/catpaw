@@ -30,7 +30,7 @@ workflow:
     name: 结束
     task: end
     needs:
-      - golang_build_node_0
+      - shell_0
   - ref: golang_build_node_0
     name: golang_build_node
     task: yystopf/golang_build_node@0.0.2
@@ -41,4 +41,11 @@ workflow:
       goarch: '"amd64"'
     needs:
       - git_clone_0
+  - ref: shell_0
+    name: 显示go build bin文件
+    image: docker.jianmuhub.com/library/alpine:3.17.0
+    script:
+      - ls  -ls  {{golang_build_node_0.bin_dir}}
+    needs:
+      - golang_build_node_0
 
