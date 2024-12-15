@@ -1,6 +1,6 @@
 version: 2
-name: workflow01
-description: ""
+name: go1.20编译二进制文件
+description: 显示二进制文件信息，可使用scp节点复制到其他服务器
 global:
   concurrent: 1
 trigger:
@@ -17,8 +17,6 @@ workflow:
     name: git clone
     task: git_clone@1.2.9
     input:
-      username: ((ns.username))
-      password: ((ns.password))
       remote_url: '"https://gitlink.org.cn/UlricQin/catpaw.git"'
       ref: '"refs/heads/master"'
       commit_id: '""'
@@ -32,15 +30,24 @@ workflow:
     name: 结束
     task: end
     needs:
-      - golong_build_122_0
-  - ref: golong_build_122_0
-    name: golang build 1.22
-    task: dagege/golong_build_122@1.0.4
+      - shell_0
+  - ref: golang_build_node_0
+    name: golang_build_node
+    task: yystopf/golang_build_node@0.0.2
     input:
-      workspace: '""'
-      out_bin_name: '""'
-      GOOS: '""'
-      GOARCH: '""'
+      workspace: git_clone_0.git_path
+      out_bin_name: '"build-test-bin"'
+      goos: '"linux"'
+      goarch: '"amd64"'
     needs:
       - git_clone_0
+  - ref: shell_0
+    name: 显示go build bin文件
+    image: docker.jianmuhub.com/library/alpine:3.17.0
+    env:
+      GO_BIN_FILE: golang_build_node_0.bin_dir
+    script:
+      - ls  -lsh  ${GO_BIN_FILE}
+    needs:
+      - golang_build_node_0
 
