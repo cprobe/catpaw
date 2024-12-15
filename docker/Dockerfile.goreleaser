@@ -1,0 +1,7 @@
+FROM --platform=$TARGETPLATFORM ubuntu:23.04
+
+WORKDIR /app
+ADD catpaw /app
+# COPY conf.d /app/conf.d
+
+CMD ["/app/catpaw", "-h"]

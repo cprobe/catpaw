@@ -1,0 +1,88 @@
+before:
+  hooks:
+    # You may remove this if you don't use go modules.
+    - go mod tidy
+
+snapshot:
+  name_template: '{{ .Tag }}'
+checksum:
+  name_template: 'checksums.txt'
+changelog:
+  skip: true
+
+builds:
+  - id: build
+    main: ./
+    binary: catpaw
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - windows
+    goarch:
+      - arm64
+      - amd64
+    ldflags:
+      - -s -w
+      - -X github.com/cprobe/catpaw/config.Version={{ .Tag }}-{{.Commit}}
+
+archives:
+  - id: archive
+    rlcp: true
+    builds:
+      - build
+    format: tar.gz
+    format_overrides:
+      - goos: windows
+        format: zip
+    name_template: "{{ .ProjectName }}-v{{ .Version }}-{{ .Os }}-{{ .Arch }}"
+    wrap_in_directory: true
+    files:
+      - conf.d/*
+      - LICENSE
+      - README.md
+
+
+release:
+  github:
+    owner: cprobe
+    name: catpaw
+  name_template: "v{{ .Version }}"
+
+dockers:
+  - image_templates:
+      - flashcatcloud/catpaw:{{ .Tag }}-amd64
+    goos: linux
+    goarch: amd64
+    ids:
+      - build
+    dockerfile: docker/Dockerfile.goreleaser
+    extra_files:
+      - LICENSE
+    use: buildx
+    build_flag_templates:
+      - "--platform=linux/amd64"
+
+  - image_templates:
+      - flashcatcloud/catpaw:{{ .Tag }}-arm64v8
+    goos: linux
+    goarch: arm64
+    ids:
+      - build
+    dockerfile: docker/Dockerfile.goreleaser
+    extra_files:
+      - LICENSE
+    use: buildx
+    build_flag_templates:
+      - "--platform=linux/arm64/v8"
+
+docker_manifests:
+  - name_template: flashcatcloud/catpaw:{{ .Tag }}
+    image_templates:
+      - flashcatcloud/catpaw:{{ .Tag }}-amd64
+      - flashcatcloud/catpaw:{{ .Tag }}-arm64v8
+
+  - name_template: flashcatcloud/catpaw:latest
+    image_templates:
+      - flashcatcloud/catpaw:{{ .Tag }}-amd64
+      - flashcatcloud/catpaw:{{ .Tag }}-arm64v8
