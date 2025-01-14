@@ -1,34 +1,34 @@
 ## 简介
+这是一个极为轻量的监控系统，就是一个小命令行工具。通常和 Flashduty 协同使用（当然，你也可以写个接收事件的小服务来做告警分发），catpaw 负责产生事件，Flashduty 负责发送事件。
 
-这是一个极为轻量的监控系统，就是一个小命令行工具。通常和 FlashDuty 协同使用（当然，你也可以写个接收事件的小服务来做告警分发），catpaw 负责产生事件，FlashDuty 负责发送事件。
+## 插件简介
+catpaw 是插件机制，提供了不同功能的插件用于不同的监控场景。
 
-catpaw 是插件机制，目前提供了几个小插件：
-
-**exec**
+### exec
 自定义脚本执行的插件。脚本用什么语言写都可以，只要按照规定的格式输出即可。
 
-**filechange**
+### filechange
 监控近期是否有文件发生变化，比如 `/etc/shadow` 等重要文件。
 
-**http**
+### http
 监控 HTTP URL，检查返回的状态码和内容是否符合预期。
 
-**journaltail**
+### journaltail
 使用 journalctl 命令检查日志，如果日志里有关键字就产生事件。
 
-**mtime**
+### mtime
 递归检查某个目录下的所有文件的 mtime，如果有文件在近期发生变化就产生事件。
 
-**net**
+### net
 通过 tcp、udp 方式探测远端端口是否可用。
 
-**ping**
+### ping
 通过 icmp 方式探测远端主机是否可用。
 
-**procnum**
+### procnum
 检查某个进程的数量，如果数量不够（通常是进程挂了）就产生事件。
 
-**sfilter**
+### sfilter
 执行脚本，检查输出，只要输出中包含关键字就产生事件。
 
 ## 使用场景
@@ -39,16 +39,16 @@ catpaw 是插件机制，目前提供了几个小插件：
 
 ## 安装
 
-现阶段先编译安装吧，这是一个 Go 项目，你需要有 Go 环境。把代码 clone 到本地，然后执行 `go build` 即可。后面我研究一下 gitlink 怎么自动编译打包。也可以联系我要编译好的二进制文件。
+从 [github releases](https://github.com/cprobe/catpaw/releases) 页面下载编译好的二进制。
 
 ## 使用
 
-首先你需要注册一个 FlashDuty 账号。
+首先你需要注册一个 Flashduty 账号。
 
-- [FlashDuty产品介绍](https://flashcat.cloud/product/flashduty/)
-- [FlashDuty免费注册](https://console.flashcat.cloud/)
+- [Flashduty产品介绍](https://flashcat.cloud/product/flashduty/)
+- [Flashduty免费注册](https://console.flashcat.cloud/)
 
-然后在集成中心创建一个“标准告警事件”的集成，随便起个名字，保存，就可以得到一个 webhook 地址。如果搞不定，FlashDuty 页面右上角有较为详细的文档和视频教程。
+然后在集成中心创建一个“标准告警事件”的集成，随便起个名字，保存，就可以得到一个 webhook 地址。如果搞不定，Flashduty 页面右上角有较为详细的文档和视频教程。
 
 ![标准告警事件](https://download.flashcat.cloud/ulric/20241205161341.png)
 
