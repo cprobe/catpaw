@@ -50,8 +50,6 @@ catpaw 是插件机制，提供了不同功能的插件用于不同的监控场�
 
 然后在集成中心创建一个“标准告警事件”的集成，随便起个名字，保存，就可以得到一个 webhook 地址。如果搞不定，Flashduty 页面右上角有较为详细的文档和视频教程。
 
-![标准告警事件](https://download.flashcat.cloud/ulric/20241205161341.png)
-
 把 webhook 地址配置到 catpaw 的配置文件中：`conf.d/config.toml`，配置到 flashduty 下面的 url 字段。然后，就可以启动 catpaw 玩耍了。catpaw 有几个命令行参数，通过 `./catpaw --help` 可以看到。
 
 当然了，具体要监控什么，需要去修改各个插件的配置，每个插件的配置文件在 `conf.d` 目录下，比如 `conf.d/p.http` 就是 http 插件的配置文件。里边有详尽的注释。
