@@ -57,7 +57,7 @@ func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
 	}
 
 	if !file.IsExist(ins.Directory) {
-		logger.Logger.Warnf("directory %s not exist", ins.Directory)
+		logger.Logger.Warnw("directory not exist", "directory", ins.Directory)
 		return
 	}
 

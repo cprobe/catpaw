@@ -61,7 +61,7 @@ func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
 		var err error
 		ins.filter, err = filter.NewIncludeExcludeFilter(ins.FilterInclude, ins.FilterExclude)
 		if err != nil {
-			logger.Logger.Warnf("failed to create filter: %s", err)
+			logger.Logger.Warnw("failed to create filter", "error", err)
 			return
 		}
 	}
@@ -74,7 +74,7 @@ func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
 	// go go go
 	bin, err := exec.LookPath("journalctl")
 	if err != nil {
-		logger.Logger.Error("lookup journalctl fail: ", err)
+		logger.Logger.Errorw("lookup journalctl fail", "error", err)
 		return
 	}
 
@@ -85,7 +85,7 @@ func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
 
 	out, err := exec.Command(bin, "--since", fmt.Sprintf("-%s", ins.TimeSpan), "--no-pager", "--no-tail").Output()
 	if err != nil {
-		logger.Logger.Error("exec journalctl fail: ", err)
+		logger.Logger.Errorw("exec journalctl fail", "error", err)
 		return
 	}
 

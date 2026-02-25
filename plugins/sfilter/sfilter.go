@@ -77,7 +77,7 @@ func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
 		var err error
 		ins.filter, err = filter.NewIncludeExcludeFilter(ins.FilterInclude, ins.FilterExclude)
 		if err != nil {
-			logger.Logger.Warnf("failed to create filter: %s", err)
+			logger.Logger.Warnw("failed to create filter", "error", err)
 			return
 		}
 	}

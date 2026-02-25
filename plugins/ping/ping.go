@@ -162,7 +162,7 @@ func (ins *Instance) Init() error {
 }
 
 func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
-	logger.Logger.Debug("ping... targets: ", ins.Targets)
+	logger.Logger.Debugw("ping targets", "targets", ins.Targets)
 
 	if len(ins.Targets) == 0 {
 		return
@@ -170,7 +170,7 @@ func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
 
 	if !ins.GetInitialized() {
 		if err := ins.Init(); err != nil {
-			logger.Logger.Errorf("failed to init ping plugin instance: %v", err)
+			logger.Logger.Errorw("failed to init ping plugin instance", "error", err)
 			return
 		} else {
 			ins.SetInitialized()
@@ -195,7 +195,7 @@ func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
 }
 
 func (ins *Instance) gather(q *safe.Queue[*types.Event], target string) {
-	logger.Logger.Debug("ping target: ", target)
+	logger.Logger.Debugw("ping target", "target", target)
 
 	labels := map[string]string{
 		"target": target,
@@ -208,28 +208,28 @@ func (ins *Instance) gather(q *safe.Queue[*types.Event], target string) {
 	stats, err := ins.ping(target)
 	if err != nil {
 		message := fmt.Sprintf("ping %s failed: %v", target, err)
-		logger.Logger.Error(message)
+		logger.Logger.Errorw("ping failed", "target", target, "error", err)
 		q.PushFront(event.SetEventStatus(ins.GetDefaultSeverity()).SetDescription(ins.buildDesc(target, message)))
 		return
 	}
 
 	if stats.PacketsSent == 0 {
 		message := fmt.Sprintf("no packets sent to %s", target)
-		logger.Logger.Error(message)
+		logger.Logger.Errorw("no packets sent", "target", target)
 		q.PushFront(event.SetEventStatus(ins.GetDefaultSeverity()).SetDescription(ins.buildDesc(target, message)))
 		return
 	}
 
 	if stats.PacketsRecv == 0 {
 		message := fmt.Sprintf("no packets received to %s", target)
-		logger.Logger.Error(message)
+		logger.Logger.Errorw("no packets received", "target", target)
 		q.PushFront(event.SetEventStatus(ins.GetDefaultSeverity()).SetDescription(ins.buildDesc(target, message)))
 		return
 	}
 
 	if stats.PacketLoss >= float64(ins.AlertIfPacketLossPercentGe) {
 		message := fmt.Sprintf("packet loss is %f%%", stats.PacketLoss)
-		logger.Logger.Error(message)
+		logger.Logger.Errorw("packet loss too high", "target", target, "packet_loss_percent", stats.PacketLoss)
 		q.PushFront(event.SetEventStatus(ins.GetDefaultSeverity()).SetDescription(ins.buildDesc(target, message)))
 		return
 	}

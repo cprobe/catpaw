@@ -52,11 +52,13 @@ func main() {
 	defer closefn()
 
 	runner.Init()
-	logger.Logger.Info("runner.binarydir: ", runner.Cwd)
-	logger.Logger.Info("runner.configdir: ", *configDir)
-	logger.Logger.Info("runner.hostname: ", runner.Hostname)
-	logger.Logger.Info("runner.fd_limits: ", runner.FdLimits())
-	logger.Logger.Info("runner.vm_limits: ", runner.VMLimits())
+	logger.Logger.Infow("runner initialized",
+		"binarydir", runner.Cwd,
+		"configdir", *configDir,
+		"hostname", runner.Hostname,
+		"fd_limits", runner.FdLimits(),
+		"vm_limits", runner.VMLimits(),
+	)
 
 	agent := agent.New()
 
@@ -77,7 +79,7 @@ func main() {
 EXIT:
 	for {
 		sig := <-sc
-		logger.Logger.Info("received signal: ", sig.String())
+		logger.Logger.Infow("received signal", "signal", sig.String())
 		switch sig {
 		case syscall.SIGQUIT, syscall.SIGTERM, syscall.SIGINT:
 			break EXIT

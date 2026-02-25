@@ -215,7 +215,7 @@ func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
 
 	if !ins.GetInitialized() {
 		if err := ins.Init(); err != nil {
-			logger.Logger.Errorf("failed to init http plugin instance: %v", err)
+			logger.Logger.Errorw("failed to init http plugin instance", "error", err)
 			return
 		} else {
 			ins.SetInitialized()
@@ -239,7 +239,7 @@ func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
 }
 
 func (ins *Instance) gather(q *safe.Queue[*types.Event], target string) {
-	logger.Logger.Debug("http target: ", target)
+	logger.Logger.Debugw("http target", "target", target)
 
 	labels := map[string]string{
 		"target": target,

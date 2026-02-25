@@ -152,7 +152,7 @@ func (ins *Instance) Init() error {
 }
 
 func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
-	logger.Logger.Debug("net gather, targets: ", ins.Targets)
+	logger.Logger.Debugw("net gather", "targets", ins.Targets)
 
 	if len(ins.Targets) == 0 {
 		return
@@ -160,7 +160,7 @@ func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
 
 	if !ins.GetInitialized() {
 		if err := ins.Init(); err != nil {
-			logger.Logger.Errorf("failed to init net plugin instance: %v", err)
+			logger.Logger.Errorw("failed to init net plugin instance", "error", err)
 			return
 		} else {
 			ins.SetInitialized()
@@ -184,7 +184,7 @@ func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
 }
 
 func (ins *Instance) gather(q *safe.Queue[*types.Event], target string) {
-	logger.Logger.Debug("net target: ", target)
+	logger.Logger.Debugw("net target", "target", target)
 
 	labels := map[string]string{
 		"target":   target,
@@ -262,7 +262,7 @@ func (ins *Instance) UDPGather(address string, labels map[string]string, q *safe
 	if err != nil {
 		message := fmt.Sprintf("resolve udp address(%s) error: %v", address, err)
 		q.PushFront(event.SetEventStatus(ins.GetDefaultSeverity()).SetDescription(ins.buildDesc(address, message)))
-		logger.Logger.Error(message)
+		logger.Logger.Errorw("resolve udp address fail", "address", address, "error", err)
 		return
 	}
 
@@ -270,7 +270,7 @@ func (ins *Instance) UDPGather(address string, labels map[string]string, q *safe
 	if err != nil {
 		message := fmt.Sprintf("dial udp address(%s) error: %v", address, err)
 		q.PushFront(event.SetEventStatus(ins.GetDefaultSeverity()).SetDescription(ins.buildDesc(address, message)))
-		logger.Logger.Error(message)
+		logger.Logger.Errorw("dial udp address fail", "address", address, "error", err)
 		return
 	}
 
@@ -279,14 +279,14 @@ func (ins *Instance) UDPGather(address string, labels map[string]string, q *safe
 	if _, err = conn.Write([]byte(ins.Send)); err != nil {
 		message := fmt.Sprintf("write string(%s) to udp address(%s) error: %v", ins.Send, address, err)
 		q.PushFront(event.SetEventStatus(ins.GetDefaultSeverity()).SetDescription(ins.buildDesc(address, message)))
-		logger.Logger.Error(message)
+		logger.Logger.Errorw("write to udp address fail", "address", address, "send", ins.Send, "error", err)
 		return
 	}
 
 	if err = conn.SetReadDeadline(time.Now().Add(time.Duration(ins.ReadTimeout))); err != nil {
 		message := fmt.Sprintf("set connection deadline to udp address(%s) error: %v", address, err)
 		q.PushFront(event.SetEventStatus(ins.GetDefaultSeverity()).SetDescription(ins.buildDesc(address, message)))
-		logger.Logger.Error(message)
+		logger.Logger.Errorw("set udp read deadline fail", "address", address, "error", err)
 		return
 	}
 
@@ -295,14 +295,14 @@ func (ins *Instance) UDPGather(address string, labels map[string]string, q *safe
 	if _, _, err = conn.ReadFromUDP(buf); err != nil {
 		message := fmt.Sprintf("read from udp address(%s) error: %v", address, err)
 		q.PushFront(event.SetEventStatus(ins.GetDefaultSeverity()).SetDescription(ins.buildDesc(address, message)))
-		logger.Logger.Error(message)
+		logger.Logger.Errorw("read from udp address fail", "address", address, "error", err)
 		return
 	}
 
 	if !strings.Contains(string(buf), ins.Expect) {
 		message := fmt.Sprintf("response mismatch. expect: %s, real: %s", ins.Expect, string(buf))
 		q.PushFront(event.SetEventStatus(ins.GetDefaultSeverity()).SetDescription(ins.buildDesc(address, message)))
-		logger.Logger.Error(message)
+		logger.Logger.Errorw("udp response mismatch", "address", address, "expect", ins.Expect, "actual", string(buf))
 		return
 	}
 

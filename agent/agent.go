@@ -50,7 +50,7 @@ func (a *Agent) Start() {
 
 	pcs, err := loadFileConfigs()
 	if err != nil {
-		logger.Logger.Error("load file configs fail:", err)
+		logger.Logger.Errorw("load file configs fail", "error", err)
 		return
 	}
 
@@ -70,18 +70,18 @@ func (a *Agent) LoadPlugin(name string, pc *PluginConfig) {
 		}
 	}
 
-	logger.Logger.Infof("%s: loading...", name)
+	logger.Logger.Infow("loading plugin", "plugin", name)
 
 	creator, has := plugins.PluginCreators[name]
 	if !has {
-		logger.Logger.Infof("%s: plugin not supported", name)
+		logger.Logger.Infow("plugin not supported", "plugin", name)
 		return
 	}
 
 	pluginObject := creator()
 	err := toml.Unmarshal(pc.FileContent, pluginObject)
 	if err != nil {
-		logger.Logger.Errorf("%s: unmarshal plugin config fail: %v", name, err)
+		logger.Logger.Errorw("unmarshal plugin config fail", "plugin", name, "error", err)
 		return
 	}
 
@@ -89,7 +89,7 @@ func (a *Agent) LoadPlugin(name string, pc *PluginConfig) {
 	// apply partial configuration if some fields are not set
 	err = plugins.MayApplyPartials(pluginObject)
 	if err != nil {
-		logger.Logger.Errorf("%s: apply partial config fail: %v", name, err)
+		logger.Logger.Errorw("apply partial config fail", "plugin", name, "error", err)
 		return
 	}
 
@@ -159,7 +159,7 @@ func (a *Agent) HandleChangedPlugin(names []string) {
 
 		mtime, err := getMTime(name)
 		if err != nil {
-			logger.Logger.Errorw("get mtime fail:"+err.Error(), "plugin:", name)
+			logger.Logger.Errorw("get mtime fail", "plugin", name, "error", err)
 			continue
 		}
 
@@ -180,7 +180,7 @@ func (a *Agent) HandleChangedPlugin(names []string) {
 
 		bs, err := getFileContent(name)
 		if err != nil {
-			logger.Logger.Errorw("get file content fail:"+err.Error(), "plugin:", name)
+			logger.Logger.Errorw("get file content fail", "plugin", name, "error", err)
 			continue
 		}
 
@@ -210,7 +210,7 @@ func (a *Agent) Reload() {
 func (a *Agent) HandleNewPlugin(names []string) {
 	dirs, err := file.DirsUnder(config.Config.ConfigDir)
 	if err != nil {
-		logger.Logger.Error("failed to get config dirs:", err)
+		logger.Logger.Errorw("failed to get config dirs", "error", err)
 		return
 	}
 
@@ -228,7 +228,7 @@ func (a *Agent) HandleNewPlugin(names []string) {
 
 		mtime, err := getMTime(name)
 		if err != nil {
-			logger.Logger.Error("get mtime fail:", err)
+			logger.Logger.Errorw("get mtime fail", "error", err)
 			continue
 		}
 
@@ -238,7 +238,7 @@ func (a *Agent) HandleNewPlugin(names []string) {
 
 		bs, err := getFileContent(name)
 		if err != nil {
-			logger.Logger.Error("get file content fail:", err)
+			logger.Logger.Errorw("get file content fail", "error", err)
 			continue
 		}
 

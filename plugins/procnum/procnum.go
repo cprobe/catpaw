@@ -62,7 +62,7 @@ func (ins *Instance) Init() error {
 func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
 	if !ins.GetInitialized() {
 		if err := ins.Init(); err != nil {
-			logger.Logger.Errorf("failed to init procnum plugin instance: %v", err)
+			logger.Logger.Errorw("failed to init procnum plugin instance", "error", err)
 			return
 		} else {
 			ins.SetInitialized()
@@ -100,7 +100,7 @@ func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
 		return
 	}
 
-	logger.Logger.Debugf("search string: %s, pids: %v", ins.searchString, pids)
+	logger.Logger.Debugw("search result", "search_string", ins.searchString, "pids", pids)
 
 	if len(pids) < ins.AlertIfNumLt {
 		s := fmt.Sprintf("The number of process is less than expected. real: %d, expected: %d", len(pids), ins.AlertIfNumLt)

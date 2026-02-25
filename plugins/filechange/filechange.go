@@ -65,7 +65,7 @@ func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
 	for _, fp := range ins.Filepaths {
 		matches, err := filepath.Glob(fp)
 		if err != nil {
-			logger.Logger.Errorf("glob %s error: %v", fp, err)
+			logger.Logger.Errorw("glob filepath fail", "filepath", fp, "error", err)
 			continue
 		}
 
@@ -83,7 +83,7 @@ func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
 	for _, fp := range fps {
 		f, e := os.Stat(fp)
 		if e != nil {
-			logger.Logger.Errorf("stat %s error: %v", fp, e)
+			logger.Logger.Errorw("stat filepath fail", "filepath", fp, "error", e)
 			continue
 		}
 
