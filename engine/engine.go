@@ -34,11 +34,17 @@ func PushRawEvents(pluginName string, pluginObj plugins.Plugin, ins plugins.Inst
 
 		err := clean(events[i], now, pluginName, pluginObj, ins)
 		if err != nil {
-			logger.Logger.Errorf("clean raw event fail: %v, event: %v", err.Error(), events[i])
+			logger.Logger.Errorw("clean raw event fail",
+				"error", err.Error(),
+				"event", events[i],
+			)
 			continue
 		}
 
-		logger.Logger.Debugf("event:%s: raw data received. event object: %v", events[i].AlertKey, events[i])
+		logger.Logger.Debugw("raw data received",
+			"event_key", events[i].AlertKey,
+			"event", events[i],
+		)
 
 		if !ins.GetAlerting().Enabled {
 			continue
@@ -196,12 +202,18 @@ func forward(event *types.Event) {
 
 	bs, err := json.Marshal(event)
 	if err != nil {
-		logger.Logger.Errorf("event:%s: forward: marshal fail: %s", event.AlertKey, err.Error())
+		logger.Logger.Errorw("forward: marshal fail",
+			"event_key", event.AlertKey,
+			"error", err.Error(),
+		)
 	}
 
 	req, err := http.NewRequest("POST", config.Config.Flashduty.Url, bytes.NewReader(bs))
 	if err != nil {
-		logger.Logger.Errorf("event:%s: forward: new request fail: %s", event.AlertKey, err.Error())
+		logger.Logger.Errorw("forward: new request fail",
+			"event_key", event.AlertKey,
+			"error", err.Error(),
+		)
 		return
 	}
 
@@ -209,7 +221,10 @@ func forward(event *types.Event) {
 
 	res, err := config.Config.Flashduty.Client.Do(req)
 	if err != nil {
-		logger.Logger.Errorf("event:%s: forward: do request fail: %s", event.AlertKey, err.Error())
+		logger.Logger.Errorw("forward: do request fail",
+			"event_key", event.AlertKey,
+			"error", err.Error(),
+		)
 		return
 	}
 
@@ -218,12 +233,20 @@ func forward(event *types.Event) {
 		defer res.Body.Close()
 		body, err = io.ReadAll(res.Body)
 		if err != nil {
-			logger.Logger.Errorf("event:%s: forward: read response fail: %s", event.AlertKey, err.Error())
+			logger.Logger.Errorw("forward: read response fail",
+				"event_key", event.AlertKey,
+				"error", err.Error(),
+			)
 			return
 		}
 	}
 
-	logger.Logger.Infof("event:%s: forward: done, request payload: %s, response status code: %d, response body: %s", event.AlertKey, string(bs), res.StatusCode, string(body))
+	logger.Logger.Infow("forward completed",
+		"event_key", event.AlertKey,
+		"request_payload", string(bs),
+		"response_status", res.StatusCode,
+		"response_body", string(body),
+	)
 }
 
 func printStdout(event *types.Event) {
