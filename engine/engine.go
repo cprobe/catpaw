@@ -206,6 +206,7 @@ func forward(event *types.Event) {
 			"event_key", event.AlertKey,
 			"error", err.Error(),
 		)
+		return
 	}
 
 	req, err := http.NewRequest("POST", config.Config.Flashduty.Url, bytes.NewReader(bs))

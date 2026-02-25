@@ -1,13 +1,8 @@
 package exec
 
 import (
-	"bytes"
 	"encoding/json"
-	"fmt"
-	"io"
-	osExec "os/exec"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"sync"
 	"time"
@@ -16,16 +11,12 @@ import (
 	"flashcat.cloud/catpaw/logger"
 	"flashcat.cloud/catpaw/pkg/cmdx"
 	"flashcat.cloud/catpaw/pkg/safe"
-	"flashcat.cloud/catpaw/pkg/shell"
 	"flashcat.cloud/catpaw/plugins"
 	"flashcat.cloud/catpaw/types"
 	"github.com/toolkits/pkg/concurrent/semaphore"
 )
 
-const (
-	pluginName     string = "exec"
-	maxStderrBytes int    = 512
-)
+const pluginName = "exec"
 
 type Instance struct {
 	config.InternalConfig
@@ -120,7 +111,7 @@ func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
 }
 
 func (ins *Instance) gather(q *safe.Queue[*types.Event], command string) {
-	outbuf, errbuf, err := commandRun(command, time.Duration(ins.Timeout))
+	outbuf, errbuf, err := cmdx.CommandRun(command, time.Duration(ins.Timeout))
 	if err != nil || len(errbuf) > 0 {
 		logger.Logger.Errorw("failed to exec command", "command", command, "error", err, "stderr", string(errbuf), "stdout", string(outbuf))
 		return
@@ -140,73 +131,4 @@ func (ins *Instance) gather(q *safe.Queue[*types.Event], command string) {
 	for i := range events {
 		q.PushFront(events[i])
 	}
-}
-
-func commandRun(command string, timeout time.Duration) ([]byte, []byte, error) {
-	splitCmd, err := shell.QuoteSplit(command)
-	if err != nil || len(splitCmd) == 0 {
-		return nil, nil, fmt.Errorf("exec: unable to parse command, %s", err)
-	}
-
-	cmd := osExec.Command(splitCmd[0], splitCmd[1:]...)
-
-	var (
-		out    bytes.Buffer
-		stderr bytes.Buffer
-	)
-	cmd.Stdout = &out
-	cmd.Stderr = &stderr
-
-	runError, runTimeout := cmdx.RunTimeout(cmd, timeout)
-	if runTimeout {
-		return nil, nil, fmt.Errorf("exec %s timeout", command)
-	}
-
-	out = removeWindowsCarriageReturns(out)
-	if stderr.Len() > 0 {
-		stderr = removeWindowsCarriageReturns(stderr)
-		stderr = truncate(stderr)
-	}
-
-	return out.Bytes(), stderr.Bytes(), runError
-}
-
-func truncate(buf bytes.Buffer) bytes.Buffer {
-	// Limit the number of bytes.
-	didTruncate := false
-	if buf.Len() > maxStderrBytes {
-		buf.Truncate(maxStderrBytes)
-		didTruncate = true
-	}
-	if i := bytes.IndexByte(buf.Bytes(), '\n'); i > 0 {
-		// Only show truncation if the newline wasn't the last character.
-		if i < buf.Len()-1 {
-			didTruncate = true
-		}
-		buf.Truncate(i)
-	}
-	if didTruncate {
-		//nolint:errcheck,revive // Will always return nil or panic
-		buf.WriteString("...")
-	}
-	return buf
-}
-
-// removeWindowsCarriageReturns removes all carriage returns from the input if the
-// OS is Windows. It does not return any errors.
-func removeWindowsCarriageReturns(b bytes.Buffer) bytes.Buffer {
-	if runtime.GOOS == "windows" {
-		var buf bytes.Buffer
-		for {
-			byt, err := b.ReadBytes(0x0D)
-			byt = bytes.TrimRight(byt, "\x0d")
-			if len(byt) > 0 {
-				_, _ = buf.Write(byt)
-			}
-			if err == io.EOF {
-				return buf
-			}
-		}
-	}
-	return b
 }

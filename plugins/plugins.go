@@ -16,8 +16,6 @@ type Instance interface {
 type Plugin interface {
 	GetLabels() map[string]string
 	GetInterval() config.Duration
-	// GetAlerting() config.Alerting
-	// InitInternalConfig() error
 }
 
 type IApplyPartials interface {

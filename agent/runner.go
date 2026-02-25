@@ -55,7 +55,7 @@ func (r *PluginRunner) startInstancePlugin(instance plugins.Instance, ch chan st
 	}
 
 	if err := instance.InitInternalConfig(); err != nil {
-		logger.Logger.Errorw("init internal config fail: "+err.Error(), "plugin", r.pluginName)
+		logger.Logger.Errorw("init internal config fail", "plugin", r.pluginName, "error", err)
 		return
 	}
 
@@ -84,7 +84,7 @@ func (r *PluginRunner) startInstancePlugin(instance plugins.Instance, ch chan st
 func (r *PluginRunner) gatherInstancePlugin(ins plugins.Instance) {
 	defer func() {
 		if rc := recover(); rc != nil {
-			logger.Logger.Errorw("gather instance plugin panic: "+string(runtimex.Stack(3)), "plugin", r.pluginName)
+			logger.Logger.Errorw("gather instance plugin panic", "plugin", r.pluginName, "stack", string(runtimex.Stack(3)))
 		}
 	}()
 
