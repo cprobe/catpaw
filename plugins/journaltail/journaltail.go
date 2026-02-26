@@ -4,28 +4,32 @@ import (
 	"bytes"
 	"fmt"
 	"os/exec"
+	"runtime"
+	"time"
 
 	"flashcat.cloud/catpaw/config"
 	"flashcat.cloud/catpaw/logger"
+	"flashcat.cloud/catpaw/pkg/cmdx"
 	"flashcat.cloud/catpaw/pkg/filter"
 	"flashcat.cloud/catpaw/pkg/safe"
 	"flashcat.cloud/catpaw/plugins"
 	"flashcat.cloud/catpaw/types"
 )
 
-const (
-	pluginName string = "journaltail"
-)
+const pluginName = "journaltail"
 
 type Instance struct {
 	config.InternalConfig
 
-	TimeSpan      string   `toml:"time_span"`
-	Check         string   `toml:"check"`
-	FilterInclude []string `toml:"filter_include"`
-	FilterExclude []string `toml:"filter_exclude"`
+	Check         string          `toml:"check"`
+	FilterInclude []string        `toml:"filter_include"`
+	FilterExclude []string        `toml:"filter_exclude"`
+	MaxLines      int             `toml:"max_lines"`
+	Timeout       config.Duration `toml:"timeout"`
 
-	filter filter.Filter
+	filter   filter.Filter
+	bin      string
+	lastScan time.Time
 }
 
 type JournaltailPlugin struct {
@@ -47,61 +51,92 @@ func init() {
 	})
 }
 
-func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
-	if ins.TimeSpan == "" {
-		ins.TimeSpan = "1m"
-	}
-
-	if ins.filter == nil {
-		if len(ins.FilterInclude) == 0 && len(ins.FilterExclude) == 0 {
-			logger.Logger.Error("filter_include and filter_exclude are empty")
-			return
-		}
-
-		var err error
-		ins.filter, err = filter.NewIncludeExcludeFilter(ins.FilterInclude, ins.FilterExclude)
-		if err != nil {
-			logger.Logger.Warnw("failed to create filter", "error", err)
-			return
-		}
+func (ins *Instance) Init() error {
+	if runtime.GOOS != "linux" {
+		return fmt.Errorf("journaltail plugin only supports linux (current: %s)", runtime.GOOS)
 	}
 
 	if ins.Check == "" {
-		logger.Logger.Error("check is empty")
-		return
+		return fmt.Errorf("check is required")
 	}
 
-	// go go go
+	if len(ins.FilterInclude) == 0 && len(ins.FilterExclude) == 0 {
+		return fmt.Errorf("filter_include and filter_exclude cannot both be empty")
+	}
+
+	if ins.MaxLines <= 0 {
+		ins.MaxLines = 10
+	}
+
+	if ins.Timeout == 0 {
+		ins.Timeout = config.Duration(30 * time.Second)
+	}
+
+	f, err := filter.NewIncludeExcludeFilter(ins.FilterInclude, ins.FilterExclude)
+	if err != nil {
+		return fmt.Errorf("failed to compile filter: %v", err)
+	}
+	ins.filter = f
+
 	bin, err := exec.LookPath("journalctl")
 	if err != nil {
-		logger.Logger.Errorw("lookup journalctl fail", "error", err)
+		return fmt.Errorf("journalctl not found: %v", err)
+	}
+	ins.bin = bin
+	ins.lastScan = time.Now()
+
+	return nil
+}
+
+func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
+	if !ins.GetInitialized() {
+		if err := ins.Init(); err != nil {
+			logger.Logger.Errorw("failed to init journaltail plugin instance", "error", err)
+			return
+		}
+		ins.SetInitialized()
+	}
+
+	now := time.Now()
+	sinceArg := ins.lastScan.Format("2006-01-02 15:04:05")
+	ins.lastScan = now
+
+	cmd := exec.Command(ins.bin, "--since", sinceArg, "--no-pager", "--no-tail")
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+
+	runErr, timedOut := cmdx.RunTimeout(cmd, time.Duration(ins.Timeout))
+	if timedOut {
+		logger.Logger.Errorw("journalctl timed out",
+			"timeout", time.Duration(ins.Timeout).String(),
+			"check", ins.Check,
+		)
+		return
+	}
+	if runErr != nil {
+		logger.Logger.Errorw("journalctl exec fail",
+			"error", runErr,
+			"stderr", stderr.String(),
+			"check", ins.Check,
+		)
 		return
 	}
 
-	if bin == "" {
-		logger.Logger.Error("journalctl not found")
-		return
-	}
-
-	out, err := exec.Command(bin, "--since", fmt.Sprintf("-%s", ins.TimeSpan), "--no-pager", "--no-tail").Output()
-	if err != nil {
-		logger.Logger.Errorw("exec journalctl fail", "error", err)
-		return
-	}
-
-	var bs bytes.Buffer
+	var desc bytes.Buffer
 	var triggered bool
+	var matchCount int
 
-	bs.WriteString("[MD]")
-	bs.WriteString(fmt.Sprintf("- time_span: `%s`\n", ins.TimeSpan))
-	bs.WriteString(fmt.Sprintf("- filter_include: `%s`\n", ins.FilterInclude))
-	bs.WriteString(fmt.Sprintf("- filter_exclude: `%s`\n", ins.FilterExclude))
-	bs.WriteString("\n")
-	bs.WriteString("\n")
-	bs.WriteString("**matched lines**:\n")
-	bs.WriteString("\n```")
+	desc.WriteString("[MD]")
+	desc.WriteString(fmt.Sprintf("- check: `%s`\n", ins.Check))
+	desc.WriteString(fmt.Sprintf("- since: `%s`\n", sinceArg))
+	desc.WriteString(fmt.Sprintf("- filter_include: `%v`\n", ins.FilterInclude))
+	desc.WriteString(fmt.Sprintf("- filter_exclude: `%v`\n", ins.FilterExclude))
+	desc.WriteString("\n")
+	desc.WriteString("**matched lines**:\n")
+	desc.WriteString("\n```\n")
 
-	for _, line := range bytes.Split(out, []byte("\n")) {
+	for _, line := range bytes.Split(stdout.Bytes(), []byte("\n")) {
 		if len(line) == 0 {
 			continue
 		}
@@ -111,11 +146,18 @@ func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
 		}
 
 		triggered = true
-		bs.Write(line)
-		bs.Write([]byte("\n"))
+		matchCount++
+		if matchCount <= ins.MaxLines {
+			desc.Write(line)
+			desc.Write([]byte("\n"))
+		}
 	}
 
-	bs.WriteString("```")
+	if matchCount > ins.MaxLines {
+		desc.WriteString(fmt.Sprintf("... and %d more lines\n", matchCount-ins.MaxLines))
+	}
+
+	desc.WriteString("```")
 
 	e := types.BuildEvent(map[string]string{
 		"check": ins.Check,
@@ -127,6 +169,6 @@ func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
 	}
 
 	e.SetEventStatus(ins.GetDefaultSeverity())
-	e.SetDescription(bs.String())
+	e.SetDescription(desc.String())
 	q.PushFront(e)
 }

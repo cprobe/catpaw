@@ -1,24 +1,27 @@
 [[instances]]
-# journalctl -S -${time_span}
-time_span = "1m"
-# relationship: or
+## check rule name (required)
+check = "Critical System Errors"
+
+## Glob patterns to match journal lines (relationship: OR)
+## At least one of filter_include or filter_exclude must be non-empty
 filter_include = ["*Out of memory*", "*nf_conntrack: table full, dropping packets*"]
 filter_exclude = []
-# check rule name
-check = "Critical System Errors"
-# # gather interval
+
+## Maximum matched lines included in the alert description (default: 10)
+## Lines beyond this limit are counted but truncated
+max_lines = 10
+
+## Timeout for journalctl command execution (default: 30s)
+timeout = "30s"
+
+## Gather interval
 interval = "30s"
 
 [instances.alerting]
-## Enable alerting or not
 enabled = true
-## Same functionality as Prometheus keyword 'for'
 for_duration = 0
-## Minimum interval duration between notifications
 repeat_interval = "5m"
-## Maximum number of notifications
 repeat_number = 3
-## Whether notify recovery event
 recovery_notification = true
 ## Choice: Critical, Warning, Info
 default_severity = "Warning"

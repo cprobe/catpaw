@@ -32,7 +32,7 @@ alert_if_packet_loss_percent_ge = 1.0
 
 [[instances]]
 targets = [
-    "127.0.0.1",
+#    "127.0.0.1",
 ]
 
 partial = "default"
