@@ -2,6 +2,7 @@ package exec
 
 import (
 	"encoding/json"
+	"fmt"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -45,9 +46,9 @@ func init() {
 	})
 }
 
-func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
+func (ins *Instance) Init() error {
 	if len(ins.Commands) == 0 {
-		return
+		return fmt.Errorf("commands is empty")
 	}
 
 	if ins.Timeout == 0 {
@@ -58,6 +59,10 @@ func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
 		ins.Concurrency = 5
 	}
 
+	return nil
+}
+
+func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
 	var commands []string
 	for _, pattern := range ins.Commands {
 		cmdAndArgs := strings.SplitN(pattern, " ", 2)
@@ -72,12 +77,8 @@ func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
 		}
 
 		if len(matches) == 0 {
-			// There were no matches with the glob pattern, so let's assume
-			// that the command is in PATH and just run it as it is
 			commands = append(commands, pattern)
 		} else {
-			// There were matches, so we'll append each match together with
-			// the arguments to the commands slice
 			for _, match := range matches {
 				if len(cmdAndArgs) == 1 {
 					commands = append(commands, match)
@@ -98,8 +99,8 @@ func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
 	se := semaphore.NewSemaphore(ins.Concurrency)
 	for _, command := range commands {
 		wg.Add(1)
-		se.Acquire()
 		go func(command string) {
+			se.Acquire()
 			defer func() {
 				se.Release()
 				wg.Done()

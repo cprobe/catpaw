@@ -8,10 +8,11 @@ import (
 	"time"
 
 	"flashcat.cloud/catpaw/config"
-	"flashcat.cloud/catpaw/logger"
 	"flashcat.cloud/catpaw/pkg/safe"
 	"flashcat.cloud/catpaw/plugins"
 	"flashcat.cloud/catpaw/types"
+
+	"flashcat.cloud/catpaw/logger"
 )
 
 const (
@@ -21,9 +22,9 @@ const (
 type Instance struct {
 	config.InternalConfig
 
-	TimeSpan  time.Duration `toml:"time_span"`
-	Filepaths []string      `toml:"filepaths"`
-	Check     string        `toml:"check"`
+	TimeSpan  config.Duration `toml:"time_span"`
+	Filepaths []string        `toml:"filepaths"`
+	Check     string          `toml:"check"`
 }
 
 type FileChangePlugin struct {
@@ -45,22 +46,23 @@ func init() {
 	})
 }
 
-func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
-	if ins.TimeSpan == 0 {
-		ins.TimeSpan = 3 * time.Minute
-	}
-
+func (ins *Instance) Init() error {
 	if ins.Check == "" {
-		logger.Logger.Error("check is empty")
-		return
+		return fmt.Errorf("check is required")
 	}
 
 	if len(ins.Filepaths) == 0 {
-		logger.Logger.Error("filepaths is empty")
-		return
+		return fmt.Errorf("filepaths is empty")
 	}
 
-	// get all files
+	if ins.TimeSpan == 0 {
+		ins.TimeSpan = config.Duration(3 * time.Minute)
+	}
+
+	return nil
+}
+
+func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
 	var fps []string
 	for _, fp := range ins.Filepaths {
 		matches, err := filepath.Glob(fp)
@@ -76,7 +78,6 @@ func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
 		fps = append(fps, matches...)
 	}
 
-	// check mtime
 	now := time.Now()
 	files := make(map[string]time.Time)
 
@@ -88,7 +89,7 @@ func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
 		}
 
 		mtime := f.ModTime()
-		if now.Sub(mtime) < ins.TimeSpan {
+		if now.Sub(mtime) < time.Duration(ins.TimeSpan) {
 			files[fp] = mtime
 		}
 	}

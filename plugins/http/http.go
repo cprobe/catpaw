@@ -188,11 +188,8 @@ func (ins *Instance) createHTTPClient() (*http.Client, error) {
 		Timeout:   time.Duration(ins.GetTimeout()),
 	}
 
-	if ins.FollowRedirects != nil && *ins.FollowRedirects {
+	if ins.FollowRedirects != nil && !*ins.FollowRedirects {
 		client.CheckRedirect = func(req *http.Request, via []*http.Request) error {
-			if len(via) >= 10 {
-				return fmt.Errorf("stopped after 10 redirects")
-			}
 			return http.ErrUseLastResponse
 		}
 	}

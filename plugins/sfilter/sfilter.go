@@ -24,6 +24,7 @@ type Instance struct {
 	Check         string          `toml:"check"`
 	FilterInclude []string        `toml:"filter_include"`
 	FilterExclude []string        `toml:"filter_exclude"`
+	MaxLines      int             `toml:"max_lines"`
 
 	filter filter.Filter
 }
@@ -47,59 +48,59 @@ func init() {
 	})
 }
 
-func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
-	if len(ins.Command) == 0 {
-		return
+func (ins *Instance) Init() error {
+	if ins.Command == "" {
+		return fmt.Errorf("command is empty")
 	}
 
 	if ins.Check == "" {
-		logger.Logger.Warnln("configuration check is empty")
-		return
+		return fmt.Errorf("check is required")
+	}
+
+	if len(ins.FilterInclude) == 0 && len(ins.FilterExclude) == 0 {
+		return fmt.Errorf("filter_include and filter_exclude cannot both be empty")
 	}
 
 	if ins.Timeout == 0 {
 		ins.Timeout = config.Duration(10 * time.Second)
 	}
 
-	if ins.filter == nil {
-		if len(ins.FilterInclude) == 0 && len(ins.FilterExclude) == 0 {
-			logger.Logger.Error("filter_include and filter_exclude are empty")
-			return
-		}
-
-		var err error
-		ins.filter, err = filter.NewIncludeExcludeFilter(ins.FilterInclude, ins.FilterExclude)
-		if err != nil {
-			logger.Logger.Warnw("failed to create filter", "error", err)
-			return
-		}
+	if ins.MaxLines <= 0 {
+		ins.MaxLines = 10
 	}
 
-	ins.gather(q, ins.Command)
+	f, err := filter.NewIncludeExcludeFilter(ins.FilterInclude, ins.FilterExclude)
+	if err != nil {
+		return fmt.Errorf("failed to compile filter: %v", err)
+	}
+	ins.filter = f
+
+	return nil
 }
 
-func (ins *Instance) gather(q *safe.Queue[*types.Event], command string) {
-	outbuf, errbuf, err := cmdx.CommandRun(command, time.Duration(ins.Timeout))
+func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
+	outbuf, errbuf, err := cmdx.CommandRun(ins.Command, time.Duration(ins.Timeout))
 	if err != nil || len(errbuf) > 0 {
-		logger.Logger.Errorw("failed to exec command", "command", command, "error", err, "stderr", string(errbuf), "stdout", string(outbuf))
+		logger.Logger.Errorw("failed to exec command", "command", ins.Command, "error", err, "stderr", string(errbuf), "stdout", string(outbuf))
 		return
 	}
 
 	if len(outbuf) == 0 {
-		logger.Logger.Warnw("exec command output is empty", "command", command)
+		logger.Logger.Warnw("exec command output is empty", "command", ins.Command)
 		return
 	}
 
-	var bs bytes.Buffer
+	var desc bytes.Buffer
 	var triggered bool
+	var matchCount int
 
-	bs.WriteString("[MD]")
-	bs.WriteString(fmt.Sprintf("- filter_include: `%s`\n", ins.FilterInclude))
-	bs.WriteString(fmt.Sprintf("- filter_exclude: `%s`\n", ins.FilterExclude))
-	bs.WriteString("\n")
-	bs.WriteString("\n")
-	bs.WriteString("**matched lines**:\n")
-	bs.WriteString("\n```")
+	desc.WriteString("[MD]")
+	desc.WriteString(fmt.Sprintf("- command: `%s`\n", ins.Command))
+	desc.WriteString(fmt.Sprintf("- filter_include: `%v`\n", ins.FilterInclude))
+	desc.WriteString(fmt.Sprintf("- filter_exclude: `%v`\n", ins.FilterExclude))
+	desc.WriteString("\n")
+	desc.WriteString("**matched lines**:\n")
+	desc.WriteString("\n```\n")
 
 	for _, line := range bytes.Split(outbuf, []byte("\n")) {
 		if len(line) == 0 {
@@ -111,15 +112,27 @@ func (ins *Instance) gather(q *safe.Queue[*types.Event], command string) {
 		}
 
 		triggered = true
-		bs.Write(line)
-		bs.Write([]byte("\n"))
+		matchCount++
+		if matchCount <= ins.MaxLines {
+			desc.Write(line)
+			desc.Write([]byte("\n"))
+		}
 	}
 
-	bs.WriteString("```")
+	if matchCount > ins.MaxLines {
+		desc.WriteString(fmt.Sprintf("... and %d more lines\n", matchCount-ins.MaxLines))
+	}
+
+	desc.WriteString("```")
+
+	e := types.BuildEvent(map[string]string{"check": ins.Check}).SetTitleRule("$check")
 
 	if !triggered {
-		q.PushFront(types.BuildEvent(map[string]string{"check": ins.Check}).SetTitleRule("$check").SetDescription("everything is ok"))
+		e.SetDescription("everything is ok")
 	} else {
-		q.PushFront(types.BuildEvent(map[string]string{"check": ins.Check}).SetTitleRule("$check").SetDescription(bs.String()).SetEventStatus(ins.GetDefaultSeverity()))
+		e.SetEventStatus(ins.GetDefaultSeverity())
+		e.SetDescription(desc.String())
 	}
+
+	q.PushFront(e)
 }

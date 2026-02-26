@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"flashcat.cloud/catpaw/config"
-	"flashcat.cloud/catpaw/logger"
 	"flashcat.cloud/catpaw/pkg/safe"
 	"flashcat.cloud/catpaw/plugins"
 	"flashcat.cloud/catpaw/types"
@@ -22,9 +21,9 @@ const (
 type Instance struct {
 	config.InternalConfig
 
-	TimeSpan  time.Duration `toml:"time_span"`
-	Directory string        `toml:"directory"`
-	Check     string        `toml:"check"`
+	TimeSpan  config.Duration `toml:"time_span"`
+	Directory string          `toml:"directory"`
+	Check     string          `toml:"check"`
 }
 
 type MTimePlugin struct {
@@ -46,21 +45,27 @@ func init() {
 	})
 }
 
-func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
-	if ins.TimeSpan == 0 {
-		ins.TimeSpan = 3 * time.Minute
+func (ins *Instance) Init() error {
+	if ins.Check == "" {
+		return fmt.Errorf("check is required")
 	}
 
-	if ins.Check == "" {
-		logger.Logger.Error("check is empty")
-		return
+	if ins.Directory == "" {
+		return fmt.Errorf("directory is required")
 	}
 
 	if !file.IsExist(ins.Directory) {
-		logger.Logger.Warnw("directory not exist", "directory", ins.Directory)
-		return
+		return fmt.Errorf("directory %s does not exist", ins.Directory)
 	}
 
+	if ins.TimeSpan == 0 {
+		ins.TimeSpan = config.Duration(3 * time.Minute)
+	}
+
+	return nil
+}
+
+func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
 	now := time.Now()
 	files := make(map[string]time.Time)
 
@@ -79,7 +84,7 @@ func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
 		}
 
 		mtime := fileinfo.ModTime()
-		if now.Sub(mtime) < ins.TimeSpan {
+		if now.Sub(mtime) < time.Duration(ins.TimeSpan) {
 			files[path] = mtime
 		}
 
