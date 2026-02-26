@@ -103,14 +103,6 @@ func (ins *Instance) Init() error {
 }
 
 func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
-	if !ins.GetInitialized() {
-		if err := ins.Init(); err != nil {
-			logger.Logger.Errorw("failed to init disk plugin instance", "error", err)
-			return
-		}
-		ins.SetInitialized()
-	}
-
 	partitions, err := disk.Partitions(true)
 	if err != nil {
 		logger.Logger.Errorw("failed to get disk partitions", "error", err)

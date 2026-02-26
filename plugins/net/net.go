@@ -158,15 +158,6 @@ func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
 		return
 	}
 
-	if !ins.GetInitialized() {
-		if err := ins.Init(); err != nil {
-			logger.Logger.Errorw("failed to init net plugin instance", "error", err)
-			return
-		} else {
-			ins.SetInitialized()
-		}
-	}
-
 	wg := new(sync.WaitGroup)
 	se := semaphore.NewSemaphore(ins.Concurrency)
 	for _, target := range ins.Targets {

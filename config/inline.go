@@ -30,9 +30,6 @@ type InternalConfig struct {
 
 	// alerting rule
 	Alerting Alerting `toml:"alerting"`
-
-	// whether instance initialized
-	initialized bool `toml:"-"`
 }
 
 func (ic *InternalConfig) GetLabels() map[string]string {
@@ -43,21 +40,8 @@ func (ic *InternalConfig) GetLabels() map[string]string {
 	return map[string]string{}
 }
 
-func (ic *InternalConfig) GetInitialized() bool {
-	return ic.initialized
-}
-
-func (ic *InternalConfig) SetInitialized() {
-	ic.initialized = true
-}
-
 func (ic *InternalConfig) GetInterval() Duration {
 	return ic.Interval
-}
-
-func (ic *InternalConfig) InitInternalConfig() error {
-	// maybe compile some glob/regex pattern here
-	return nil
 }
 
 func (ic *InternalConfig) GetAlerting() Alerting {

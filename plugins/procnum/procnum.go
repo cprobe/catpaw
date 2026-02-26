@@ -60,15 +60,6 @@ func (ins *Instance) Init() error {
 }
 
 func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
-	if !ins.GetInitialized() {
-		if err := ins.Init(); err != nil {
-			logger.Logger.Errorw("failed to init procnum plugin instance", "error", err)
-			return
-		} else {
-			ins.SetInitialized()
-		}
-	}
-
 	if ins.searchString == "" {
 		return
 	}

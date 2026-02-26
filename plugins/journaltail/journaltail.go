@@ -89,14 +89,6 @@ func (ins *Instance) Init() error {
 }
 
 func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
-	if !ins.GetInitialized() {
-		if err := ins.Init(); err != nil {
-			logger.Logger.Errorw("failed to init journaltail plugin instance", "error", err)
-			return
-		}
-		ins.SetInitialized()
-	}
-
 	now := time.Now()
 	sinceArg := ins.lastScan.Format("2006-01-02 15:04:05")
 	ins.lastScan = now

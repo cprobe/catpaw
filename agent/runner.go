@@ -54,8 +54,8 @@ func (r *PluginRunner) startInstancePlugin(instance plugins.Instance, ch chan st
 		}
 	}
 
-	if err := instance.InitInternalConfig(); err != nil {
-		logger.Logger.Errorw("init internal config fail", "plugin", r.pluginName, "error", err)
+	if err := plugins.MayInit(instance); err != nil {
+		logger.Logger.Errorw("init plugin instance fail", "plugin", r.pluginName, "error", err)
 		return
 	}
 

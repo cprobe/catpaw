@@ -168,15 +168,6 @@ func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
 		return
 	}
 
-	if !ins.GetInitialized() {
-		if err := ins.Init(); err != nil {
-			logger.Logger.Errorw("failed to init ping plugin instance", "error", err)
-			return
-		} else {
-			ins.SetInitialized()
-		}
-	}
-
 	wg := new(sync.WaitGroup)
 	se := make(chan struct{}, ins.Concurrency)
 	for _, target := range ins.Targets {

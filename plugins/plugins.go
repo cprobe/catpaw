@@ -10,7 +10,6 @@ type Instance interface {
 	GetLabels() map[string]string
 	GetInterval() config.Duration
 	GetAlerting() config.Alerting
-	InitInternalConfig() error
 }
 
 type Plugin interface {
@@ -29,6 +28,17 @@ type Gatherer interface {
 func MayApplyPartials(p interface{}) error {
 	if ap, ok := p.(IApplyPartials); ok {
 		return ap.ApplyPartials()
+	}
+	return nil
+}
+
+type Initer interface {
+	Init() error
+}
+
+func MayInit(t interface{}) error {
+	if initer, ok := t.(Initer); ok {
+		return initer.Init()
 	}
 	return nil
 }
