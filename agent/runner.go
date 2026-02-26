@@ -28,7 +28,7 @@ func newPluginRunner(pluginName string, p plugins.Plugin) *PluginRunner {
 
 func (r *PluginRunner) stop() {
 	for i := 0; i < len(r.Instances); i++ {
-		r.quitChan[i] <- struct{}{}
+		close(r.quitChan[i])
 		plugins.MayDrop(r.Instances[i])
 	}
 }
@@ -37,7 +37,7 @@ func (r *PluginRunner) start() {
 	r.Instances = plugins.MayGetInstances(r.pluginObject)
 	r.quitChan = make([]chan struct{}, len(r.Instances))
 	for i := 0; i < len(r.Instances); i++ {
-		r.quitChan[i] = make(chan struct{}, 1)
+		r.quitChan[i] = make(chan struct{})
 		ins := r.Instances[i]
 		ch := r.quitChan[i]
 		go r.startInstancePlugin(ins, ch)
@@ -67,11 +67,15 @@ func (r *PluginRunner) startInstancePlugin(instance plugins.Instance, ch chan st
 	for {
 		select {
 		case <-ch:
-			close(ch)
 			return
 		case <-timer.C:
 			start = time.Now()
 			r.gatherInstancePlugin(instance)
+			select {
+			case <-ch:
+				return
+			default:
+			}
 			next := time.Duration(interval) - time.Since(start)
 			if next < 0 {
 				next = 0

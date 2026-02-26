@@ -153,7 +153,7 @@ func parseFilter(filterStr string) map[string]struct{} {
 		if strings.TrimSpace(filters[i]) == "" {
 			continue
 		}
-		filtermap[filters[i]] = struct{}{}
+		filtermap[strings.TrimSpace(filters[i])] = struct{}{}
 	}
 	return filtermap
 }

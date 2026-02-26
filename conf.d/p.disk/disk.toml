@@ -1,0 +1,61 @@
+[[instances]]
+## 要监控的挂载点，支持 glob 模式
+## 留空 = 监控所有挂载点（排除 ignore 规则之后）
+## 示例: ["/", "/data*", "/home*"]
+# mount_points = []
+
+## 排除挂载点，支持 glob 模式（多平台规则可共存，匹配不到的自动跳过）
+ignore_mount_points = [
+    "/dev*", "/run*", "/sys*", "/proc*", "/snap*",         # Linux
+    "/System/Volumes/*", "/private/var/vm*",                # macOS
+]
+
+## 排除的文件系统类型（多平台规则可共存，匹配不到的自动跳过）
+ignore_fs_types = [
+    "tmpfs", "devtmpfs", "squashfs", "overlay",            # Linux
+    "devfs", "autofs", "nullfs",                            # macOS
+    "nfs", "nfs4", "cifs",                                  # 网络文件系统（通用）
+]
+
+## 磁盘空间使用率阈值，0 = 禁用该档
+warn_if_used_percent_ge     = 90.0
+critical_if_used_percent_ge = 99.0
+
+## inode 使用率阈值，0 = 禁用该档
+## Windows 下 InodesTotal=0 时自动跳过
+warn_if_inodes_used_percent_ge     = 90.0
+critical_if_inodes_used_percent_ge = 99.0
+
+## 读写健康检测，默认关闭
+## 开启后会在每个挂载点下写入临时文件并读回校验，需要 catpaw 进程有写权限
+check_writable = false
+## 临时文件名（相对于挂载点）
+# writable_test_file = ".catpaw_disk_check"
+
+## 并发控制：同时检查的挂载点数量上限
+# concurrency = 10
+
+## 单次 Gather 超时时间
+## 超时后未完成的挂载点在下个周期会报 "检查卡住"（通常是 NFS/网络盘断连导致）
+# gather_timeout = "10s"
+
+## 检查名称，会作为事件的 check label
+check = "磁盘检测"
+
+## 采集间隔
+# interval = "30s"
+
+## 追加自定义标签
+# labels = { env = "production", team = "devops" }
+
+[instances.alerting]
+## 是否启用告警
+enabled = true
+## 同 Prometheus 的 for 关键字
+for_duration = 0
+## 重复通知的最小间隔
+repeat_interval = "5m"
+## 最大通知次数
+repeat_number = 3
+## 是否发送恢复通知
+recovery_notification = true

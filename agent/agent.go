@@ -13,6 +13,7 @@ import (
 	"github.com/toolkits/pkg/file"
 
 	// auto registry
+	_ "flashcat.cloud/catpaw/plugins/disk"
 	_ "flashcat.cloud/catpaw/plugins/exec"
 	_ "flashcat.cloud/catpaw/plugins/filechange"
 	_ "flashcat.cloud/catpaw/plugins/http"

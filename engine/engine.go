@@ -71,9 +71,6 @@ func handleRecoveryEvent(ins plugins.Instance, event *types.Event) {
 
 	// 不过，也得看具体 alerting 的配置，如果不需要发送恢复通知，则忽略
 	if ins.GetAlerting().RecoveryNotification && old.LastSent > 0 {
-		event.LastSent = event.EventTime
-		event.FirstFireTime = old.FirstFireTime
-		event.NotifyCount = old.NotifyCount + 1
 		forward(event)
 	}
 }
@@ -91,9 +88,10 @@ func handleAlertEvent(ins plugins.Instance, event *types.Event) {
 
 		// 要不要发？分两种情况。ForDuration 是 0 则立马发，否则等待 ForDuration 时间后再发
 		if alerting.ForDuration == 0 {
-			event.LastSent = event.EventTime
-			event.NotifyCount++
-			forward(event)
+			if forward(event) {
+				event.LastSent = event.EventTime
+				event.NotifyCount++
+			}
 			return
 		}
 
@@ -118,10 +116,11 @@ func handleAlertEvent(ins plugins.Instance, event *types.Event) {
 	}
 
 	// 最后，可以发了
-	event.LastSent = event.EventTime
 	event.NotifyCount = old.NotifyCount + 1
-	Events.Set(event)
-	forward(event)
+	if forward(event) {
+		event.LastSent = event.EventTime
+		Events.Set(event)
+	}
 }
 
 func clean(event *types.Event, now int64, pluginName string, pluginObj plugins.Plugin, ins plugins.Instance) error {
@@ -194,10 +193,10 @@ func clean(event *types.Event, now int64, pluginName string, pluginObj plugins.P
 	return nil
 }
 
-func forward(event *types.Event) {
+func forward(event *types.Event) bool {
 	if config.Config.TestMode {
 		printStdout(event)
-		return
+		return true
 	}
 
 	bs, err := json.Marshal(event)
@@ -206,7 +205,7 @@ func forward(event *types.Event) {
 			"event_key", event.AlertKey,
 			"error", err.Error(),
 		)
-		return
+		return false
 	}
 
 	req, err := http.NewRequest("POST", config.Config.Flashduty.Url, bytes.NewReader(bs))
@@ -215,7 +214,7 @@ func forward(event *types.Event) {
 			"event_key", event.AlertKey,
 			"error", err.Error(),
 		)
-		return
+		return false
 	}
 
 	req.Header.Set("Content-Type", "application/json")
@@ -226,7 +225,7 @@ func forward(event *types.Event) {
 			"event_key", event.AlertKey,
 			"error", err.Error(),
 		)
-		return
+		return false
 	}
 
 	var body []byte
@@ -238,8 +237,17 @@ func forward(event *types.Event) {
 				"event_key", event.AlertKey,
 				"error", err.Error(),
 			)
-			return
+			return false
 		}
+	}
+
+	if res.StatusCode >= 400 {
+		logger.Logger.Errorw("forward: server returned error status",
+			"event_key", event.AlertKey,
+			"response_status", res.StatusCode,
+			"response_body", string(body),
+		)
+		return false
 	}
 
 	logger.Logger.Infow("forward completed",
@@ -248,6 +256,7 @@ func forward(event *types.Event) {
 		"response_status", res.StatusCode,
 		"response_body", string(body),
 	)
+	return true
 }
 
 func printStdout(event *types.Event) {

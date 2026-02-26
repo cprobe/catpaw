@@ -4,9 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"os/signal"
 	"runtime"
-	"syscall"
 
 	"flashcat.cloud/catpaw/agent"
 	"flashcat.cloud/catpaw/config"
@@ -60,37 +58,20 @@ func main() {
 		"vm_limits", runner.VMLimits(),
 	)
 
-	agent := agent.New()
+	ag := agent.New()
 
 	if runtime.GOOS == "windows" && !winsvc.IsAnInteractiveSession() {
-		if err := winsvc.RunAsService(winx.GetServiceName(), agent.Start, agent.Stop, false); err != nil {
+		if err := winsvc.RunAsService(winx.GetServiceName(), ag.Start, ag.Stop, false); err != nil {
 			fmt.Println("failed to run windows service:", err)
 			os.Exit(1)
 		}
 		return
 	} else {
-		agent.Start()
+		ag.Start()
 	}
 
-	sc := make(chan os.Signal, 1)
-	// syscall.SIGUSR2 == 0xc , not available on windows
-	signal.Notify(sc, syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT, syscall.SIGPIPE)
+	waitForSignal(ag)
 
-EXIT:
-	for {
-		sig := <-sc
-		logger.Logger.Infow("received signal", "signal", sig.String())
-		switch sig {
-		case syscall.SIGQUIT, syscall.SIGTERM, syscall.SIGINT:
-			break EXIT
-		case syscall.SIGHUP:
-			agent.Reload()
-		case syscall.SIGPIPE:
-			// https://pkg.go.dev/os/signal#hdr-SIGPIPE
-			// do nothing
-		}
-	}
-
-	agent.Stop()
+	ag.Stop()
 	logger.Logger.Info("agent exited")
 }
