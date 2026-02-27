@@ -1,11 +1,24 @@
+## 一个 instance = 一组 filter + 一个 severity
+## 需要不同严重级别？配多个 instance 即可
+
+## 示例1：常规异常日志 → Warning
 [[instances]]
-## Glob patterns to match journal lines (relationship: OR)
-## At least one of filter_include or filter_exclude must be non-empty
-filter_include = ["*Out of memory*", "*nf_conntrack: table full, dropping packets*"]
-filter_exclude = []
+## journalctl native pre-filters (applied at the journal engine level, very efficient)
+## units: filter by systemd unit names (can specify multiple)
+# units = ["nginx", "sshd", "docker"]
+
+## priority: filter by message priority or range
+##   single: "err", range: "emerg..err", numeric: "0..3"
+# priority = "emerg..err"
+
+## Line-level filtering (applied to each journal line after native pre-filtering)
+## Glob and regex patterns can be mixed in the same list (OR logic: any match triggers).
+## Patterns wrapped in / are treated as regex, e.g. "/(?i)oom|segfault/"
+## Other patterns are treated as glob, e.g. "*Out of memory*"
+filter_include = ["*Out of memory*", "*nf_conntrack: table full*"]
+# filter_exclude = ["*expected*"]
 
 ## Maximum matched lines included in the alert description (default: 10)
-## Lines beyond this limit are counted but truncated
 max_lines = 10
 
 ## Timeout for journalctl command execution (default: 30s)
@@ -14,16 +27,21 @@ timeout = "30s"
 ## Gather interval
 interval = "30s"
 
-## Severity when matched journal lines are found
-## check label auto-set to "journaltail::match", target label auto-set from filter_include
 [instances.match]
 severity = "Warning"
 # title_rule = "[check] [target]"
 
-# 不常用的配置，默认值都是 false
-# disabled = false
-# disable_recovery_notification = false
 [instances.alerting]
 for_duration = 0
 repeat_interval = "5m"
 repeat_number = 3
+
+## 示例2：致命错误 → Critical（独立 instance，独立告警）
+# [[instances]]
+# filter_include = ["*kernel panic*", "/(?i)segfault|oom.killer/"]
+# interval = "30s"
+# [instances.match]
+# severity = "Critical"
+# [instances.alerting]
+# repeat_interval = "1m"
+# repeat_number = 10

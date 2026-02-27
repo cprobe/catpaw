@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"flashcat.cloud/catpaw/config"
-	"flashcat.cloud/catpaw/logger"
 	"flashcat.cloud/catpaw/pkg/cmdx"
 	"flashcat.cloud/catpaw/pkg/filter"
 	"flashcat.cloud/catpaw/pkg/safe"
@@ -27,15 +26,25 @@ type MatchCheck struct {
 type Instance struct {
 	config.InternalConfig
 
-	FilterInclude []string        `toml:"filter_include"`
-	FilterExclude []string        `toml:"filter_exclude"`
-	MaxLines      int             `toml:"max_lines"`
-	Timeout       config.Duration `toml:"timeout"`
-	Match         MatchCheck      `toml:"match"`
+	// journalctl native pre-filters
+	Units    []string `toml:"units"`
+	Priority string   `toml:"priority"`
 
-	filter   filter.Filter
-	bin      string
-	lastScan time.Time
+	// Line-level filtering: glob patterns and /regex/ patterns can be mixed.
+	// A pattern wrapped in / is treated as regex, e.g. "/OOM|oom-killer/"
+	FilterInclude []string `toml:"filter_include"`
+	FilterExclude []string `toml:"filter_exclude"`
+
+	MaxLines int             `toml:"max_lines"`
+	Timeout  config.Duration `toml:"timeout"`
+	Match    MatchCheck      `toml:"match"`
+
+	includeFilter filter.Filter
+	excludeFilter filter.Filter
+
+	bin       string
+	cursor    string
+	initSince string // formatted startup time for first --since
 }
 
 type JournaltailPlugin struct {
@@ -62,8 +71,8 @@ func (ins *Instance) Init() error {
 		return fmt.Errorf("journaltail plugin only supports linux (current: %s)", runtime.GOOS)
 	}
 
-	if len(ins.FilterInclude) == 0 && len(ins.FilterExclude) == 0 {
-		return fmt.Errorf("filter_include and filter_exclude cannot both be empty")
+	if len(ins.FilterInclude) == 0 {
+		return fmt.Errorf("filter_include must be configured")
 	}
 
 	if ins.MaxLines <= 0 {
@@ -74,90 +83,120 @@ func (ins *Instance) Init() error {
 		ins.Timeout = config.Duration(30 * time.Second)
 	}
 
-	f, err := filter.NewIncludeExcludeFilter(ins.FilterInclude, ins.FilterExclude)
+	var err error
+
+	ins.includeFilter, err = filter.Compile(ins.FilterInclude)
 	if err != nil {
-		return fmt.Errorf("failed to compile filter: %v", err)
+		return fmt.Errorf("failed to compile filter_include: %v", err)
 	}
-	ins.filter = f
+
+	ins.excludeFilter, err = filter.Compile(ins.FilterExclude)
+	if err != nil {
+		return fmt.Errorf("failed to compile filter_exclude: %v", err)
+	}
 
 	bin, err := exec.LookPath("journalctl")
 	if err != nil {
 		return fmt.Errorf("journalctl not found: %v", err)
 	}
 	ins.bin = bin
-	ins.lastScan = time.Now()
 
 	if ins.Match.Severity == "" {
 		ins.Match.Severity = types.EventStatusWarning
+	} else if !types.EventStatusValid(ins.Match.Severity) {
+		return fmt.Errorf("invalid severity %q, must be one of: Critical, Warning, Info, Ok", ins.Match.Severity)
 	}
+
+	ins.initSince = time.Now().Format("2006-01-02 15:04:05")
 
 	return nil
 }
 
-func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
-	now := time.Now()
-	sinceArg := ins.lastScan.Format("2006-01-02 15:04:05")
-	ins.lastScan = now
+func (ins *Instance) buildTarget() string {
+	if len(ins.Units) > 0 {
+		return strings.Join(ins.Units, ",")
+	}
+	if len(ins.FilterInclude) == 1 {
+		return ins.FilterInclude[0]
+	}
+	if len(ins.FilterInclude) > 1 {
+		return fmt.Sprintf("%s(+%d)", ins.FilterInclude[0], len(ins.FilterInclude)-1)
+	}
+	return "journaltail"
+}
 
-	cmd := exec.Command(ins.bin, "--since", sinceArg, "--no-pager", "--no-tail")
+func (ins *Instance) buildArgs() []string {
+	args := []string{"--no-pager", "--no-tail", "--show-cursor"}
+
+	if ins.cursor != "" {
+		args = append(args, "--after-cursor", ins.cursor)
+	} else {
+		args = append(args, "--since", ins.initSince)
+	}
+
+	for _, u := range ins.Units {
+		args = append(args, "--unit", u)
+	}
+
+	if ins.Priority != "" {
+		args = append(args, "--priority", ins.Priority)
+	}
+
+	return args
+}
+
+func (ins *Instance) matchLine(line string) bool {
+	if ins.includeFilter != nil {
+		if !ins.includeFilter.Match(line) {
+			return false
+		}
+	}
+
+	if ins.excludeFilter != nil {
+		if ins.excludeFilter.Match(line) {
+			return false
+		}
+	}
+
+	return true
+}
+
+func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
+	target := ins.buildTarget()
+	args := ins.buildArgs()
+
+	cmd := exec.Command(ins.bin, args...)
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 
-	target := strings.Join(ins.FilterInclude, ",")
-
 	runErr, timedOut := cmdx.RunTimeout(cmd, time.Duration(ins.Timeout))
+
+	// P2/P3: on failure, generate alert event and do NOT update cursor
 	if timedOut {
-		logger.Logger.Errorw("journalctl timed out",
-			"timeout", time.Duration(ins.Timeout).String(),
-			"target", target,
-		)
+		q.PushFront(ins.buildErrorEvent(target, fmt.Sprintf("journalctl timed out after %s", time.Duration(ins.Timeout))))
 		return
 	}
 	if runErr != nil {
-		logger.Logger.Errorw("journalctl exec fail",
-			"error", runErr,
-			"stderr", stderr.String(),
-			"target", target,
-		)
+		q.PushFront(ins.buildErrorEvent(target, fmt.Sprintf("journalctl exec failed: %v (stderr: %s)", runErr, strings.TrimSpace(stderr.String()))))
 		return
 	}
 
-	var desc bytes.Buffer
-	var triggered bool
-	var matchCount int
+	// Parse output and extract cursor from the last line
+	output := stdout.Bytes()
+	newCursor := extractCursor(output)
+	lines := extractLines(output)
 
-	desc.WriteString("[MD]")
-	desc.WriteString(fmt.Sprintf("- target: `%s`\n", target))
-	desc.WriteString(fmt.Sprintf("- since: `%s`\n", sinceArg))
-	desc.WriteString(fmt.Sprintf("- filter_include: `%v`\n", ins.FilterInclude))
-	desc.WriteString(fmt.Sprintf("- filter_exclude: `%v`\n", ins.FilterExclude))
-	desc.WriteString("\n")
-	desc.WriteString("**matched lines**:\n")
-	desc.WriteString("\n```\n")
-
-	for _, line := range bytes.Split(stdout.Bytes(), []byte("\n")) {
-		if len(line) == 0 {
-			continue
-		}
-
-		if !ins.filter.Match(string(line)) {
-			continue
-		}
-
-		triggered = true
-		matchCount++
-		if matchCount <= ins.MaxLines {
-			desc.Write(line)
-			desc.Write([]byte("\n"))
+	var matched []string
+	for _, line := range lines {
+		if ins.matchLine(line) {
+			matched = append(matched, line)
 		}
 	}
 
-	if matchCount > ins.MaxLines {
-		desc.WriteString(fmt.Sprintf("... and %d more lines\n", matchCount-ins.MaxLines))
+	if newCursor != "" {
+		ins.cursor = newCursor
 	}
-
-	desc.WriteString("```")
 
 	tr := ins.Match.TitleRule
 	if tr == "" {
@@ -169,12 +208,78 @@ func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
 		"target": target,
 	}).SetTitleRule(tr)
 
-	if !triggered {
+	if len(matched) == 0 {
 		q.PushFront(e)
 		return
 	}
 
+	var desc bytes.Buffer
+	desc.WriteString("[MD]\n")
+	fmt.Fprintf(&desc, "- **target**: %s\n", target)
+	if len(ins.Units) > 0 {
+		fmt.Fprintf(&desc, "- **units**: %s\n", strings.Join(ins.Units, ", "))
+	}
+	if ins.Priority != "" {
+		fmt.Fprintf(&desc, "- **priority**: %s\n", ins.Priority)
+	}
+	desc.WriteString("\n**matched lines**:\n\n```\n")
+
+	for i, line := range matched {
+		if i >= ins.MaxLines {
+			break
+		}
+		desc.WriteString(line)
+		desc.WriteByte('\n')
+	}
+
+	if len(matched) > ins.MaxLines {
+		fmt.Fprintf(&desc, "... and %d more lines\n", len(matched)-ins.MaxLines)
+	}
+	desc.WriteString("```")
+
 	e.SetEventStatus(ins.Match.Severity)
 	e.SetDescription(desc.String())
 	q.PushFront(e)
+}
+
+func (ins *Instance) buildErrorEvent(target, errMsg string) *types.Event {
+	tr := ins.Match.TitleRule
+	if tr == "" {
+		tr = "[check] [target]"
+	}
+
+	return types.BuildEvent(map[string]string{
+		"check":  "journaltail::match",
+		"target": target,
+	}).SetTitleRule(tr).
+		SetEventStatus(types.EventStatusCritical).
+		SetDescription(fmt.Sprintf("[MD]\n- **target**: %s\n- **error**: %s\n", target, errMsg))
+}
+
+// extractCursor parses the journal cursor from `--show-cursor` output.
+// The cursor line looks like: "-- cursor: s=...;i=...;b=...;m=...;t=...;x=..."
+func extractCursor(output []byte) string {
+	const prefix = "-- cursor: "
+	idx := bytes.LastIndex(output, []byte(prefix))
+	if idx < 0 {
+		return ""
+	}
+	rest := output[idx+len(prefix):]
+	if end := bytes.IndexByte(rest, '\n'); end >= 0 {
+		rest = rest[:end]
+	}
+	return strings.TrimSpace(string(rest))
+}
+
+// extractLines returns all non-empty, non-cursor lines from journalctl output.
+func extractLines(output []byte) []string {
+	var lines []string
+	for _, raw := range bytes.Split(output, []byte("\n")) {
+		line := string(raw)
+		if line == "" || strings.HasPrefix(line, "-- cursor: ") {
+			continue
+		}
+		lines = append(lines, line)
+	}
+	return lines
 }

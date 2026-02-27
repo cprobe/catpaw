@@ -1,6 +1,8 @@
 package filter
 
 import (
+	"fmt"
+	"regexp"
 	"strings"
 
 	"github.com/gobwas/glob"
@@ -10,24 +12,73 @@ type Filter interface {
 	Match(string) bool
 }
 
+// isRegexPattern checks if a pattern uses /regex/ syntax.
+func isRegexPattern(s string) bool {
+	return len(s) >= 2 && s[0] == '/' && s[len(s)-1] == '/'
+}
+
 // Compile takes a list of string filters and returns a Filter interface
-// for matching a given string against the filter list. The filter list
-// supports glob matching too, ie:
+// for matching a given string against the filter list (OR logic).
+//
+// Patterns surrounded by / are treated as regular expressions:
+//
+//	f, _ := Compile([]string{"*error*", "/(?i)panic|segfault/"})
+//	f.Match("an error occurred")    // true (glob match)
+//	f.Match("KERNEL PANIC")         // true (regex match)
+//	f.Match("normal log")           // false
+//
+// Plain patterns support glob matching:
 //
 //	f, _ := Compile([]string{"cpu", "mem", "net*"})
 //	f.Match("cpu")     // true
 //	f.Match("network") // true
 //	f.Match("memory")  // false
 func Compile(filters []string) (Filter, error) {
-	// return if there is nothing to compile
 	if len(filters) == 0 {
 		return nil, nil
 	}
 
-	// check if we can compile a non-glob filter
+	var globPatterns []string
+	var regexFilters []Filter
+
+	for _, p := range filters {
+		if isRegexPattern(p) {
+			re, err := regexp.Compile(p[1 : len(p)-1])
+			if err != nil {
+				return nil, fmt.Errorf("invalid regex %q: %v", p, err)
+			}
+			regexFilters = append(regexFilters, &regexFilter{patterns: []*regexp.Regexp{re}})
+		} else {
+			globPatterns = append(globPatterns, p)
+		}
+	}
+
+	var parts []Filter
+
+	if len(globPatterns) > 0 {
+		gf, err := compileGlob(globPatterns)
+		if err != nil {
+			return nil, err
+		}
+		parts = append(parts, gf)
+	}
+
+	parts = append(parts, regexFilters...)
+
+	if len(parts) == 0 {
+		return nil, nil
+	}
+	if len(parts) == 1 {
+		return parts[0], nil
+	}
+	return &CombinedFilter{filters: parts}, nil
+}
+
+// compileGlob compiles a list of pure glob/literal patterns (no /regex/ syntax).
+func compileGlob(filters []string) (Filter, error) {
 	noGlob := true
-	for _, filter := range filters {
-		if HasMeta(filter) {
+	for _, f := range filters {
+		if HasMeta(f) {
 			noGlob = false
 			break
 		}
@@ -35,7 +86,6 @@ func Compile(filters []string) (Filter, error) {
 
 	switch {
 	case noGlob:
-		// return non-globbing filter if not needed.
 		return compileFilterNoGlob(filters), nil
 	case len(filters) == 1:
 		return glob.Compile(filters[0])
@@ -128,4 +178,32 @@ func (f *IncludeExcludeFilter) Match(s string) bool {
 	}
 
 	return true
+}
+
+// regexFilter matches if any of the compiled regexps match.
+type regexFilter struct {
+	patterns []*regexp.Regexp
+}
+
+func (f *regexFilter) Match(s string) bool {
+	for _, re := range f.patterns {
+		if re.MatchString(s) {
+			return true
+		}
+	}
+	return false
+}
+
+// CombinedFilter matches if ANY of its sub-filters match (OR logic).
+type CombinedFilter struct {
+	filters []Filter
+}
+
+func (f *CombinedFilter) Match(s string) bool {
+	for _, sub := range f.filters {
+		if sub.Match(s) {
+			return true
+		}
+	}
+	return false
 }
