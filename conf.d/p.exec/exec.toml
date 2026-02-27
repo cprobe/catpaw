@@ -1,33 +1,46 @@
-# script stdout example:
-# 1. It's an array
-# 2. event_status choice: Critical, Warning, Info, Ok
+# ========== JSON mode (default) ==========
+# Script must output a JSON array of events to stdout:
 # [
 #     {
 #         "event_status": "Warning",
-#         "labels": {
-#             "check": "oom killed",
-#         },
-#         "title_rule": "$check",
-#         "description": "kernel: Out of memory: Kill process 9163 (mysqld) score 511 or sacrifice child"
+#         "labels": { "check": "oom killed" },
+#         "title_rule": "[check]",
+#         "description": "kernel: Out of memory: Kill process 9163 (mysqld)"
 #     }
 # ]
+#
+# ========== Nagios mode ==========
+# Compatible with all Nagios/Monitoring plugins.
+# Exit code determines status: 0=OK, 1=Warning, 2=Critical, other=Critical
+# Stdout format: STATUS TEXT | perfdata\nlong text
+#
+# Example:
+#   mode = "nagios"
+#   commands = ["/usr/lib/nagios/plugins/check_load -w 5,4,3 -c 10,8,6"]
 
 [[instances]]
-# # commands, support glob
+# commands, support glob
 commands = [
     # "/opt/catpaw/scripts/*.sh"
+    # "/usr/lib/nagios/plugins/check_load -w 5,4,3 -c 10,8,6"
 ]
 
-# # script timeout
+## Execution mode: "json" (default) or "nagios"
+# mode = "json"
+
+## Script timeout
 # timeout = "10s"
 
-# # Concurrent requests to make per target
+## Max concurrent script executions
 # concurrency = 5
 
-# # gather interval
+## Environment variables passed to scripts
+# env_vars = { DB_HOST = "10.0.0.1", DB_PORT = "3306" }
+
+## Gather interval
 # interval = "30s"
 
-# # Optional append labels
+## Optional append labels
 # labels = { env="production", team="devops" }
 
 # 不常用的配置，默认值都是 false

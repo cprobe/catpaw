@@ -1,8 +1,12 @@
 package exec
 
 import (
+	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -12,6 +16,7 @@ import (
 	"flashcat.cloud/catpaw/logger"
 	"flashcat.cloud/catpaw/pkg/cmdx"
 	"flashcat.cloud/catpaw/pkg/safe"
+	"flashcat.cloud/catpaw/pkg/shell"
 	"flashcat.cloud/catpaw/plugins"
 	"flashcat.cloud/catpaw/types"
 	"github.com/toolkits/pkg/concurrent/semaphore"
@@ -19,12 +24,37 @@ import (
 
 const pluginName = "exec"
 
+const (
+	maxStdoutBytes = 1 << 20   // 1MB
+	maxStderrBytes = 256 << 10 // 256KB
+)
+
+// limitedWriter wraps bytes.Buffer with a size cap to prevent OOM
+// from scripts that produce unbounded output.
+type limitedWriter struct {
+	buf bytes.Buffer
+	max int
+}
+
+func (w *limitedWriter) Write(p []byte) (int, error) {
+	if remaining := w.max - w.buf.Len(); remaining > 0 {
+		if len(p) > remaining {
+			w.buf.Write(p[:remaining])
+		} else {
+			w.buf.Write(p)
+		}
+	}
+	return len(p), nil
+}
+
 type Instance struct {
 	config.InternalConfig
 
-	Commands    []string        `toml:"commands"`
-	Timeout     config.Duration `toml:"timeout"`
-	Concurrency int             `toml:"concurrency"`
+	Commands    []string          `toml:"commands"`
+	Timeout     config.Duration   `toml:"timeout"`
+	Concurrency int               `toml:"concurrency"`
+	Mode        string            `toml:"mode"`
+	EnvVars     map[string]string `toml:"env_vars"`
 }
 
 type ExecPlugin struct {
@@ -57,6 +87,13 @@ func (ins *Instance) Init() error {
 
 	if ins.Concurrency == 0 {
 		ins.Concurrency = 5
+	}
+
+	if ins.Mode == "" {
+		ins.Mode = "json"
+	}
+	if ins.Mode != "json" && ins.Mode != "nagios" {
+		return fmt.Errorf("mode must be 'json' or 'nagios', got '%s'", ins.Mode)
 	}
 
 	return nil
@@ -112,24 +149,202 @@ func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
 }
 
 func (ins *Instance) gather(q *safe.Queue[*types.Event], command string) {
-	outbuf, errbuf, err := cmdx.CommandRun(command, time.Duration(ins.Timeout))
-	if err != nil || len(errbuf) > 0 {
-		logger.Logger.Errorw("failed to exec command", "command", command, "error", err, "stderr", string(errbuf), "stdout", string(outbuf))
+	stdout, stderr, exitCode, err := ins.runCommand(command)
+
+	if err != nil {
+		q.PushFront(ins.buildErrorEvent(command, err, combineOutput(stdout, stderr)))
 		return
 	}
 
-	if len(outbuf) == 0 {
-		logger.Logger.Warnw("exec command output is empty", "command", command)
+	if len(stderr) > 0 {
+		logger.Logger.Debugw("command stderr output", "command", command, "stderr", string(stderr))
+	}
+
+	switch ins.Mode {
+	case "nagios":
+		ins.gatherNagios(q, command, stdout, exitCode)
+	default:
+		ins.gatherJSON(q, command, stdout, exitCode)
+	}
+}
+
+// runCommand executes a command with timeout and environment variables,
+// returning stdout, stderr, exit code, and error.
+// A non-zero exit code is NOT treated as an error (returned via exitCode).
+// Error is only set for actual execution failures (command not found, timeout, etc).
+// On timeout, partial stdout/stderr captured before the kill is still returned.
+func (ins *Instance) runCommand(command string) ([]byte, []byte, int, error) {
+	splitCmd, err := shell.QuoteSplit(command)
+	if err != nil || len(splitCmd) == 0 {
+		return nil, nil, -1, fmt.Errorf("unable to parse command: %v", err)
+	}
+
+	cmd := exec.Command(splitCmd[0], splitCmd[1:]...)
+
+	if len(ins.EnvVars) > 0 {
+		cmd.Env = os.Environ()
+		for k, v := range ins.EnvVars {
+			cmd.Env = append(cmd.Env, k+"="+v)
+		}
+	}
+
+	outBuf := &limitedWriter{max: maxStdoutBytes}
+	errBuf := &limitedWriter{max: maxStderrBytes}
+	cmd.Stdout = outBuf
+	cmd.Stderr = errBuf
+
+	runErr, timedOut := cmdx.RunTimeout(cmd, time.Duration(ins.Timeout))
+
+	outResult := cmdx.RemoveWindowsCarriageReturns(outBuf.buf)
+	errResult := cmdx.RemoveWindowsCarriageReturns(errBuf.buf)
+
+	if timedOut {
+		return outResult.Bytes(), errResult.Bytes(), -1,
+			fmt.Errorf("command timed out after %s", time.Duration(ins.Timeout))
+	}
+
+	if runErr != nil {
+		var exitErr *exec.ExitError
+		if errors.As(runErr, &exitErr) {
+			return outResult.Bytes(), errResult.Bytes(), exitErr.ExitCode(), nil
+		}
+		return nil, errResult.Bytes(), -1, runErr
+	}
+
+	return outResult.Bytes(), errResult.Bytes(), 0, nil
+}
+
+// gatherNagios parses Nagios plugin output format:
+//
+//	exit code: 0=OK, 1=Warning, 2=Critical, other=Critical
+//	stdout line 1: STATUS TEXT | perfdata
+//	stdout line 2+: long text (optional)
+func (ins *Instance) gatherNagios(q *safe.Queue[*types.Event], command string, stdout []byte, exitCode int) {
+	status := nagiosExitCodeToStatus(exitCode)
+
+	output := strings.TrimSpace(string(stdout))
+	var statusLine, perfData, longText string
+	if output != "" {
+		lines := strings.SplitN(output, "\n", 2)
+		parts := strings.SplitN(lines[0], "|", 2)
+		statusLine = strings.TrimSpace(parts[0])
+		if len(parts) > 1 {
+			perfData = strings.TrimSpace(parts[1])
+		}
+		if len(lines) > 1 {
+			longText = strings.TrimSpace(lines[1])
+		}
+	}
+
+	var desc strings.Builder
+	desc.WriteString("[MD]\n")
+	desc.WriteString(fmt.Sprintf("- **target**: %s\n", command))
+	desc.WriteString(fmt.Sprintf("- **exit_code**: %d\n", exitCode))
+	if statusLine != "" {
+		desc.WriteString(fmt.Sprintf("- **status**: %s\n", statusLine))
+	}
+	if perfData != "" {
+		desc.WriteString(fmt.Sprintf("- **perfdata**: `%s`\n", perfData))
+	}
+	if longText != "" {
+		desc.WriteString(fmt.Sprintf("\n**detail**:\n\n```\n%s\n```\n", longText))
+	}
+
+	event := types.BuildEvent(map[string]string{
+		"check":  "exec::nagios",
+		"target": command,
+	}).SetTitleRule("[check] [target]").
+		SetEventStatus(status).
+		SetDescription(desc.String())
+
+	q.PushFront(event)
+}
+
+func nagiosExitCodeToStatus(code int) string {
+	switch code {
+	case 0:
+		return types.EventStatusOk
+	case 1:
+		return types.EventStatusWarning
+	case 2:
+		return types.EventStatusCritical
+	default:
+		return types.EventStatusCritical
+	}
+}
+
+func (ins *Instance) gatherJSON(q *safe.Queue[*types.Event], command string, stdout []byte, exitCode int) {
+	if exitCode != 0 {
+		q.PushFront(ins.buildErrorEvent(command,
+			fmt.Errorf("non-zero exit code %d", exitCode), stdout))
+		return
+	}
+
+	if len(stdout) == 0 {
+		q.PushFront(ins.buildErrorEvent(command,
+			fmt.Errorf("command produced no output"), nil))
 		return
 	}
 
 	var events []*types.Event
-	if err := json.Unmarshal(outbuf, &events); err != nil {
-		logger.Logger.Errorw("failed to unmarshal command output", "command", command, "error", err, "output", string(outbuf))
+	if err := json.Unmarshal(stdout, &events); err != nil {
+		q.PushFront(ins.buildErrorEvent(command,
+			fmt.Errorf("failed to parse JSON: %v", err), stdout))
 		return
 	}
 
-	for i := range events {
-		q.PushFront(events[i])
+	for i, e := range events {
+		if e == nil {
+			continue
+		}
+		if e.Labels == nil || e.Labels["check"] == "" {
+			logger.Logger.Warnw("exec event missing 'check' label",
+				"command", command, "index", i)
+		}
+		if e.EventStatus == "" {
+			logger.Logger.Warnw("exec event missing 'event_status', defaulting to Critical",
+				"command", command, "index", i)
+			e.EventStatus = types.EventStatusCritical
+		}
+		q.PushFront(e)
 	}
+}
+
+func combineOutput(stdout, stderr []byte) []byte {
+	if len(stdout) == 0 {
+		return stderr
+	}
+	if len(stderr) == 0 {
+		return stdout
+	}
+	combined := make([]byte, 0, len(stdout)+1+len(stderr))
+	combined = append(combined, stdout...)
+	combined = append(combined, '\n')
+	combined = append(combined, stderr...)
+	return combined
+}
+
+func (ins *Instance) buildErrorEvent(command string, err error, output []byte) *types.Event {
+	var desc strings.Builder
+	desc.WriteString("[MD]\n")
+	desc.WriteString(fmt.Sprintf("- **target**: %s\n", command))
+	desc.WriteString(fmt.Sprintf("- **error**: %v\n", err))
+	if len(output) > 0 {
+		truncated := truncateUTF8(output, 1024)
+		desc.WriteString(fmt.Sprintf("\n**output**:\n\n```\n%s\n```\n", truncated))
+	}
+
+	return types.BuildEvent(map[string]string{
+		"check":  "exec::error",
+		"target": command,
+	}).SetTitleRule("[check] [target]").
+		SetEventStatus(types.EventStatusCritical).
+		SetDescription(desc.String())
+}
+
+func truncateUTF8(b []byte, max int) string {
+	if len(b) <= max {
+		return string(b)
+	}
+	return strings.ToValidUTF8(string(b[:max]), "") + "... (truncated)"
 }
