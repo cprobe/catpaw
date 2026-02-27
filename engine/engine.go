@@ -46,7 +46,7 @@ func PushRawEvents(pluginName string, pluginObj plugins.Plugin, ins plugins.Inst
 			"event", events[i],
 		)
 
-		if !ins.GetAlerting().Enabled {
+		if ins.GetAlerting().Disabled {
 			continue
 		}
 
@@ -70,7 +70,7 @@ func handleRecoveryEvent(ins plugins.Instance, event *types.Event) {
 	Events.Del(old.AlertKey)
 
 	// 不过，也得看具体 alerting 的配置，如果不需要发送恢复通知，则忽略
-	if ins.GetAlerting().RecoveryNotification && old.LastSent > 0 {
+	if !ins.GetAlerting().DisableRecoveryNotification && old.LastSent > 0 {
 		forward(event)
 	}
 }

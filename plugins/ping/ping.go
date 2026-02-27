@@ -21,31 +21,52 @@ const (
 	defaultPingDataBytesSize = 56
 )
 
+type ConnectivityCheck struct {
+	Severity  string `toml:"severity"`
+	TitleRule string `toml:"title_rule"`
+}
+
+type PacketLossCheck struct {
+	WarnGe     float64 `toml:"warn_ge"`
+	CriticalGe float64 `toml:"critical_ge"`
+	TitleRule   string  `toml:"title_rule"`
+}
+
+type RttCheck struct {
+	WarnGe     config.Duration `toml:"warn_ge"`
+	CriticalGe config.Duration `toml:"critical_ge"`
+	TitleRule   string          `toml:"title_rule"`
+}
+
 type Partial struct {
-	ID                         string  `toml:"id"`
-	Concurrency                int     `toml:"concurrency"`
-	Count                      int     `toml:"count"`         // ping -c <COUNT>
-	PingInterval               float64 `toml:"ping_interval"` // ping -i <INTERVAL>
-	Timeout                    float64 `toml:"timeout"`       // ping -W <TIMEOUT>
-	Interface                  string  `toml:"interface"`     // ping -I/-S <INTERFACE/SRC_ADDR>
-	IPv6                       *bool   `toml:"ipv6"`          // Whether to resolve addresses using ipv6 or not.
-	Size                       *int    `toml:"size"`          // Packet size
-	AlertIfPacketLossPercentGe float64 `toml:"alert_if_packet_loss_percent_ge"`
+	ID           string            `toml:"id"`
+	Concurrency  int               `toml:"concurrency"`
+	Count        int               `toml:"count"`
+	PingInterval float64           `toml:"ping_interval"`
+	Timeout      float64           `toml:"timeout"`
+	Interface    string            `toml:"interface"`
+	IPv6         *bool             `toml:"ipv6"`
+	Size         *int              `toml:"size"`
+	Connectivity ConnectivityCheck `toml:"connectivity"`
+	PacketLoss   PacketLossCheck   `toml:"packet_loss"`
+	Rtt          RttCheck          `toml:"rtt"`
 }
 
 type Instance struct {
 	config.InternalConfig
 	Partial string `toml:"partial"`
 
-	Targets                    []string `toml:"targets"`
-	Concurrency                int      `toml:"concurrency"`
-	Count                      int      `toml:"count"`         // ping -c <COUNT>
-	PingInterval               float64  `toml:"ping_interval"` // ping -i <INTERVAL>
-	Timeout                    float64  `toml:"timeout"`       // ping -W <TIMEOUT>
-	Interface                  string   `toml:"interface"`     // ping -I/-S <INTERFACE/SRC_ADDR>
-	IPv6                       *bool    `toml:"ipv6"`          // Whether to resolve addresses using ipv6 or not.
-	Size                       *int     `toml:"size"`          // Packet size
-	AlertIfPacketLossPercentGe float64  `toml:"alert_if_packet_loss_percent_ge"`
+	Targets      []string          `toml:"targets"`
+	Concurrency  int               `toml:"concurrency"`
+	Count        int               `toml:"count"`
+	PingInterval float64           `toml:"ping_interval"`
+	Timeout      float64           `toml:"timeout"`
+	Interface    string            `toml:"interface"`
+	IPv6         *bool             `toml:"ipv6"`
+	Size         *int              `toml:"size"`
+	Connectivity ConnectivityCheck `toml:"connectivity"`
+	PacketLoss   PacketLossCheck   `toml:"packet_loss"`
+	Rtt          RttCheck          `toml:"rtt"`
 
 	calcInterval  time.Duration
 	calcTimeout   time.Duration
@@ -64,39 +85,42 @@ func (p *PingPlugin) ApplyPartials() error {
 		if id != "" {
 			for _, partial := range p.Partials {
 				if partial.ID == id {
-					// use partial config as default
 					if p.Instances[i].Concurrency == 0 {
 						p.Instances[i].Concurrency = partial.Concurrency
 					}
-
 					if p.Instances[i].Count == 0 {
 						p.Instances[i].Count = partial.Count
 					}
-
 					if p.Instances[i].PingInterval == 0 {
 						p.Instances[i].PingInterval = partial.PingInterval
 					}
-
 					if p.Instances[i].Timeout == 0 {
 						p.Instances[i].Timeout = partial.Timeout
 					}
-
 					if p.Instances[i].Interface == "" {
 						p.Instances[i].Interface = partial.Interface
 					}
-
 					if p.Instances[i].IPv6 == nil {
 						p.Instances[i].IPv6 = partial.IPv6
 					}
-
 					if p.Instances[i].Size == nil {
 						p.Instances[i].Size = partial.Size
 					}
-
-					if p.Instances[i].AlertIfPacketLossPercentGe == 0 {
-						p.Instances[i].AlertIfPacketLossPercentGe = partial.AlertIfPacketLossPercentGe
+					if p.Instances[i].Connectivity.Severity == "" {
+						p.Instances[i].Connectivity.Severity = partial.Connectivity.Severity
 					}
-
+					if p.Instances[i].PacketLoss.WarnGe == 0 {
+						p.Instances[i].PacketLoss.WarnGe = partial.PacketLoss.WarnGe
+					}
+					if p.Instances[i].PacketLoss.CriticalGe == 0 {
+						p.Instances[i].PacketLoss.CriticalGe = partial.PacketLoss.CriticalGe
+					}
+					if p.Instances[i].Rtt.WarnGe == 0 {
+						p.Instances[i].Rtt.WarnGe = partial.Rtt.WarnGe
+					}
+					if p.Instances[i].Rtt.CriticalGe == 0 {
+						p.Instances[i].Rtt.CriticalGe = partial.Rtt.CriticalGe
+					}
 					break
 				}
 			}
@@ -123,7 +147,6 @@ func (ins *Instance) Init() error {
 	if ins.Concurrency == 0 {
 		ins.Concurrency = 10
 	}
-
 	if ins.Count < 1 {
 		ins.Count = 5
 	}
@@ -140,6 +163,24 @@ func (ins *Instance) Init() error {
 		ins.calcTimeout = time.Duration(ins.Timeout * float64(time.Second))
 	}
 
+	if ins.Connectivity.Severity == "" {
+		ins.Connectivity.Severity = types.EventStatusCritical
+	}
+
+	if ins.PacketLoss.WarnGe > 0 && ins.PacketLoss.CriticalGe > 0 {
+		if ins.PacketLoss.WarnGe >= ins.PacketLoss.CriticalGe {
+			return fmt.Errorf("packet_loss.warn_ge(%.1f) must be less than packet_loss.critical_ge(%.1f)",
+				ins.PacketLoss.WarnGe, ins.PacketLoss.CriticalGe)
+		}
+	}
+
+	if ins.Rtt.WarnGe > 0 && ins.Rtt.CriticalGe > 0 {
+		if ins.Rtt.WarnGe >= ins.Rtt.CriticalGe {
+			return fmt.Errorf("rtt.warn_ge(%s) must be less than rtt.critical_ge(%s)",
+				time.Duration(ins.Rtt.WarnGe), time.Duration(ins.Rtt.CriticalGe))
+		}
+	}
+
 	if ins.Interface != "" {
 		if addr := net.ParseIP(ins.Interface); addr != nil {
 			ins.sourceAddress = ins.Interface
@@ -148,12 +189,10 @@ func (ins *Instance) Init() error {
 			if err != nil {
 				return fmt.Errorf("failed to get interface: %v", err)
 			}
-
 			addrs, err := i.Addrs()
 			if err != nil {
 				return fmt.Errorf("failed to get the address of interface: %v", err)
 			}
-
 			ins.sourceAddress = addrs[0].(*net.IPNet).IP.String()
 		}
 	}
@@ -192,40 +231,98 @@ func (ins *Instance) gather(q *safe.Queue[*types.Event], target string) {
 		"target": target,
 	}
 
-	event := types.BuildEvent(map[string]string{
-		"check": "ping check",
-	}, labels).SetTitleRule("$check").SetDescription(ins.buildDesc(target, "everything is ok"))
+	connTR := ins.Connectivity.TitleRule
+	if connTR == "" {
+		connTR = "[check] [target]"
+	}
+
+	connEvent := types.BuildEvent(map[string]string{
+		"check": "ping::connectivity",
+	}, labels).SetTitleRule(connTR)
 
 	stats, err := ins.ping(target)
 	if err != nil {
 		message := fmt.Sprintf("ping %s failed: %v", target, err)
 		logger.Logger.Errorw("ping failed", "target", target, "error", err)
-		q.PushFront(event.SetEventStatus(ins.GetDefaultSeverity()).SetDescription(ins.buildDesc(target, message)))
+		q.PushFront(connEvent.SetEventStatus(ins.Connectivity.Severity).SetDescription(ins.buildDesc(target, message, nil)))
 		return
 	}
 
 	if stats.PacketsSent == 0 {
 		message := fmt.Sprintf("no packets sent to %s", target)
 		logger.Logger.Errorw("no packets sent", "target", target)
-		q.PushFront(event.SetEventStatus(ins.GetDefaultSeverity()).SetDescription(ins.buildDesc(target, message)))
+		q.PushFront(connEvent.SetEventStatus(ins.Connectivity.Severity).SetDescription(ins.buildDesc(target, message, nil)))
 		return
 	}
 
 	if stats.PacketsRecv == 0 {
-		message := fmt.Sprintf("no packets received to %s", target)
+		message := fmt.Sprintf("no packets received from %s, 100%% packet loss", target)
 		logger.Logger.Errorw("no packets received", "target", target)
-		q.PushFront(event.SetEventStatus(ins.GetDefaultSeverity()).SetDescription(ins.buildDesc(target, message)))
+		q.PushFront(connEvent.SetEventStatus(ins.Connectivity.Severity).SetDescription(ins.buildDesc(target, message, stats)))
 		return
 	}
 
-	if stats.PacketLoss >= float64(ins.AlertIfPacketLossPercentGe) {
-		message := fmt.Sprintf("packet loss is %f%%", stats.PacketLoss)
-		logger.Logger.Errorw("packet loss too high", "target", target, "packet_loss_percent", stats.PacketLoss)
-		q.PushFront(event.SetEventStatus(ins.GetDefaultSeverity()).SetDescription(ins.buildDesc(target, message)))
-		return
+	// Connectivity OK
+	connEvent.SetDescription(ins.buildDesc(target, "everything is ok", stats))
+	q.PushFront(connEvent)
+
+	// Packet loss threshold check (separate event)
+	if ins.PacketLoss.WarnGe > 0 || ins.PacketLoss.CriticalGe > 0 {
+		plTR := ins.PacketLoss.TitleRule
+		if plTR == "" {
+			plTR = "[check] [target]"
+		}
+
+		plEvent := types.BuildEvent(map[string]string{
+			"check": "ping::packet_loss",
+		}, labels).SetTitleRule(plTR)
+
+		if ins.PacketLoss.CriticalGe > 0 && stats.PacketLoss >= ins.PacketLoss.CriticalGe {
+			plEvent.SetEventStatus(types.EventStatusCritical)
+		} else if ins.PacketLoss.WarnGe > 0 && stats.PacketLoss >= ins.PacketLoss.WarnGe {
+			plEvent.SetEventStatus(types.EventStatusWarning)
+		}
+
+		plEvent.SetDescription(fmt.Sprintf(`[MD]
+- **target**: %s
+- **packet_loss**: %.2f%%
+- **warn_threshold**: %.1f%%
+- **critical_threshold**: %.1f%%
+`, target, stats.PacketLoss, ins.PacketLoss.WarnGe, ins.PacketLoss.CriticalGe))
+
+		q.PushFront(plEvent)
 	}
 
-	q.PushFront(event)
+	// RTT threshold check (separate event)
+	if ins.Rtt.WarnGe > 0 || ins.Rtt.CriticalGe > 0 {
+		rttTR := ins.Rtt.TitleRule
+		if rttTR == "" {
+			rttTR = "[check] [target]"
+		}
+
+		rttEvent := types.BuildEvent(map[string]string{
+			"check": "ping::rtt",
+		}, labels).SetTitleRule(rttTR)
+
+		if ins.Rtt.CriticalGe > 0 && stats.AvgRtt >= time.Duration(ins.Rtt.CriticalGe) {
+			rttEvent.SetEventStatus(types.EventStatusCritical)
+		} else if ins.Rtt.WarnGe > 0 && stats.AvgRtt >= time.Duration(ins.Rtt.WarnGe) {
+			rttEvent.SetEventStatus(types.EventStatusWarning)
+		}
+
+		rttEvent.SetDescription(fmt.Sprintf(`[MD]
+- **target**: %s
+- **avg_rtt**: %s
+- **min_rtt**: %s
+- **max_rtt**: %s
+- **warn_threshold**: %s
+- **critical_threshold**: %s
+`, target, stats.AvgRtt, stats.MinRtt, stats.MaxRtt,
+			ins.Rtt.WarnGe.HumanString(),
+			ins.Rtt.CriticalGe.HumanString()))
+
+		q.PushFront(rttEvent)
+	}
 }
 
 type pingStats struct {
@@ -256,7 +353,6 @@ func (ins *Instance) ping(destination string) (*pingStats, error) {
 	pinger.Interval = ins.calcInterval
 	pinger.Timeout = ins.calcTimeout
 
-	// Get Time to live (TTL) of first response, matching original implementation
 	once := &sync.Once{}
 	pinger.OnRecv = func(pkt *ping.Packet) {
 		once.Do(func() {
@@ -271,7 +367,6 @@ func (ins *Instance) ping(destination string) (*pingStats, error) {
 			if runtime.GOOS == "linux" {
 				return nil, fmt.Errorf("permission changes required, enable CAP_NET_RAW capabilities (refer to the ping plugin's README.md for more info)")
 			}
-
 			return nil, fmt.Errorf("permission changes required, refer to the ping plugin's README.md for more info")
 		}
 		return nil, fmt.Errorf("%w", err)
@@ -282,16 +377,23 @@ func (ins *Instance) ping(destination string) (*pingStats, error) {
 	return ps, nil
 }
 
-func (ins *Instance) buildDesc(target, message string) string {
-	return `[MD]
-- target: ` + target + `
-- alert_if_packet_loss_percent_ge: ` + fmt.Sprint(ins.AlertIfPacketLossPercentGe) + `
-
-
-**message**:
-
-` + "```" + `
-` + message + `
-` + "```" + `
-`
+func (ins *Instance) buildDesc(target, message string, stats *pingStats) string {
+	var b strings.Builder
+	b.WriteString("[MD]\n")
+	b.WriteString("- **target**: " + target + "\n")
+	if stats != nil {
+		b.WriteString(fmt.Sprintf("- **packets_sent**: %d\n", stats.PacketsSent))
+		b.WriteString(fmt.Sprintf("- **packets_recv**: %d\n", stats.PacketsRecv))
+		b.WriteString(fmt.Sprintf("- **packet_loss**: %.2f%%\n", stats.PacketLoss))
+		if stats.PacketsRecv > 0 {
+			b.WriteString(fmt.Sprintf("- **min_rtt**: %s\n", stats.MinRtt))
+			b.WriteString(fmt.Sprintf("- **avg_rtt**: %s\n", stats.AvgRtt))
+			b.WriteString(fmt.Sprintf("- **max_rtt**: %s\n", stats.MaxRtt))
+			b.WriteString(fmt.Sprintf("- **std_dev_rtt**: %s\n", stats.StdDevRtt))
+		}
+	}
+	b.WriteString("\n**message**:\n\n```\n")
+	b.WriteString(message)
+	b.WriteString("\n```\n")
+	return b.String()
 }

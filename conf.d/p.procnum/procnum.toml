@@ -8,20 +8,28 @@ search_cmdline_substring = ""
 # # windows service name
 # search_win_service = ""
 
-alert_if_num_lt = 1
-check = "进程存活检测(进程数量检测)"
 interval = "30s"
 
+## Process count check
+## check label auto-set to "procnum::process_count", target label auto-set from search string
+##
+## "too few" thresholds (daemon alive check):
+##   warn_lt / critical_lt — alert when process count < threshold
+##   critical_lt has higher priority; warn_lt must be >= critical_lt
+##
+## "too many" thresholds (process leak / fork bomb check):
+##   warn_gt / critical_gt — alert when process count > threshold
+##   critical_gt has higher priority; warn_gt must be <= critical_gt
+[instances.process_count]
+critical_lt = 1
+# warn_lt = 1
+# warn_gt = 50
+# critical_gt = 100
+# title_rule = "[check] [target]"
+
 [instances.alerting]
-## Enable alerting or not
-enabled = true
-## Same functionality as Prometheus keyword 'for'
+# disabled = true
 for_duration = 0
-## Minimum interval duration between notifications
 repeat_interval = "5m"
-## Maximum number of notifications
 repeat_number = 3
-## Whether notify recovery event
-recovery_notification = true
-## Choice: Critical, Warning, Info
-default_severity = "Warning"
+# disable_recovery_notification = true

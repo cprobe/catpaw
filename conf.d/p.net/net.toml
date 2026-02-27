@@ -4,14 +4,11 @@ id = "default"
 # # Concurrent requests to make per instance
 # concurrency = 10
 
-## Set connect timeout (default 5 seconds)
+## Set connect timeout (default 1s)
 # timeout = "1s"
 
 ## Set read timeout (only used if expecting a response)
 # read_timeout = "1s"
-
-# # Concurrent requests to make per instance
-# concurrency = 10
 
 ## Protocol, must be "tcp" or "udp"
 ## NOTE: because the "udp" protocol does not respond to requests, it requires
@@ -25,6 +22,19 @@ id = "default"
 # send = "ssh"
 ## expected string in answer
 # expect = "ssh"
+
+## Connectivity check (always enabled, defaults to Critical)
+## check label auto-set to "net::connectivity"
+[partials.connectivity]
+severity = "Critical"
+# title_rule = "[check] [target]"
+
+## Response time check (disabled if both thresholds are 0)
+## check label auto-set to "net::response_time"
+# [partials.response_time]
+# warn_ge = "200ms"
+# critical_ge = "1s"
+# title_rule = "[check] [target]"
 
 
 [[instances]]
@@ -43,15 +53,8 @@ partial = "default"
 # labels = { env="production", team="devops" }
 
 [instances.alerting]
-## Enable alerting or not
-enabled = true
-## Same functionality as Prometheus keyword 'for'
+# disabled = true
 for_duration = 0
-## Minimum interval duration between notifications
 repeat_interval = "5m"
-## Maximum number of notifications
 repeat_number = 3
-## Whether notify recovery event
-recovery_notification = true
-## Choice: Critical, Warning, Info
-default_severity = "Warning"
+# disable_recovery_notification = true

@@ -17,20 +17,28 @@ ignore_fs_types = [
     "nfs", "nfs4", "cifs",                                  # 网络文件系统（通用）
 ]
 
-## 磁盘空间使用率阈值，0 = 禁用该档
-warn_if_used_percent_ge     = 90.0
-critical_if_used_percent_ge = 99.0
+## 磁盘空间使用率阈值（禁用：不写或两个都设0）
+## check label 自动设为 "disk::space_usage"
+[instances.space_usage]
+warn_ge     = 90.0
+critical_ge = 99.0
+# title_rule = "[check] [target]"
 
-## inode 使用率阈值，0 = 禁用该档
+## inode 使用率阈值（禁用：不写或两个都设0）
 ## Windows 下 InodesTotal=0 时自动跳过
-warn_if_inodes_used_percent_ge     = 90.0
-critical_if_inodes_used_percent_ge = 99.0
+## check label 自动设为 "disk::inode_usage"
+[instances.inode_usage]
+warn_ge     = 90.0
+critical_ge = 99.0
+# title_rule = "[check] [target]"
 
-## 读写健康检测，默认关闭
+## 读写健康检测（severity 非空则启用）
 ## 开启后会在每个挂载点下写入临时文件并读回校验，需要 catpaw 进程有写权限
-check_writable = false
-## 临时文件名（相对于挂载点）
-# writable_test_file = ".catpaw_disk_check"
+## check label 自动设为 "disk::writable"
+# [instances.writable]
+# severity = "Critical"
+# test_file = ".catpaw_disk_check"
+# title_rule = "[check] [target]"
 
 ## 并发控制：同时检查的挂载点数量上限
 # concurrency = 10
@@ -39,9 +47,6 @@ check_writable = false
 ## 超时后未完成的挂载点在下个周期会报 "检查卡住"（通常是 NFS/网络盘断连导致）
 # gather_timeout = "10s"
 
-## 检查名称，会作为事件的 check label
-check = "磁盘检测"
-
 ## 采集间隔
 # interval = "30s"
 
@@ -49,13 +54,8 @@ check = "磁盘检测"
 # labels = { env = "production", team = "devops" }
 
 [instances.alerting]
-## 是否启用告警
-enabled = true
-## 同 Prometheus 的 for 关键字
+# disabled = true
 for_duration = 0
-## 重复通知的最小间隔
 repeat_interval = "5m"
-## 最大通知次数
 repeat_number = 3
-## 是否发送恢复通知
-recovery_notification = true
+# disable_recovery_notification = true

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os/exec"
 	"runtime"
+	"strings"
 	"time"
 
 	"flashcat.cloud/catpaw/config"
@@ -18,14 +19,19 @@ import (
 
 const pluginName = "journaltail"
 
+type MatchCheck struct {
+	Severity  string `toml:"severity"`
+	TitleRule string `toml:"title_rule"`
+}
+
 type Instance struct {
 	config.InternalConfig
 
-	Check         string          `toml:"check"`
 	FilterInclude []string        `toml:"filter_include"`
 	FilterExclude []string        `toml:"filter_exclude"`
 	MaxLines      int             `toml:"max_lines"`
 	Timeout       config.Duration `toml:"timeout"`
+	Match         MatchCheck      `toml:"match"`
 
 	filter   filter.Filter
 	bin      string
@@ -56,10 +62,6 @@ func (ins *Instance) Init() error {
 		return fmt.Errorf("journaltail plugin only supports linux (current: %s)", runtime.GOOS)
 	}
 
-	if ins.Check == "" {
-		return fmt.Errorf("check is required")
-	}
-
 	if len(ins.FilterInclude) == 0 && len(ins.FilterExclude) == 0 {
 		return fmt.Errorf("filter_include and filter_exclude cannot both be empty")
 	}
@@ -85,6 +87,10 @@ func (ins *Instance) Init() error {
 	ins.bin = bin
 	ins.lastScan = time.Now()
 
+	if ins.Match.Severity == "" {
+		ins.Match.Severity = types.EventStatusWarning
+	}
+
 	return nil
 }
 
@@ -98,11 +104,13 @@ func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 
+	target := strings.Join(ins.FilterInclude, ",")
+
 	runErr, timedOut := cmdx.RunTimeout(cmd, time.Duration(ins.Timeout))
 	if timedOut {
 		logger.Logger.Errorw("journalctl timed out",
 			"timeout", time.Duration(ins.Timeout).String(),
-			"check", ins.Check,
+			"target", target,
 		)
 		return
 	}
@@ -110,7 +118,7 @@ func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
 		logger.Logger.Errorw("journalctl exec fail",
 			"error", runErr,
 			"stderr", stderr.String(),
-			"check", ins.Check,
+			"target", target,
 		)
 		return
 	}
@@ -120,7 +128,7 @@ func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
 	var matchCount int
 
 	desc.WriteString("[MD]")
-	desc.WriteString(fmt.Sprintf("- check: `%s`\n", ins.Check))
+	desc.WriteString(fmt.Sprintf("- target: `%s`\n", target))
 	desc.WriteString(fmt.Sprintf("- since: `%s`\n", sinceArg))
 	desc.WriteString(fmt.Sprintf("- filter_include: `%v`\n", ins.FilterInclude))
 	desc.WriteString(fmt.Sprintf("- filter_exclude: `%v`\n", ins.FilterExclude))
@@ -151,16 +159,22 @@ func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
 
 	desc.WriteString("```")
 
+	tr := ins.Match.TitleRule
+	if tr == "" {
+		tr = "[check] [target]"
+	}
+
 	e := types.BuildEvent(map[string]string{
-		"check": ins.Check,
-	}).SetTitleRule("$check")
+		"check":  "journaltail::match",
+		"target": target,
+	}).SetTitleRule(tr)
 
 	if !triggered {
 		q.PushFront(e)
 		return
 	}
 
-	e.SetEventStatus(ins.GetDefaultSeverity())
+	e.SetEventStatus(ins.Match.Severity)
 	e.SetDescription(desc.String())
 	q.PushFront(e)
 }

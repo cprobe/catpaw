@@ -11,6 +11,7 @@ import (
 	"flashcat.cloud/catpaw/pkg/safe"
 	"flashcat.cloud/catpaw/plugins"
 	"flashcat.cloud/catpaw/types"
+
 	"github.com/toolkits/pkg/file"
 )
 
@@ -18,12 +19,17 @@ const (
 	pluginName string = "mtime"
 )
 
+type ChangeCheck struct {
+	Severity  string `toml:"severity"`
+	TitleRule string `toml:"title_rule"`
+}
+
 type Instance struct {
 	config.InternalConfig
 
 	TimeSpan  config.Duration `toml:"time_span"`
 	Directory string          `toml:"directory"`
-	Check     string          `toml:"check"`
+	Change    ChangeCheck     `toml:"change"`
 }
 
 type MTimePlugin struct {
@@ -46,10 +52,6 @@ func init() {
 }
 
 func (ins *Instance) Init() error {
-	if ins.Check == "" {
-		return fmt.Errorf("check is required")
-	}
-
 	if ins.Directory == "" {
 		return fmt.Errorf("directory is required")
 	}
@@ -60,6 +62,10 @@ func (ins *Instance) Init() error {
 
 	if ins.TimeSpan == 0 {
 		ins.TimeSpan = config.Duration(3 * time.Minute)
+	}
+
+	if ins.Change.Severity == "" {
+		ins.Change.Severity = types.EventStatusWarning
 	}
 
 	return nil
@@ -90,12 +96,12 @@ func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
 
 		return nil
 	}); err != nil {
-		q.PushFront(ins.buildEvent(ins.Directory, ins.Check, fmt.Sprintf("walk directory %s error: %v", ins.Directory, err)).SetEventStatus(ins.GetDefaultSeverity()))
+		q.PushFront(ins.buildEvent(ins.Directory, fmt.Sprintf("walk directory %s error: %v", ins.Directory, err)).SetEventStatus(ins.Change.Severity))
 		return
 	}
 
 	if len(files) == 0 {
-		q.PushFront(ins.buildEvent(ins.Directory, ins.Check, fmt.Sprintf("files not changed or created in directory %s", ins.Directory)))
+		q.PushFront(ins.buildEvent(ins.Directory, fmt.Sprintf("files not changed or created in directory %s", ins.Directory)))
 		return
 	}
 
@@ -110,11 +116,19 @@ func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
 		body.WriteString(" |\n")
 	}
 
-	q.PushFront(ins.buildEvent(ins.Directory, ins.Check, body.String()).SetEventStatus(ins.GetDefaultSeverity()))
+	q.PushFront(ins.buildEvent(ins.Directory, body.String()).SetEventStatus(ins.Change.Severity))
 }
 
-func (ins *Instance) buildEvent(dir, check string, desc ...string) *types.Event {
-	event := types.BuildEvent(map[string]string{"directory": dir, "check": check}).SetTitleRule("$check")
+func (ins *Instance) buildEvent(dir string, desc ...string) *types.Event {
+	tr := ins.Change.TitleRule
+	if tr == "" {
+		tr = "[check] [target]"
+	}
+
+	event := types.BuildEvent(map[string]string{
+		"check":     "mtime::change",
+		"target": dir,
+	}).SetTitleRule(tr)
 	if len(desc) > 0 {
 		event.SetDescription(desc[0])
 	}

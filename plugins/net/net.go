@@ -20,27 +20,42 @@ import (
 
 const pluginName = "net"
 
+type ConnectivityCheck struct {
+	Severity  string `toml:"severity"`
+	TitleRule string `toml:"title_rule"`
+}
+
+type ResponseTimeCheck struct {
+	WarnGe     config.Duration `toml:"warn_ge"`
+	CriticalGe config.Duration `toml:"critical_ge"`
+	TitleRule   string          `toml:"title_rule"`
+}
+
 type Partial struct {
-	ID          string          `toml:"id"`
-	Concurrency int             `toml:"concurrency"`
-	Timeout     config.Duration `toml:"timeout"`
-	ReadTimeout config.Duration `toml:"read_timeout"`
-	Protocol    string          `toml:"protocol"`
-	Send        string          `toml:"send"`
-	Expect      string          `toml:"expect"`
+	ID           string            `toml:"id"`
+	Concurrency  int               `toml:"concurrency"`
+	Timeout      config.Duration   `toml:"timeout"`
+	ReadTimeout  config.Duration   `toml:"read_timeout"`
+	Protocol     string            `toml:"protocol"`
+	Send         string            `toml:"send"`
+	Expect       string            `toml:"expect"`
+	Connectivity ConnectivityCheck `toml:"connectivity"`
+	ResponseTime ResponseTimeCheck `toml:"response_time"`
 }
 
 type Instance struct {
 	config.InternalConfig
 	Partial string `toml:"partial"`
 
-	Targets     []string        `toml:"targets"`
-	Concurrency int             `toml:"concurrency"`
-	Timeout     config.Duration `toml:"timeout"`
-	ReadTimeout config.Duration `toml:"read_timeout"`
-	Protocol    string          `toml:"protocol"`
-	Send        string          `toml:"send"`
-	Expect      string          `toml:"expect"`
+	Targets      []string          `toml:"targets"`
+	Concurrency  int               `toml:"concurrency"`
+	Timeout      config.Duration   `toml:"timeout"`
+	ReadTimeout  config.Duration   `toml:"read_timeout"`
+	Protocol     string            `toml:"protocol"`
+	Send         string            `toml:"send"`
+	Expect       string            `toml:"expect"`
+	Connectivity ConnectivityCheck `toml:"connectivity"`
+	ResponseTime ResponseTimeCheck `toml:"response_time"`
 }
 
 type NETPlugin struct {
@@ -55,31 +70,33 @@ func (p *NETPlugin) ApplyPartials() error {
 		if id != "" {
 			for _, partial := range p.Partials {
 				if partial.ID == id {
-					// use partial config as default
 					if p.Instances[i].Concurrency == 0 {
 						p.Instances[i].Concurrency = partial.Concurrency
 					}
-
 					if p.Instances[i].Timeout == 0 {
 						p.Instances[i].Timeout = partial.Timeout
 					}
-
 					if p.Instances[i].ReadTimeout == 0 {
 						p.Instances[i].ReadTimeout = partial.ReadTimeout
 					}
-
 					if p.Instances[i].Protocol == "" {
 						p.Instances[i].Protocol = partial.Protocol
 					}
-
 					if p.Instances[i].Send == "" {
 						p.Instances[i].Send = partial.Send
 					}
-
 					if p.Instances[i].Expect == "" {
 						p.Instances[i].Expect = partial.Expect
 					}
-
+					if p.Instances[i].Connectivity.Severity == "" {
+						p.Instances[i].Connectivity.Severity = partial.Connectivity.Severity
+					}
+					if p.Instances[i].ResponseTime.WarnGe == 0 {
+						p.Instances[i].ResponseTime.WarnGe = partial.ResponseTime.WarnGe
+					}
+					if p.Instances[i].ResponseTime.CriticalGe == 0 {
+						p.Instances[i].ResponseTime.CriticalGe = partial.ResponseTime.CriticalGe
+					}
 					break
 				}
 			}
@@ -106,43 +123,45 @@ func (ins *Instance) Init() error {
 	if ins.Concurrency == 0 {
 		ins.Concurrency = 10
 	}
-
 	if ins.Timeout == 0 {
 		ins.Timeout = config.Duration(time.Second)
 	}
-
 	if ins.ReadTimeout == 0 {
 		ins.ReadTimeout = config.Duration(time.Second)
 	}
-
 	if ins.Protocol == "" {
 		ins.Protocol = "tcp"
 	}
-
 	if ins.Protocol != "tcp" && ins.Protocol != "udp" {
 		return errors.New("bad protocol, only tcp and udp are supported")
 	}
-
 	if ins.Protocol == "udp" && ins.Send == "" {
 		return errors.New("send string cannot be empty when protocol is udp")
 	}
-
 	if ins.Protocol == "udp" && ins.Expect == "" {
 		return errors.New("expected string cannot be empty when protocol is udp")
 	}
 
+	if ins.Connectivity.Severity == "" {
+		ins.Connectivity.Severity = types.EventStatusCritical
+	}
+
+	if ins.ResponseTime.WarnGe > 0 && ins.ResponseTime.CriticalGe > 0 {
+		if ins.ResponseTime.WarnGe >= ins.ResponseTime.CriticalGe {
+			return fmt.Errorf("response_time.warn_ge(%s) must be less than response_time.critical_ge(%s)",
+				time.Duration(ins.ResponseTime.WarnGe), time.Duration(ins.ResponseTime.CriticalGe))
+		}
+	}
+
 	for i := 0; i < len(ins.Targets); i++ {
 		target := ins.Targets[i]
-
 		host, port, err := net.SplitHostPort(target)
 		if err != nil {
 			return fmt.Errorf("failed to split host port, target: %s, error: %v", target, err)
 		}
-
 		if host == "" {
 			ins.Targets[i] = "localhost:" + port
 		}
-
 		if port == "" {
 			return errors.New("bad port, target: " + target)
 		}
@@ -191,76 +210,97 @@ func (ins *Instance) gather(q *safe.Queue[*types.Event], target string) {
 }
 
 func (ins *Instance) TCPGather(address string, labels map[string]string, q *safe.Queue[*types.Event]) {
+	connTR := ins.Connectivity.TitleRule
+	if connTR == "" {
+		connTR = "[check] [target]"
+	}
+
 	event := types.BuildEvent(map[string]string{
-		"check": "tcp check",
-	}, labels).SetTitleRule("$check").SetDescription(ins.buildDesc(address, "everything is ok"))
+		"check": "net::connectivity",
+	}, labels).SetTitleRule(connTR)
+
+	start := time.Now()
 
 	conn, err := net.DialTimeout("tcp", address, time.Duration(ins.Timeout))
 	if err != nil {
-		q.PushFront(event.SetEventStatus(ins.GetDefaultSeverity()).SetDescription(ins.buildDesc(address, fmt.Sprintf("connection error: %v", err))))
+		responseTime := time.Since(start)
+		q.PushFront(event.SetEventStatus(ins.Connectivity.Severity).SetDescription(
+			ins.buildDesc(address, fmt.Sprintf("connection error: %v", err), responseTime)))
 		logger.Logger.Errorw("failed to send tcp request", "error", err, "plugin", pluginName, "target", address)
 		return
 	}
 
 	defer conn.Close()
 
-	// check expect string
-	if ins.Send == "" {
-		// no need check send and expect
-		q.PushFront(event)
-		return
-	}
-
-	msg := []byte(ins.Send)
-	if _, err = conn.Write(msg); err != nil {
-		q.PushFront(event.SetEventStatus(ins.GetDefaultSeverity()).SetDescription(ins.buildDesc(address, fmt.Sprintf("failed to send message: %s, error: %v", ins.Send, err))))
-		return
-	}
-
-	// Read string if needed
-	if ins.Expect != "" {
-		// Set read timeout
-		if err := conn.SetReadDeadline(time.Now().Add(time.Duration(ins.ReadTimeout))); err != nil {
-			q.PushFront(event.SetEventStatus(ins.GetDefaultSeverity()).SetDescription(ins.buildDesc(address, fmt.Sprintf("failed to set read deadline, error: %v", err))))
+	if ins.Send != "" {
+		msg := []byte(ins.Send)
+		if _, err = conn.Write(msg); err != nil {
+			responseTime := time.Since(start)
+			q.PushFront(event.SetEventStatus(ins.Connectivity.Severity).SetDescription(
+				ins.buildDesc(address, fmt.Sprintf("failed to send message: %s, error: %v", ins.Send, err), responseTime)))
 			return
 		}
 
-		// Prepare reader
-		reader := bufio.NewReader(conn)
-		tp := textproto.NewReader(reader)
-		// Read
-		data, err := tp.ReadLine()
-		if err != nil {
-			q.PushFront(event.SetEventStatus(ins.GetDefaultSeverity()).SetDescription(ins.buildDesc(address, fmt.Sprintf("failed to read response line, error: %v", err))))
-			return
-		}
+		if ins.Expect != "" {
+			if err := conn.SetReadDeadline(time.Now().Add(time.Duration(ins.ReadTimeout))); err != nil {
+				responseTime := time.Since(start)
+				q.PushFront(event.SetEventStatus(ins.Connectivity.Severity).SetDescription(
+					ins.buildDesc(address, fmt.Sprintf("failed to set read deadline, error: %v", err), responseTime)))
+				return
+			}
 
-		if !strings.Contains(data, ins.Expect) {
-			q.PushFront(event.SetEventStatus(ins.GetDefaultSeverity()).SetDescription(ins.buildDesc(address, fmt.Sprintf("response mismatch. expected: %s, real response: %s", ins.Expect, data))))
-			return
+			reader := bufio.NewReader(conn)
+			tp := textproto.NewReader(reader)
+			data, err := tp.ReadLine()
+			if err != nil {
+				responseTime := time.Since(start)
+				q.PushFront(event.SetEventStatus(ins.Connectivity.Severity).SetDescription(
+					ins.buildDesc(address, fmt.Sprintf("failed to read response line, error: %v", err), responseTime)))
+				return
+			}
+
+			if !strings.Contains(data, ins.Expect) {
+				responseTime := time.Since(start)
+				q.PushFront(event.SetEventStatus(ins.Connectivity.Severity).SetDescription(
+					ins.buildDesc(address, fmt.Sprintf("response mismatch. expected: %s, real response: %s", ins.Expect, data), responseTime)))
+				return
+			}
 		}
 	}
 
+	responseTime := time.Since(start)
+	event.SetDescription(ins.buildDesc(address, "everything is ok", responseTime))
 	q.PushFront(event)
+
+	ins.checkResponseTime(q, address, labels, responseTime)
 }
 
 func (ins *Instance) UDPGather(address string, labels map[string]string, q *safe.Queue[*types.Event]) {
+	connTR := ins.Connectivity.TitleRule
+	if connTR == "" {
+		connTR = "[check] [target]"
+	}
+
 	event := types.BuildEvent(map[string]string{
-		"check": "udp check",
-	}, labels).SetTitleRule("$check").SetDescription(ins.buildDesc(address, "everything is ok"))
+		"check": "net::connectivity",
+	}, labels).SetTitleRule(connTR)
+
+	start := time.Now()
 
 	udpAddr, err := net.ResolveUDPAddr("udp", address)
 	if err != nil {
+		responseTime := time.Since(start)
 		message := fmt.Sprintf("resolve udp address(%s) error: %v", address, err)
-		q.PushFront(event.SetEventStatus(ins.GetDefaultSeverity()).SetDescription(ins.buildDesc(address, message)))
+		q.PushFront(event.SetEventStatus(ins.Connectivity.Severity).SetDescription(ins.buildDesc(address, message, responseTime)))
 		logger.Logger.Errorw("resolve udp address fail", "address", address, "error", err)
 		return
 	}
 
 	conn, err := net.DialUDP("udp", nil, udpAddr)
 	if err != nil {
+		responseTime := time.Since(start)
 		message := fmt.Sprintf("dial udp address(%s) error: %v", address, err)
-		q.PushFront(event.SetEventStatus(ins.GetDefaultSeverity()).SetDescription(ins.buildDesc(address, message)))
+		q.PushFront(event.SetEventStatus(ins.Connectivity.Severity).SetDescription(ins.buildDesc(address, message, responseTime)))
 		logger.Logger.Errorw("dial udp address fail", "address", address, "error", err)
 		return
 	}
@@ -268,45 +308,85 @@ func (ins *Instance) UDPGather(address string, labels map[string]string, q *safe
 	defer conn.Close()
 
 	if _, err = conn.Write([]byte(ins.Send)); err != nil {
+		responseTime := time.Since(start)
 		message := fmt.Sprintf("write string(%s) to udp address(%s) error: %v", ins.Send, address, err)
-		q.PushFront(event.SetEventStatus(ins.GetDefaultSeverity()).SetDescription(ins.buildDesc(address, message)))
+		q.PushFront(event.SetEventStatus(ins.Connectivity.Severity).SetDescription(ins.buildDesc(address, message, responseTime)))
 		logger.Logger.Errorw("write to udp address fail", "address", address, "send", ins.Send, "error", err)
 		return
 	}
 
 	if err = conn.SetReadDeadline(time.Now().Add(time.Duration(ins.ReadTimeout))); err != nil {
+		responseTime := time.Since(start)
 		message := fmt.Sprintf("set connection deadline to udp address(%s) error: %v", address, err)
-		q.PushFront(event.SetEventStatus(ins.GetDefaultSeverity()).SetDescription(ins.buildDesc(address, message)))
+		q.PushFront(event.SetEventStatus(ins.Connectivity.Severity).SetDescription(ins.buildDesc(address, message, responseTime)))
 		logger.Logger.Errorw("set udp read deadline fail", "address", address, "error", err)
 		return
 	}
 
-	// Read
 	buf := make([]byte, 1024)
 	if _, _, err = conn.ReadFromUDP(buf); err != nil {
+		responseTime := time.Since(start)
 		message := fmt.Sprintf("read from udp address(%s) error: %v", address, err)
-		q.PushFront(event.SetEventStatus(ins.GetDefaultSeverity()).SetDescription(ins.buildDesc(address, message)))
+		q.PushFront(event.SetEventStatus(ins.Connectivity.Severity).SetDescription(ins.buildDesc(address, message, responseTime)))
 		logger.Logger.Errorw("read from udp address fail", "address", address, "error", err)
 		return
 	}
 
 	if !strings.Contains(string(buf), ins.Expect) {
+		responseTime := time.Since(start)
 		message := fmt.Sprintf("response mismatch. expect: %s, real: %s", ins.Expect, string(buf))
-		q.PushFront(event.SetEventStatus(ins.GetDefaultSeverity()).SetDescription(ins.buildDesc(address, message)))
+		q.PushFront(event.SetEventStatus(ins.Connectivity.Severity).SetDescription(ins.buildDesc(address, message, responseTime)))
 		logger.Logger.Errorw("udp response mismatch", "address", address, "expect", ins.Expect, "actual", string(buf))
 		return
 	}
 
+	responseTime := time.Since(start)
+	event.SetDescription(ins.buildDesc(address, "everything is ok", responseTime))
 	q.PushFront(event)
+
+	ins.checkResponseTime(q, address, labels, responseTime)
 }
 
-func (ins *Instance) buildDesc(target, message string) string {
+func (ins *Instance) checkResponseTime(q *safe.Queue[*types.Event], address string, labels map[string]string, responseTime time.Duration) {
+	if ins.ResponseTime.WarnGe == 0 && ins.ResponseTime.CriticalGe == 0 {
+		return
+	}
+
+	tr := ins.ResponseTime.TitleRule
+	if tr == "" {
+		tr = "[check] [target]"
+	}
+
+	rtEvent := types.BuildEvent(map[string]string{
+		"check": "net::response_time",
+	}, labels).SetTitleRule(tr)
+
+	if ins.ResponseTime.CriticalGe > 0 && responseTime >= time.Duration(ins.ResponseTime.CriticalGe) {
+		rtEvent.SetEventStatus(types.EventStatusCritical)
+	} else if ins.ResponseTime.WarnGe > 0 && responseTime >= time.Duration(ins.ResponseTime.WarnGe) {
+		rtEvent.SetEventStatus(types.EventStatusWarning)
+	}
+
+	rtEvent.SetDescription(fmt.Sprintf(`[MD]
+- **target**: %s
+- **protocol**: %s
+- **response_time**: %s
+- **warn_threshold**: %s
+- **critical_threshold**: %s
+`, address, ins.Protocol, responseTime.String(),
+		ins.ResponseTime.WarnGe.HumanString(),
+		ins.ResponseTime.CriticalGe.HumanString()))
+
+	q.PushFront(rtEvent)
+}
+
+func (ins *Instance) buildDesc(target, message string, responseTime time.Duration) string {
 	return `[MD]
 - **target**: ` + target + `
 - **protocol**: ` + ins.Protocol + `
+- **response_time**: ` + responseTime.String() + `
 - **config.send**: ` + ins.Send + `
-- **config.expect**:` + ins.Expect + `
-
+- **config.expect**: ` + ins.Expect + `
 
 **message**:
 

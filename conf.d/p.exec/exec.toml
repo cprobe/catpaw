@@ -31,13 +31,8 @@ commands = [
 # labels = { env="production", team="devops" }
 
 [instances.alerting]
-## Enable alerting or not
-enabled = true
-## Same functionality as Prometheus keyword 'for'
+# disabled = true
 for_duration = 0
-## Minimum interval duration between notifications
 repeat_interval = "5m"
-## Maximum number of notifications
 repeat_number = 3
-## Whether notify recovery event
-recovery_notification = true
+# disable_recovery_notification = true

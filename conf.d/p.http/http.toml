@@ -53,24 +53,39 @@ partial = "default"
 ## Use TLS but skip chain & host verification
 # insecure_skip_verify = false
 
-[instances.expect]
-## Optional expected response status code.
-response_status_code = ["20*", "30*"]
-## Optional substring match in body of the response (case sensitive)
-response_substring = "html"
-## Optional alert when cert will expire in x hours
-cert_expire_threshold = "72h"
+## Connectivity check (always enabled, defaults to Critical)
+## check label auto-set to "http::connectivity"
+[instances.connectivity]
+severity = "Critical"
+# title_rule = "[check] [target]"
+
+## Response time check (disabled if both thresholds are 0)
+# [instances.response_time]
+# warn_ge = "500ms"
+# critical_ge = "2s"
+# title_rule = "[check] [target]"
+
+## TLS cert expiry check (disabled if both thresholds are 0, HTTPS only)
+[instances.cert_expiry]
+warn_within = "72h"
+critical_within = "24h"
+# title_rule = "[check] [target]"
+
+## HTTP status code check (disabled if expect is empty)
+[instances.status_code]
+expect = ["20*", "30*"]
+severity = "Warning"
+# title_rule = "[check] [target]"
+
+## HTTP response body check (disabled if expect_substring is empty)
+[instances.response_body]
+expect_substring = "html"
+severity = "Warning"
+# title_rule = "[check] [target]"
 
 [instances.alerting]
-## Enable alerting or not
-enabled = true
-## Same functionality as Prometheus keyword 'for'
+# disabled = true
 for_duration = 0
-## Minimum interval duration between notifications
 repeat_interval = "5m"
-## Maximum number of notifications
 repeat_number = 3
-## Whether notify recovery event
-recovery_notification = true
-## Choice: Critical, Warning, Info
-default_severity = "Warning"
+# disable_recovery_notification = true

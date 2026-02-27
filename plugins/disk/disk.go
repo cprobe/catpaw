@@ -20,6 +20,24 @@ import (
 
 const pluginName = "disk"
 
+type SpaceUsageCheck struct {
+	WarnGe     float64 `toml:"warn_ge"`
+	CriticalGe float64 `toml:"critical_ge"`
+	TitleRule  string  `toml:"title_rule"`
+}
+
+type InodeUsageCheck struct {
+	WarnGe     float64 `toml:"warn_ge"`
+	CriticalGe float64 `toml:"critical_ge"`
+	TitleRule  string  `toml:"title_rule"`
+}
+
+type WritableCheck struct {
+	Severity  string `toml:"severity"`
+	TestFile  string `toml:"test_file"`
+	TitleRule string `toml:"title_rule"`
+}
+
 type Instance struct {
 	config.InternalConfig
 
@@ -27,22 +45,16 @@ type Instance struct {
 	IgnoreMountPoints []string `toml:"ignore_mount_points"`
 	IgnoreFSTypes     []string `toml:"ignore_fs_types"`
 
-	WarnIfUsedPercentGe     float64 `toml:"warn_if_used_percent_ge"`
-	CriticalIfUsedPercentGe float64 `toml:"critical_if_used_percent_ge"`
-
-	WarnIfInodesUsedPercentGe     float64 `toml:"warn_if_inodes_used_percent_ge"`
-	CriticalIfInodesUsedPercentGe float64 `toml:"critical_if_inodes_used_percent_ge"`
-
-	CheckWritable    bool   `toml:"check_writable"`
-	WritableTestFile string `toml:"writable_test_file"`
+	SpaceUsage SpaceUsageCheck `toml:"space_usage"`
+	InodeUsage InodeUsageCheck `toml:"inode_usage"`
+	Writable   WritableCheck   `toml:"writable"`
 
 	Concurrency   int             `toml:"concurrency"`
 	GatherTimeout config.Duration `toml:"gather_timeout"`
-	Check         string          `toml:"check"`
 
 	mountFilter filter.Filter
-	inFlight    sync.Map // mountPoint -> int64 (unix timestamp)
-	prevHung    sync.Map // mountPoint -> bool
+	inFlight    sync.Map
+	prevHung    sync.Map
 }
 
 type DiskPlugin struct {
@@ -73,24 +85,20 @@ func (ins *Instance) Init() error {
 		ins.GatherTimeout = config.Duration(10 * time.Second)
 	}
 
-	if ins.WritableTestFile == "" {
-		ins.WritableTestFile = ".catpaw_disk_check"
+	if ins.Writable.Severity != "" && ins.Writable.TestFile == "" {
+		ins.Writable.TestFile = ".catpaw_disk_check"
 	}
 
-	if ins.Check == "" {
-		ins.Check = "disk check"
+	if ins.SpaceUsage.WarnGe > 0 && ins.SpaceUsage.CriticalGe > 0 &&
+		ins.SpaceUsage.WarnGe >= ins.SpaceUsage.CriticalGe {
+		return fmt.Errorf("space_usage.warn_ge(%.1f) must be less than space_usage.critical_ge(%.1f)",
+			ins.SpaceUsage.WarnGe, ins.SpaceUsage.CriticalGe)
 	}
 
-	if ins.WarnIfUsedPercentGe > 0 && ins.CriticalIfUsedPercentGe > 0 &&
-		ins.WarnIfUsedPercentGe >= ins.CriticalIfUsedPercentGe {
-		return fmt.Errorf("warn_if_used_percent_ge(%.1f) must be less than critical_if_used_percent_ge(%.1f)",
-			ins.WarnIfUsedPercentGe, ins.CriticalIfUsedPercentGe)
-	}
-
-	if ins.WarnIfInodesUsedPercentGe > 0 && ins.CriticalIfInodesUsedPercentGe > 0 &&
-		ins.WarnIfInodesUsedPercentGe >= ins.CriticalIfInodesUsedPercentGe {
-		return fmt.Errorf("warn_if_inodes_used_percent_ge(%.1f) must be less than critical_if_inodes_used_percent_ge(%.1f)",
-			ins.WarnIfInodesUsedPercentGe, ins.CriticalIfInodesUsedPercentGe)
+	if ins.InodeUsage.WarnGe > 0 && ins.InodeUsage.CriticalGe > 0 &&
+		ins.InodeUsage.WarnGe >= ins.InodeUsage.CriticalGe {
+		return fmt.Errorf("inode_usage.warn_ge(%.1f) must be less than inode_usage.critical_ge(%.1f)",
+			ins.InodeUsage.WarnGe, ins.InodeUsage.CriticalGe)
 	}
 
 	f, err := filter.NewIncludeExcludeFilter(ins.MountPoints, ins.IgnoreMountPoints)
@@ -184,11 +192,16 @@ func (ins *Instance) gatherMountPoint(q *safe.Queue[*types.Event], mountPoint, d
 	usage, err := disk.Usage(mountPoint)
 	if err != nil {
 		logger.Logger.Errorw("failed to get disk usage", "mount_point", mountPoint, "error", err)
+
+		tr := ins.SpaceUsage.TitleRule
+		if tr == "" {
+			tr = "[check] [target]"
+		}
+
 		q.PushFront(types.BuildEvent(map[string]string{
-			"check":       ins.Check,
-			"check_type":  "usage",
-			"mount_point": mountPoint,
-		}).SetTitleRule("[check]").SetEventStatus(types.EventStatusCritical).
+			"check":       "disk::space_usage",
+			"target": mountPoint,
+		}).SetTitleRule(tr).SetEventStatus(types.EventStatusCritical).
 			SetDescription(fmt.Sprintf(`[MD]
 - **mount_point**: %s
 - **device**: %s
@@ -202,34 +215,38 @@ func (ins *Instance) gatherMountPoint(q *safe.Queue[*types.Event], mountPoint, d
 	ins.checkUsage(q, mountPoint, device, fsType, usage)
 	ins.checkInodes(q, mountPoint, device, fsType, usage)
 
-	if ins.CheckWritable {
+	if ins.Writable.Severity != "" {
 		ins.checkWritable(q, mountPoint, device, fsType)
 	}
 }
 
 func (ins *Instance) checkUsage(q *safe.Queue[*types.Event], mountPoint, device, fsType string, usage *disk.UsageStat) {
-	if ins.WarnIfUsedPercentGe == 0 && ins.CriticalIfUsedPercentGe == 0 {
+	if ins.SpaceUsage.WarnGe == 0 && ins.SpaceUsage.CriticalGe == 0 {
 		return
 	}
 
-	labels := map[string]string{
-		"check":       ins.Check,
-		"check_type":  "usage",
-		"mount_point": mountPoint,
+	tr := ins.SpaceUsage.TitleRule
+	if tr == "" {
+		tr = "[check] [target]"
 	}
 
-	event := types.BuildEvent(labels).SetTitleRule("[check]").
+	labels := map[string]string{
+		"check":       "disk::space_usage",
+		"target": mountPoint,
+	}
+
+	event := types.BuildEvent(labels).SetTitleRule(tr).
 		SetDescription(ins.buildUsageDesc(mountPoint, device, fsType, usage, "everything is ok"))
 
-	if ins.CriticalIfUsedPercentGe > 0 && usage.UsedPercent >= ins.CriticalIfUsedPercentGe {
-		msg := fmt.Sprintf("disk usage %.1f%% >= critical threshold %.1f%%", usage.UsedPercent, ins.CriticalIfUsedPercentGe)
+	if ins.SpaceUsage.CriticalGe > 0 && usage.UsedPercent >= ins.SpaceUsage.CriticalGe {
+		msg := fmt.Sprintf("disk usage %.1f%% >= critical threshold %.1f%%", usage.UsedPercent, ins.SpaceUsage.CriticalGe)
 		q.PushFront(event.SetEventStatus(types.EventStatusCritical).
 			SetDescription(ins.buildUsageDesc(mountPoint, device, fsType, usage, msg)))
 		return
 	}
 
-	if ins.WarnIfUsedPercentGe > 0 && usage.UsedPercent >= ins.WarnIfUsedPercentGe {
-		msg := fmt.Sprintf("disk usage %.1f%% >= warning threshold %.1f%%", usage.UsedPercent, ins.WarnIfUsedPercentGe)
+	if ins.SpaceUsage.WarnGe > 0 && usage.UsedPercent >= ins.SpaceUsage.WarnGe {
+		msg := fmt.Sprintf("disk usage %.1f%% >= warning threshold %.1f%%", usage.UsedPercent, ins.SpaceUsage.WarnGe)
 		q.PushFront(event.SetEventStatus(types.EventStatusWarning).
 			SetDescription(ins.buildUsageDesc(mountPoint, device, fsType, usage, msg)))
 		return
@@ -243,28 +260,32 @@ func (ins *Instance) checkInodes(q *safe.Queue[*types.Event], mountPoint, device
 		return
 	}
 
-	if ins.WarnIfInodesUsedPercentGe == 0 && ins.CriticalIfInodesUsedPercentGe == 0 {
+	if ins.InodeUsage.WarnGe == 0 && ins.InodeUsage.CriticalGe == 0 {
 		return
 	}
 
-	labels := map[string]string{
-		"check":       ins.Check,
-		"check_type":  "inode",
-		"mount_point": mountPoint,
+	tr := ins.InodeUsage.TitleRule
+	if tr == "" {
+		tr = "[check] [target]"
 	}
 
-	event := types.BuildEvent(labels).SetTitleRule("[check]").
+	labels := map[string]string{
+		"check":       "disk::inode_usage",
+		"target": mountPoint,
+	}
+
+	event := types.BuildEvent(labels).SetTitleRule(tr).
 		SetDescription(ins.buildInodeDesc(mountPoint, device, fsType, usage, "everything is ok"))
 
-	if ins.CriticalIfInodesUsedPercentGe > 0 && usage.InodesUsedPercent >= ins.CriticalIfInodesUsedPercentGe {
-		msg := fmt.Sprintf("inode usage %.1f%% >= critical threshold %.1f%%", usage.InodesUsedPercent, ins.CriticalIfInodesUsedPercentGe)
+	if ins.InodeUsage.CriticalGe > 0 && usage.InodesUsedPercent >= ins.InodeUsage.CriticalGe {
+		msg := fmt.Sprintf("inode usage %.1f%% >= critical threshold %.1f%%", usage.InodesUsedPercent, ins.InodeUsage.CriticalGe)
 		q.PushFront(event.SetEventStatus(types.EventStatusCritical).
 			SetDescription(ins.buildInodeDesc(mountPoint, device, fsType, usage, msg)))
 		return
 	}
 
-	if ins.WarnIfInodesUsedPercentGe > 0 && usage.InodesUsedPercent >= ins.WarnIfInodesUsedPercentGe {
-		msg := fmt.Sprintf("inode usage %.1f%% >= warning threshold %.1f%%", usage.InodesUsedPercent, ins.WarnIfInodesUsedPercentGe)
+	if ins.InodeUsage.WarnGe > 0 && usage.InodesUsedPercent >= ins.InodeUsage.WarnGe {
+		msg := fmt.Sprintf("inode usage %.1f%% >= warning threshold %.1f%%", usage.InodesUsedPercent, ins.InodeUsage.WarnGe)
 		q.PushFront(event.SetEventStatus(types.EventStatusWarning).
 			SetDescription(ins.buildInodeDesc(mountPoint, device, fsType, usage, msg)))
 		return
@@ -274,21 +295,25 @@ func (ins *Instance) checkInodes(q *safe.Queue[*types.Event], mountPoint, device
 }
 
 func (ins *Instance) checkWritable(q *safe.Queue[*types.Event], mountPoint, device, fsType string) {
-	labels := map[string]string{
-		"check":       ins.Check,
-		"check_type":  "writable",
-		"mount_point": mountPoint,
+	tr := ins.Writable.TitleRule
+	if tr == "" {
+		tr = "[check] [target]"
 	}
 
-	event := types.BuildEvent(labels).SetTitleRule("[check]")
+	labels := map[string]string{
+		"check":       "disk::writable",
+		"target": mountPoint,
+	}
 
-	testFile := filepath.Join(mountPoint, ins.WritableTestFile)
+	event := types.BuildEvent(labels).SetTitleRule(tr)
+
+	testFile := filepath.Join(mountPoint, ins.Writable.TestFile)
 	testContent := fmt.Sprintf("catpaw-disk-check-%d", time.Now().UnixNano())
 
 	err := os.WriteFile(testFile, []byte(testContent), 0644)
 	if err != nil {
 		msg := ins.classifyWriteError(err)
-		q.PushFront(event.SetEventStatus(types.EventStatusCritical).
+		q.PushFront(event.SetEventStatus(ins.Writable.Severity).
 			SetDescription(ins.buildWritableDesc(mountPoint, device, fsType, msg)))
 		return
 	}
@@ -297,7 +322,7 @@ func (ins *Instance) checkWritable(q *safe.Queue[*types.Event], mountPoint, devi
 	if err != nil {
 		_ = os.Remove(testFile)
 		msg := fmt.Sprintf("write succeeded but read-back failed: %v", err)
-		q.PushFront(event.SetEventStatus(types.EventStatusCritical).
+		q.PushFront(event.SetEventStatus(ins.Writable.Severity).
 			SetDescription(ins.buildWritableDesc(mountPoint, device, fsType, msg)))
 		return
 	}
@@ -306,7 +331,7 @@ func (ins *Instance) checkWritable(q *safe.Queue[*types.Event], mountPoint, devi
 
 	if string(readBack) != testContent {
 		msg := "write succeeded but read-back content mismatch (possible data corruption)"
-		q.PushFront(event.SetEventStatus(types.EventStatusCritical).
+		q.PushFront(event.SetEventStatus(ins.Writable.Severity).
 			SetDescription(ins.buildWritableDesc(mountPoint, device, fsType, msg)))
 		return
 	}
@@ -339,9 +364,8 @@ func (ins *Instance) isIgnoredFSType(fsType string) bool {
 
 func (ins *Instance) buildHungEvent(mountPoint string, elapsedSec int64) *types.Event {
 	labels := map[string]string{
-		"check":       ins.Check,
-		"check_type":  "hung",
-		"mount_point": mountPoint,
+		"check":       "disk::hung",
+		"target": mountPoint,
 	}
 	desc := fmt.Sprintf(`[MD]
 - **mount_point**: %s
@@ -354,9 +378,8 @@ func (ins *Instance) buildHungEvent(mountPoint string, elapsedSec int64) *types.
 
 func (ins *Instance) buildHungRecoveryEvent(mountPoint string) *types.Event {
 	labels := map[string]string{
-		"check":       ins.Check,
-		"check_type":  "hung",
-		"mount_point": mountPoint,
+		"check":       "disk::hung",
+		"target": mountPoint,
 	}
 	desc := fmt.Sprintf(`[MD]
 - **mount_point**: %s

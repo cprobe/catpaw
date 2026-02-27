@@ -15,6 +15,14 @@ const (
 	pluginName string = "procnum"
 )
 
+type ProcessCountCheck struct {
+	WarnLt     int    `toml:"warn_lt"`
+	CriticalLt int    `toml:"critical_lt"`
+	WarnGt     int    `toml:"warn_gt"`
+	CriticalGt int    `toml:"critical_gt"`
+	TitleRule  string `toml:"title_rule"`
+}
+
 type Instance struct {
 	config.InternalConfig
 
@@ -24,8 +32,7 @@ type Instance struct {
 
 	searchString string
 
-	AlertIfNumLt int    `toml:"alert_if_num_lt"`
-	Check        string `toml:"check"`
+	ProcessCount ProcessCountCheck `toml:"process_count"`
 }
 
 type ProcnumPlugin struct {
@@ -56,16 +63,19 @@ func (ins *Instance) Init() error {
 		ins.searchString = ins.SearchWinService
 	}
 
+	pc := ins.ProcessCount
+	if pc.WarnLt > 0 && pc.CriticalLt > 0 && pc.WarnLt < pc.CriticalLt {
+		return fmt.Errorf("process_count.warn_lt(%d) must be >= process_count.critical_lt(%d)", pc.WarnLt, pc.CriticalLt)
+	}
+	if pc.WarnGt > 0 && pc.CriticalGt > 0 && pc.WarnGt > pc.CriticalGt {
+		return fmt.Errorf("process_count.warn_gt(%d) must be <= process_count.critical_gt(%d)", pc.WarnGt, pc.CriticalGt)
+	}
+
 	return nil
 }
 
 func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
 	if ins.searchString == "" {
-		return
-	}
-
-	if ins.Check == "" {
-		logger.Logger.Error("check is empty")
 		return
 	}
 
@@ -87,27 +97,72 @@ func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
 	}
 
 	if err != nil {
-		q.PushFront(ins.buildEvent("Occur error: " + err.Error()).SetEventStatus(ins.GetDefaultSeverity()))
+		q.PushFront(ins.buildEvent(fmt.Sprintf(`[MD]
+- **target**: %s
+- **error**: %v
+`, ins.searchString, err)).SetEventStatus(types.EventStatusCritical))
 		return
 	}
 
-	logger.Logger.Debugw("search result", "search_string", ins.searchString, "pids", pids)
+	count := len(pids)
+	logger.Logger.Debugw("search result", "search_string", ins.searchString, "pids", pids, "count", count)
 
-	if len(pids) < ins.AlertIfNumLt {
-		s := fmt.Sprintf("The number of process is less than expected. real: %d, expected: %d", len(pids), ins.AlertIfNumLt)
-		q.PushFront(ins.buildEvent("[MD]", s, `
-- search_exec_substring: `+ins.SearchExecSubstring+`
-- search_cmdline_substring: `+ins.SearchCmdlineSubstring+`
-- search_win_service: `+ins.SearchWinService+`
-		`).SetEventStatus(ins.GetDefaultSeverity()))
+	pc := ins.ProcessCount
+	desc := ins.buildDesc(count)
+
+	// "too few" check: critical_lt has higher priority than warn_lt
+	if pc.CriticalLt > 0 && count < pc.CriticalLt {
+		q.PushFront(ins.buildEvent(desc).SetEventStatus(types.EventStatusCritical))
+		return
+	}
+	if pc.WarnLt > 0 && count < pc.WarnLt {
+		q.PushFront(ins.buildEvent(desc).SetEventStatus(types.EventStatusWarning))
 		return
 	}
 
-	q.PushFront(ins.buildEvent())
+	// "too many" check: critical_gt has higher priority than warn_gt
+	if pc.CriticalGt > 0 && count > pc.CriticalGt {
+		q.PushFront(ins.buildEvent(desc).SetEventStatus(types.EventStatusCritical))
+		return
+	}
+	if pc.WarnGt > 0 && count > pc.WarnGt {
+		q.PushFront(ins.buildEvent(desc).SetEventStatus(types.EventStatusWarning))
+		return
+	}
+
+	// everything is ok
+	q.PushFront(ins.buildEvent(desc))
+}
+
+func (ins *Instance) buildDesc(count int) string {
+	pc := ins.ProcessCount
+	return fmt.Sprintf(`[MD]
+- **target**: %s
+- **process_count**: %d
+- **warn_lt**: %d
+- **critical_lt**: %d
+- **warn_gt**: %d
+- **critical_gt**: %d
+
+**search config**:
+- search_exec_substring: %s
+- search_cmdline_substring: %s
+- search_win_service: %s
+`, ins.searchString, count,
+		pc.WarnLt, pc.CriticalLt, pc.WarnGt, pc.CriticalGt,
+		ins.SearchExecSubstring, ins.SearchCmdlineSubstring, ins.SearchWinService)
 }
 
 func (ins *Instance) buildEvent(desc ...string) *types.Event {
-	event := types.BuildEvent(map[string]string{"check": ins.Check}).SetTitleRule("$check")
+	tr := ins.ProcessCount.TitleRule
+	if tr == "" {
+		tr = "[check] [target]"
+	}
+
+	event := types.BuildEvent(map[string]string{
+		"check":  "procnum::process_count",
+		"target": ins.searchString,
+	}).SetTitleRule(tr)
 	if len(desc) > 0 {
 		event.SetDescription(strings.Join(desc, "\n"))
 	}

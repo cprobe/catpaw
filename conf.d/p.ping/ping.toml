@@ -27,8 +27,25 @@ id = "default"
 ## option of the ping command.
 # size = 56
 
-# alert if packet loss is above this threshold
-alert_if_packet_loss_percent_ge = 1.0
+## Connectivity check (always enabled, defaults to Critical)
+## check label auto-set to "ping::connectivity"
+[partials.connectivity]
+severity = "Critical"
+# title_rule = "[check] [target]"
+
+## Packet loss check (disabled if both thresholds are 0)
+## check label auto-set to "ping::packet_loss"
+[partials.packet_loss]
+warn_ge = 1.0
+critical_ge = 50.0
+# title_rule = "[check] [target]"
+
+## Average RTT check (disabled if both thresholds are 0)
+## check label auto-set to "ping::rtt"
+# [partials.rtt]
+# warn_ge = "100ms"
+# critical_ge = "500ms"
+# title_rule = "[check] [target]"
 
 [[instances]]
 targets = [
@@ -44,15 +61,8 @@ partial = "default"
 # labels = { env="production", team="devops" }
 
 [instances.alerting]
-## Enable alerting or not
-enabled = true
-## Same functionality as Prometheus keyword 'for'
+# disabled = true
 for_duration = 0
-## Minimum interval duration between notifications
 repeat_interval = "5m"
-## Maximum number of notifications
 repeat_number = 3
-## Whether notify recovery event
-recovery_notification = true
-## Choice: Critical, Warning, Info
-default_severity = "Warning"
+# disable_recovery_notification = true

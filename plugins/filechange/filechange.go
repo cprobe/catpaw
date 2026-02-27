@@ -8,23 +8,27 @@ import (
 	"time"
 
 	"flashcat.cloud/catpaw/config"
+	"flashcat.cloud/catpaw/logger"
 	"flashcat.cloud/catpaw/pkg/safe"
 	"flashcat.cloud/catpaw/plugins"
 	"flashcat.cloud/catpaw/types"
-
-	"flashcat.cloud/catpaw/logger"
 )
 
 const (
 	pluginName string = "filechange"
 )
 
+type ChangeCheck struct {
+	Severity  string `toml:"severity"`
+	TitleRule string `toml:"title_rule"`
+}
+
 type Instance struct {
 	config.InternalConfig
 
 	TimeSpan  config.Duration `toml:"time_span"`
 	Filepaths []string        `toml:"filepaths"`
-	Check     string          `toml:"check"`
+	Change    ChangeCheck     `toml:"change"`
 }
 
 type FileChangePlugin struct {
@@ -47,16 +51,16 @@ func init() {
 }
 
 func (ins *Instance) Init() error {
-	if ins.Check == "" {
-		return fmt.Errorf("check is required")
-	}
-
 	if len(ins.Filepaths) == 0 {
 		return fmt.Errorf("filepaths is empty")
 	}
 
 	if ins.TimeSpan == 0 {
 		ins.TimeSpan = config.Duration(3 * time.Minute)
+	}
+
+	if ins.Change.Severity == "" {
+		ins.Change.Severity = types.EventStatusWarning
 	}
 
 	return nil
@@ -95,7 +99,7 @@ func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
 	}
 
 	if len(files) == 0 {
-		q.PushFront(ins.buildEvent(ins.Check, "files not changed"))
+		q.PushFront(ins.buildEvent("files not changed"))
 		return
 	}
 
@@ -111,11 +115,19 @@ func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
 	}
 
 	title := fmt.Sprintf("files changed\n\nconfiguration.filepaths:`%s`\n", ins.Filepaths)
-	q.PushFront(ins.buildEvent(ins.Check, "[MD]", title, body.String()).SetEventStatus(ins.GetDefaultSeverity()))
+	q.PushFront(ins.buildEvent("[MD]", title, body.String()).SetEventStatus(ins.Change.Severity))
 }
 
-func (ins *Instance) buildEvent(check string, desc ...string) *types.Event {
-	event := types.BuildEvent(map[string]string{"check": check}).SetTitleRule("$check")
+func (ins *Instance) buildEvent(desc ...string) *types.Event {
+	tr := ins.Change.TitleRule
+	if tr == "" {
+		tr = "[check] [target]"
+	}
+
+	event := types.BuildEvent(map[string]string{
+		"check":  "filechange::change",
+		"target": strings.Join(ins.Filepaths, ","),
+	}).SetTitleRule(tr)
 	if len(desc) > 0 {
 		event.SetDescription(strings.Join(desc, "\n"))
 	}

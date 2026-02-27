@@ -16,15 +16,20 @@ import (
 
 const pluginName = "sfilter"
 
+type MatchCheck struct {
+	Severity  string `toml:"severity"`
+	TitleRule string `toml:"title_rule"`
+}
+
 type Instance struct {
 	config.InternalConfig
 
 	Command       string          `toml:"command"`
 	Timeout       config.Duration `toml:"timeout"`
-	Check         string          `toml:"check"`
 	FilterInclude []string        `toml:"filter_include"`
 	FilterExclude []string        `toml:"filter_exclude"`
 	MaxLines      int             `toml:"max_lines"`
+	Match         MatchCheck      `toml:"match"`
 
 	filter filter.Filter
 }
@@ -53,10 +58,6 @@ func (ins *Instance) Init() error {
 		return fmt.Errorf("command is empty")
 	}
 
-	if ins.Check == "" {
-		return fmt.Errorf("check is required")
-	}
-
 	if len(ins.FilterInclude) == 0 && len(ins.FilterExclude) == 0 {
 		return fmt.Errorf("filter_include and filter_exclude cannot both be empty")
 	}
@@ -67,6 +68,10 @@ func (ins *Instance) Init() error {
 
 	if ins.MaxLines <= 0 {
 		ins.MaxLines = 10
+	}
+
+	if ins.Match.Severity == "" {
+		ins.Match.Severity = types.EventStatusWarning
 	}
 
 	f, err := filter.NewIncludeExcludeFilter(ins.FilterInclude, ins.FilterExclude)
@@ -125,12 +130,20 @@ func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
 
 	desc.WriteString("```")
 
-	e := types.BuildEvent(map[string]string{"check": ins.Check}).SetTitleRule("$check")
+	tr := ins.Match.TitleRule
+	if tr == "" {
+		tr = "[check] [target]"
+	}
+
+	e := types.BuildEvent(map[string]string{
+		"check":  "sfilter::match",
+		"target": ins.Command,
+	}).SetTitleRule(tr)
 
 	if !triggered {
 		e.SetDescription("everything is ok")
 	} else {
-		e.SetEventStatus(ins.GetDefaultSeverity())
+		e.SetEventStatus(ins.Match.Severity)
 		e.SetDescription(desc.String())
 	}
 
