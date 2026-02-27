@@ -78,7 +78,7 @@ func init() {
 
 func (ins *Instance) Init() error {
 	if len(ins.Commands) == 0 {
-		return fmt.Errorf("commands is empty")
+		return nil
 	}
 
 	if ins.Timeout == 0 {
@@ -100,6 +100,10 @@ func (ins *Instance) Init() error {
 }
 
 func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
+	if len(ins.Commands) == 0 {
+		return
+	}
+
 	var commands []string
 	for _, pattern := range ins.Commands {
 		cmdAndArgs := strings.SplitN(pattern, " ", 2)

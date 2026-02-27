@@ -62,7 +62,7 @@ func init() {
 func (ins *Instance) Init() error {
 	ins.Command = strings.TrimSpace(ins.Command)
 	if ins.Command == "" {
-		return fmt.Errorf("command is empty")
+		return nil
 	}
 
 	if len(ins.FilterInclude) == 0 {
@@ -129,6 +129,10 @@ func (ins *Instance) matchLine(line string) bool {
 }
 
 func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
+	if ins.Command == "" {
+		return
+	}
+
 	outbuf, errbuf, err := cmdx.CommandRun(ins.Command, time.Duration(ins.Timeout))
 	if err != nil {
 		var exitErr *exec.ExitError
