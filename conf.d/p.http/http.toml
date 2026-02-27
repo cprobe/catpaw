@@ -83,9 +83,10 @@ expect_substring = "html"
 severity = "Warning"
 # title_rule = "[check] [target]"
 
+# 不常用的配置，默认值都是 false
+# disabled = false
+# disable_recovery_notification = false
 [instances.alerting]
-# disabled = true
 for_duration = 0
 repeat_interval = "5m"
 repeat_number = 3
-# disable_recovery_notification = true
