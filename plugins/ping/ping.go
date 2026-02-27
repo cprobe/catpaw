@@ -42,8 +42,8 @@ type Partial struct {
 	ID           string            `toml:"id"`
 	Concurrency  int               `toml:"concurrency"`
 	Count        int               `toml:"count"`
-	PingInterval float64           `toml:"ping_interval"`
-	Timeout      float64           `toml:"timeout"`
+	PingInterval config.Duration   `toml:"ping_interval"`
+	Timeout      config.Duration   `toml:"timeout"`
 	Interface    string            `toml:"interface"`
 	IPv6         *bool             `toml:"ipv6"`
 	Size         *int              `toml:"size"`
@@ -59,8 +59,8 @@ type Instance struct {
 	Targets      []string          `toml:"targets"`
 	Concurrency  int               `toml:"concurrency"`
 	Count        int               `toml:"count"`
-	PingInterval float64           `toml:"ping_interval"`
-	Timeout      float64           `toml:"timeout"`
+	PingInterval config.Duration   `toml:"ping_interval"`
+	Timeout      config.Duration   `toml:"timeout"`
 	Interface    string            `toml:"interface"`
 	IPv6         *bool             `toml:"ipv6"`
 	Size         *int              `toml:"size"`
@@ -151,16 +151,23 @@ func (ins *Instance) Init() error {
 		ins.Count = 5
 	}
 
-	if ins.PingInterval < 0.2 {
-		ins.calcInterval = time.Duration(0.2 * float64(time.Second))
+	if time.Duration(ins.PingInterval) < 200*time.Millisecond {
+		ins.calcInterval = 200 * time.Millisecond
 	} else {
-		ins.calcInterval = time.Duration(ins.PingInterval * float64(time.Second))
+		ins.calcInterval = time.Duration(ins.PingInterval)
 	}
 
 	if ins.Timeout == 0 {
-		ins.calcTimeout = time.Duration(3) * time.Second
+		ins.calcTimeout = 3 * time.Second
 	} else {
-		ins.calcTimeout = time.Duration(ins.Timeout * float64(time.Second))
+		ins.calcTimeout = time.Duration(ins.Timeout)
+	}
+
+	minTimeout := time.Duration(ins.Count) * ins.calcInterval
+	if ins.calcTimeout < minTimeout {
+		ins.calcTimeout = minTimeout
+		logger.Logger.Warnw("ping timeout auto-adjusted to accommodate count*ping_interval",
+			"timeout", ins.calcTimeout, "count", ins.Count, "ping_interval", ins.calcInterval)
 	}
 
 	if ins.Connectivity.Severity == "" {
@@ -185,15 +192,26 @@ func (ins *Instance) Init() error {
 		if addr := net.ParseIP(ins.Interface); addr != nil {
 			ins.sourceAddress = ins.Interface
 		} else {
-			i, err := net.InterfaceByName(ins.Interface)
+			iface, err := net.InterfaceByName(ins.Interface)
 			if err != nil {
-				return fmt.Errorf("failed to get interface: %v", err)
+				return fmt.Errorf("failed to get interface %q: %v", ins.Interface, err)
 			}
-			addrs, err := i.Addrs()
+			addrs, err := iface.Addrs()
 			if err != nil {
-				return fmt.Errorf("failed to get the address of interface: %v", err)
+				return fmt.Errorf("failed to get addresses of interface %q: %v", ins.Interface, err)
 			}
-			ins.sourceAddress = addrs[0].(*net.IPNet).IP.String()
+			if len(addrs) == 0 {
+				return fmt.Errorf("interface %q has no addresses", ins.Interface)
+			}
+			for _, addr := range addrs {
+				if ipNet, ok := addr.(*net.IPNet); ok {
+					ins.sourceAddress = ipNet.IP.String()
+					break
+				}
+			}
+			if ins.sourceAddress == "" {
+				return fmt.Errorf("interface %q has no usable IP address", ins.Interface)
+			}
 		}
 	}
 
@@ -211,9 +229,12 @@ func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
 	se := make(chan struct{}, ins.Concurrency)
 	for _, target := range ins.Targets {
 		wg.Add(1)
-		se <- struct{}{}
 		go func(target string) {
+			se <- struct{}{}
 			defer func() {
+				if r := recover(); r != nil {
+					logger.Logger.Errorw("panic in ping gather goroutine", "target", target, "recover", r)
+				}
 				<-se
 				wg.Done()
 			}()
@@ -221,7 +242,6 @@ func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
 		}(target)
 	}
 	wg.Wait()
-	close(se)
 }
 
 func (ins *Instance) gather(q *safe.Queue[*types.Event], target string) {

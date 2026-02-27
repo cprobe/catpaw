@@ -39,7 +39,12 @@ type ServerConfig struct {
 // configured.
 func (c *ClientConfig) TLSConfig() (*tls.Config, error) {
 	if !c.UseTLS {
-		return nil, nil
+		if c.InsecureSkipVerify || c.TLSCA != "" || c.TLSCert != "" || c.TLSKey != "" ||
+			c.ServerName != "" || c.TLSMinVersion != "" || c.TLSMaxVersion != "" {
+			c.UseTLS = true
+		} else {
+			return nil, nil
+		}
 	}
 
 	tlsConfig := &tls.Config{

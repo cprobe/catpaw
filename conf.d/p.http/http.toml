@@ -45,12 +45,11 @@ partial = "default"
 # # Optional append labels
 # labels = { env="production", team="devops" }
 
-## Optional TLS Config
-# use_tls = false
+## Optional TLS Config (use_tls is auto-detected from https:// targets)
 # tls_ca = "/etc/catpaw/ca.pem"
 # tls_cert = "/etc/catpaw/cert.pem"
 # tls_key = "/etc/catpaw/key.pem"
-## Use TLS but skip chain & host verification
+## Skip TLS certificate chain & host verification
 # insecure_skip_verify = false
 
 ## Connectivity check (always enabled, defaults to Critical)
@@ -77,9 +76,11 @@ expect = ["20*", "30*"]
 severity = "Warning"
 # title_rule = "[check] [target]"
 
-## HTTP response body check (disabled if expect_substring is empty)
+## HTTP response body check (disabled if both expect_substring and expect_regex are empty)
+## expect_substring and expect_regex are mutually exclusive
 [instances.response_body]
 expect_substring = "html"
+# expect_regex = "<title>.+</title>"
 severity = "Warning"
 # title_rule = "[check] [target]"
 

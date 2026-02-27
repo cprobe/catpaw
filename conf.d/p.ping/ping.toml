@@ -8,13 +8,13 @@ id = "default"
 ## option of the ping command.
 # count = 3
 
-## Time to wait between sending ping packets in seconds.  Operates like the
-## "-i" option of the ping command.
-# ping_interval = 0.2
+## Time to wait between sending ping packets. Operates like the "-i" option
+## of the ping command. Minimum 200ms. Supports: "200ms", "1s", or float seconds (0.2)
+# ping_interval = "200ms"
 
-## If set, the time to wait for a ping response in seconds.  Operates like
-## the "-W" option of the ping command.
-# timeout = 2.0
+## If set, the time to wait for a ping response. Operates like the "-W"
+## option of the ping command. Supports: "2s", "500ms", or float seconds (2.0)
+# timeout = "3s"
 
 ## Interface or source address to send ping from.  Operates like the -I or -S
 ## option of the ping command.

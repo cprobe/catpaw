@@ -6,6 +6,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -21,6 +22,11 @@ import (
 )
 
 const pluginName = "http"
+
+const (
+	maxBodyReadSize    = 1 << 20 // 1MB max read from response body
+	maxBodyDisplaySize = 1024    // 1KB max in alert description
+)
 
 type ConnectivityCheck struct {
 	Severity  string `toml:"severity"`
@@ -48,8 +54,10 @@ type StatusCodeCheck struct {
 
 type ResponseBodyCheck struct {
 	ExpectSubstring string `toml:"expect_substring"`
+	ExpectRegex     string `toml:"expect_regex"`
 	Severity        string `toml:"severity"`
 	TitleRule       string `toml:"title_rule"`
+	compiledRegex   *regexp.Regexp
 }
 
 type Partial struct {
@@ -168,15 +176,26 @@ func (ins *Instance) Init() error {
 		}
 	}
 
+	if ins.ResponseBody.ExpectSubstring != "" && ins.ResponseBody.ExpectRegex != "" {
+		return fmt.Errorf("response_body: expect_substring and expect_regex are mutually exclusive")
+	}
 	if ins.ResponseBody.ExpectSubstring != "" && ins.ResponseBody.Severity == "" {
 		ins.ResponseBody.Severity = types.EventStatusWarning
 	}
-
-	client, err := ins.createHTTPClient()
-	if err != nil {
-		return fmt.Errorf("failed to create http client: %v", err)
+	if ins.ResponseBody.ExpectRegex != "" {
+		compiled, err := regexp.Compile(ins.ResponseBody.ExpectRegex)
+		if err != nil {
+			return fmt.Errorf("failed to compile response_body.expect_regex: %v", err)
+		}
+		ins.ResponseBody.compiledRegex = compiled
+		if ins.ResponseBody.Severity == "" {
+			ins.ResponseBody.Severity = types.EventStatusWarning
+		}
 	}
-	ins.client = client
+
+	if len(ins.Headers) > 0 && len(ins.Headers)%2 != 0 {
+		return fmt.Errorf("headers must be key-value pairs (even number of elements), got %d", len(ins.Headers))
+	}
 
 	for _, target := range ins.Targets {
 		addr, err := url.Parse(target)
@@ -186,7 +205,16 @@ func (ins *Instance) Init() error {
 		if addr.Scheme != "http" && addr.Scheme != "https" {
 			return fmt.Errorf("only http and https are supported, target: %s", target)
 		}
+		if addr.Scheme == "https" {
+			ins.UseTLS = true
+		}
 	}
+
+	client, err := ins.createHTTPClient()
+	if err != nil {
+		return fmt.Errorf("failed to create http client: %v", err)
+	}
+	ins.client = client
 
 	return nil
 }
@@ -216,10 +244,6 @@ func (ins *Instance) createHTTPClient() (*http.Client, error) {
 		DialContext:       dialer.DialContext,
 		DisableKeepAlives: true,
 		TLSClientConfig:   tlsCfg,
-	}
-
-	if ins.UseTLS {
-		trans.TLSClientConfig = tlsCfg
 	}
 
 	client := &http.Client{
@@ -253,9 +277,12 @@ func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
 	se := semaphore.NewSemaphore(ins.Concurrency)
 	for _, target := range ins.Targets {
 		wg.Add(1)
-		se.Acquire()
 		go func(target string) {
+			se.Acquire()
 			defer func() {
+				if r := recover(); r != nil {
+					logger.Logger.Errorw("panic in http gather goroutine", "target", target, "recover", r)
+				}
 				se.Release()
 				wg.Done()
 			}()
@@ -278,7 +305,7 @@ func (ins *Instance) gather(q *safe.Queue[*types.Event], target string) {
 		payload = strings.NewReader(ins.Payload)
 	}
 
-	request, err := http.NewRequest(ins.Method, target, payload)
+	request, err := http.NewRequest(ins.GetMethod(), target, payload)
 	if err != nil {
 		logger.Logger.Errorw("failed to create http request", "error", err, "plugin", pluginName)
 		return
@@ -319,8 +346,7 @@ func (ins *Instance) gather(q *safe.Queue[*types.Event], target string) {
 - **target**: ` + target + `
 - **method**: ` + ins.GetMethod() + `
 - **response_time**: ` + responseTime.String() + `
-- **error**: ` + errString + `
-	`)
+- **error**: ` + errString)
 
 	q.PushFront(connEvent)
 
@@ -373,15 +399,24 @@ func (ins *Instance) gather(q *safe.Queue[*types.Event], target string) {
 		}, labels).SetTitleRule(certTR)
 
 		certExpiry := getEarliestCertExpiry(resp.TLS)
-		timeUntilExpiry := time.Until(certExpiry)
 
-		if ins.CertExpiry.CriticalWithin > 0 && timeUntilExpiry <= time.Duration(ins.CertExpiry.CriticalWithin) {
+		if certExpiry.IsZero() {
 			certEvent.SetEventStatus(types.EventStatusCritical)
-		} else if ins.CertExpiry.WarnWithin > 0 && timeUntilExpiry <= time.Duration(ins.CertExpiry.WarnWithin) {
-			certEvent.SetEventStatus(types.EventStatusWarning)
-		}
+			certEvent.SetDescription(fmt.Sprintf(`[MD]
+- **target**: %s
+- **method**: %s
+- **error**: no peer certificates found in TLS connection
+`, target, ins.GetMethod()))
+		} else {
+			timeUntilExpiry := time.Until(certExpiry)
 
-		certEvent.SetDescription(fmt.Sprintf(`[MD]
+			if ins.CertExpiry.CriticalWithin > 0 && timeUntilExpiry <= time.Duration(ins.CertExpiry.CriticalWithin) {
+				certEvent.SetEventStatus(types.EventStatusCritical)
+			} else if ins.CertExpiry.WarnWithin > 0 && timeUntilExpiry <= time.Duration(ins.CertExpiry.WarnWithin) {
+				certEvent.SetEventStatus(types.EventStatusWarning)
+			}
+
+			certEvent.SetDescription(fmt.Sprintf(`[MD]
 - **target**: %s
 - **method**: %s
 - **cert_expires_at**: %s
@@ -389,25 +424,31 @@ func (ins *Instance) gather(q *safe.Queue[*types.Event], target string) {
 - **warn_within**: %s
 - **critical_within**: %s
 `, target, ins.GetMethod(),
-			certExpiry.Format("2006-01-02 15:04:05"),
-			timeUntilExpiry.Truncate(time.Minute).String(),
-			ins.CertExpiry.WarnWithin.HumanString(),
-			ins.CertExpiry.CriticalWithin.HumanString()))
+				certExpiry.Format("2006-01-02 15:04:05"),
+				timeUntilExpiry.Truncate(time.Minute).String(),
+				ins.CertExpiry.WarnWithin.HumanString(),
+				ins.CertExpiry.CriticalWithin.HumanString()))
+		}
 
 		q.PushFront(certEvent)
 	}
 
-	var body []byte
 	if resp.Body != nil {
 		defer resp.Body.Close()
-		body, err = io.ReadAll(resp.Body)
-		if err != nil {
-			logger.Logger.Errorw("failed to read http response body", "error", err, "plugin", pluginName, "target", target)
-			return
-		}
 	}
 
 	statusCode := fmt.Sprint(resp.StatusCode)
+	needBody := len(ins.StatusCode.Expect) > 0 ||
+		ins.ResponseBody.ExpectSubstring != "" ||
+		ins.ResponseBody.compiledRegex != nil
+
+	var body []byte
+	if needBody && resp.Body != nil {
+		body, err = io.ReadAll(io.LimitReader(resp.Body, maxBodyReadSize))
+		if err != nil {
+			logger.Logger.Errorw("failed to read http response body", "error", err, "plugin", pluginName, "target", target)
+		}
+	}
 
 	// status code check
 	if len(ins.StatusCode.Expect) > 0 {
@@ -424,12 +465,24 @@ func (ins *Instance) gather(q *safe.Queue[*types.Event], target string) {
 			scEvent.SetEventStatus(ins.StatusCode.Severity)
 		}
 
-		scEvent.SetDescription(fmt.Sprintf(ExpectResponseStatusCodeDesc, target, ins.GetMethod(), statusCode, ins.StatusCode.Expect, string(body)))
+		scEvent.SetDescription(fmt.Sprintf(`[MD]
+- **target**: %s
+- **method**: %s
+- **status_code**: %s
+- **expect_code**: %v
+
+**response body**:
+
+`+"```"+`
+%s
+`+"```"+`
+`, target, ins.GetMethod(), statusCode, ins.StatusCode.Expect, truncateBody(body, maxBodyDisplaySize)))
+
 		q.PushFront(scEvent)
 	}
 
 	// response body check
-	if ins.ResponseBody.ExpectSubstring != "" {
+	if ins.ResponseBody.ExpectSubstring != "" || ins.ResponseBody.compiledRegex != nil {
 		rbTR := ins.ResponseBody.TitleRule
 		if rbTR == "" {
 			rbTR = "[check] [target]"
@@ -439,37 +492,40 @@ func (ins *Instance) gather(q *safe.Queue[*types.Event], target string) {
 			"check": "http::response_body",
 		}, labels).SetTitleRule(rbTR)
 
-		if !strings.Contains(string(body), ins.ResponseBody.ExpectSubstring) {
+		var matched bool
+		var expectDesc string
+		if ins.ResponseBody.compiledRegex != nil {
+			matched = ins.ResponseBody.compiledRegex.Match(body)
+			expectDesc = fmt.Sprintf("expect_regex: `%s`", ins.ResponseBody.ExpectRegex)
+		} else {
+			matched = strings.Contains(string(body), ins.ResponseBody.ExpectSubstring)
+			expectDesc = fmt.Sprintf("expect_substring: %s", ins.ResponseBody.ExpectSubstring)
+		}
+
+		if !matched {
 			rbEvent.SetEventStatus(ins.ResponseBody.Severity)
 		}
 
-		rbEvent.SetDescription(fmt.Sprintf(ExpectResponseSubstringDesc, target, ins.GetMethod(), statusCode, ins.ResponseBody.ExpectSubstring, string(body)))
+		rbEvent.SetDescription(fmt.Sprintf(`[MD]
+- **target**: %s
+- **method**: %s
+- **status_code**: %s
+- **%s**
+
+**response body**:
+
+`+"```"+`
+%s
+`+"```"+`
+`, target, ins.GetMethod(), statusCode, expectDesc, truncateBody(body, maxBodyDisplaySize)))
+
 		q.PushFront(rbEvent)
 	}
 }
 
-var ExpectResponseStatusCodeDesc = `[MD]
-- **target**: %s
-- **method**: %s
-- **status code**: %s
-- **expect code**: %v
-
-**response body**:
-
-` + "```" + `
-%s
-` + "```" + `
-`
-
-var ExpectResponseSubstringDesc = `[MD]
-- **target**: %s
-- **method**: %s
-- **status code**: %s
-- **expect substring**: %v
-
-**response body**:
-
-` + "```" + `
-%s
-` + "```" + `
-`
+func truncateBody(body []byte, max int) string {
+	if len(body) <= max {
+		return string(body)
+	}
+	return strings.ToValidUTF8(string(body[:max]), "") + "\n... (truncated)"
+}

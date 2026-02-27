@@ -1,11 +1,10 @@
 package net
 
 import (
-	"bufio"
+	"bytes"
 	"errors"
 	"fmt"
 	"net"
-	"net/textproto"
 	"strings"
 	"sync"
 	"time"
@@ -181,9 +180,12 @@ func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
 	se := semaphore.NewSemaphore(ins.Concurrency)
 	for _, target := range ins.Targets {
 		wg.Add(1)
-		se.Acquire()
 		go func(target string) {
+			se.Acquire()
 			defer func() {
+				if r := recover(); r != nil {
+					logger.Logger.Errorw("panic in net gather goroutine", "target", target, "recover", r)
+				}
 				se.Release()
 				wg.Done()
 			}()
@@ -233,38 +235,44 @@ func (ins *Instance) TCPGather(address string, labels map[string]string, q *safe
 	defer conn.Close()
 
 	if ins.Send != "" {
-		msg := []byte(ins.Send)
-		if _, err = conn.Write(msg); err != nil {
+		if _, err = conn.Write([]byte(ins.Send)); err != nil {
 			responseTime := time.Since(start)
 			q.PushFront(event.SetEventStatus(ins.Connectivity.Severity).SetDescription(
 				ins.buildDesc(address, fmt.Sprintf("failed to send message: %s, error: %v", ins.Send, err), responseTime)))
 			return
 		}
+	}
 
-		if ins.Expect != "" {
-			if err := conn.SetReadDeadline(time.Now().Add(time.Duration(ins.ReadTimeout))); err != nil {
-				responseTime := time.Since(start)
-				q.PushFront(event.SetEventStatus(ins.Connectivity.Severity).SetDescription(
-					ins.buildDesc(address, fmt.Sprintf("failed to set read deadline, error: %v", err), responseTime)))
-				return
-			}
+	if ins.Expect != "" {
+		if err := conn.SetReadDeadline(time.Now().Add(time.Duration(ins.ReadTimeout))); err != nil {
+			responseTime := time.Since(start)
+			q.PushFront(event.SetEventStatus(ins.Connectivity.Severity).SetDescription(
+				ins.buildDesc(address, fmt.Sprintf("failed to set read deadline, error: %v", err), responseTime)))
+			return
+		}
 
-			reader := bufio.NewReader(conn)
-			tp := textproto.NewReader(reader)
-			data, err := tp.ReadLine()
-			if err != nil {
-				responseTime := time.Since(start)
-				q.PushFront(event.SetEventStatus(ins.Connectivity.Severity).SetDescription(
-					ins.buildDesc(address, fmt.Sprintf("failed to read response line, error: %v", err), responseTime)))
-				return
+		const maxResponseSize = 65536
+		var dataBuf bytes.Buffer
+		tmp := make([]byte, 4096)
+		for dataBuf.Len() < maxResponseSize {
+			n, readErr := conn.Read(tmp)
+			if n > 0 {
+				dataBuf.Write(tmp[:n])
+				if strings.Contains(dataBuf.String(), ins.Expect) {
+					break
+				}
 			}
+			if readErr != nil {
+				break
+			}
+		}
+		data := dataBuf.String()
 
-			if !strings.Contains(data, ins.Expect) {
-				responseTime := time.Since(start)
-				q.PushFront(event.SetEventStatus(ins.Connectivity.Severity).SetDescription(
-					ins.buildDesc(address, fmt.Sprintf("response mismatch. expected: %s, real response: %s", ins.Expect, data), responseTime)))
-				return
-			}
+		if !strings.Contains(data, ins.Expect) {
+			responseTime := time.Since(start)
+			q.PushFront(event.SetEventStatus(ins.Connectivity.Severity).SetDescription(
+				ins.buildDesc(address, fmt.Sprintf("response mismatch. expected: %s, real response: %s", ins.Expect, data), responseTime)))
+			return
 		}
 	}
 
@@ -323,8 +331,9 @@ func (ins *Instance) UDPGather(address string, labels map[string]string, q *safe
 		return
 	}
 
-	buf := make([]byte, 1024)
-	if _, _, err = conn.ReadFromUDP(buf); err != nil {
+	buf := make([]byte, 65536)
+	n, _, err := conn.ReadFromUDP(buf)
+	if err != nil {
 		responseTime := time.Since(start)
 		message := fmt.Sprintf("read from udp address(%s) error: %v", address, err)
 		q.PushFront(event.SetEventStatus(ins.Connectivity.Severity).SetDescription(ins.buildDesc(address, message, responseTime)))
@@ -332,11 +341,12 @@ func (ins *Instance) UDPGather(address string, labels map[string]string, q *safe
 		return
 	}
 
-	if !strings.Contains(string(buf), ins.Expect) {
+	data := string(buf[:n])
+	if !strings.Contains(data, ins.Expect) {
 		responseTime := time.Since(start)
-		message := fmt.Sprintf("response mismatch. expect: %s, real: %s", ins.Expect, string(buf))
+		message := fmt.Sprintf("response mismatch. expect: %s, real: %s", ins.Expect, data)
 		q.PushFront(event.SetEventStatus(ins.Connectivity.Severity).SetDescription(ins.buildDesc(address, message, responseTime)))
-		logger.Logger.Errorw("udp response mismatch", "address", address, "expect", ins.Expect, "actual", string(buf))
+		logger.Logger.Errorw("udp response mismatch", "address", address, "expect", ins.Expect, "actual", data)
 		return
 	}
 
@@ -381,17 +391,19 @@ func (ins *Instance) checkResponseTime(q *safe.Queue[*types.Event], address stri
 }
 
 func (ins *Instance) buildDesc(target, message string, responseTime time.Duration) string {
-	return `[MD]
-- **target**: ` + target + `
-- **protocol**: ` + ins.Protocol + `
-- **response_time**: ` + responseTime.String() + `
-- **config.send**: ` + ins.Send + `
-- **config.expect**: ` + ins.Expect + `
-
-**message**:
-
-` + "```" + `
-` + message + `
-` + "```" + `
-`
+	var b strings.Builder
+	b.WriteString("[MD]\n")
+	b.WriteString("- **target**: " + target + "\n")
+	b.WriteString("- **protocol**: " + ins.Protocol + "\n")
+	b.WriteString("- **response_time**: " + responseTime.String() + "\n")
+	if ins.Send != "" {
+		b.WriteString("- **config.send**: " + ins.Send + "\n")
+	}
+	if ins.Expect != "" {
+		b.WriteString("- **config.expect**: " + ins.Expect + "\n")
+	}
+	b.WriteString("\n**message**:\n\n```\n")
+	b.WriteString(message)
+	b.WriteString("\n```\n")
+	return b.String()
 }
