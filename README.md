@@ -38,7 +38,7 @@ catpaw 是一个轻量的事件监控工具：负责探测异常并产出标准�
 
 ### 配置
 
-1. 编辑 `conf.d/config.toml`，填入 FlashDuty 的 `integration_key`
+1. 编辑 `conf.d/config.toml`，填入 FlashDuty 的 `integration_key`。当然也可以不用 Flashduty，那就需要自己写一个事件接收、告警分发的服务。
 2. 在 `conf.d/p.<plugin>/` 下启用需要的插件配置
 3. 启动 catpaw
 
