@@ -64,10 +64,9 @@ critical_ge = 99.0
 ## 追加自定义标签
 # labels = { env = "production", team = "devops" }
 
-# 不常用的配置，默认值都是 false
-# disabled = false
-# disable_recovery_notification = false
 [instances.alerting]
 for_duration = 0
 repeat_interval = "5m"
 repeat_number = 3
+# disabled = false
+# disable_recovery_notification = false

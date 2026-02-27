@@ -48,3 +48,5 @@ severity = "Warning"
 for_duration = 0
 repeat_interval = "5m"
 repeat_number = 3
+# disabled = false
+# disable_recovery_notification = false

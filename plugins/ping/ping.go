@@ -14,6 +14,7 @@ import (
 	"flashcat.cloud/catpaw/plugins"
 	"flashcat.cloud/catpaw/types"
 	ping "github.com/prometheus-community/pro-bing"
+	"github.com/toolkits/pkg/concurrent/semaphore"
 )
 
 const (
@@ -240,16 +241,16 @@ func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
 	}
 
 	wg := new(sync.WaitGroup)
-	se := make(chan struct{}, ins.Concurrency)
+	se := semaphore.NewSemaphore(ins.Concurrency)
 	for _, target := range ins.Targets {
 		wg.Add(1)
 		go func(target string) {
-			se <- struct{}{}
+			se.Acquire()
 			defer func() {
 				if r := recover(); r != nil {
 					logger.Logger.Errorw("panic in ping gather goroutine", "target", target, "recover", r)
 				}
-				<-se
+				se.Release()
 				wg.Done()
 			}()
 			ins.gather(q, target)

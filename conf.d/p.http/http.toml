@@ -25,8 +25,8 @@ id = "default"
 ## 请求超时（默认 5s）
 # timeout = "5s"
 
-## 是否跟随重定向（默认 false）
-# follow_redirects = false
+## 是否跟随重定向（默认 true，即跟随重定向）
+# follow_redirects = true
 
 ## Basic Auth（可选）
 # basic_auth_user = "username"
@@ -94,10 +94,9 @@ severity = "Warning"
 # severity = "Warning"
 # title_rule = "[check] [target]"
 
-# 不常用的配置，默认值都是 false
-# disabled = false
-# disable_recovery_notification = false
 [instances.alerting]
 for_duration = 0
 repeat_interval = "5m"
 repeat_number = 3
+# disabled = false
+# disable_recovery_notification = false

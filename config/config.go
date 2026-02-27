@@ -116,7 +116,6 @@ func InitConfig(configDir string, testMode bool, interval int64, plugins, url, l
 
 		if strings.Contains(v, "$hostname") {
 			Config.Global.LabelHasHostname = true
-			continue
 		}
 
 		if strings.Contains(v, "$ip") {
@@ -124,10 +123,15 @@ func InitConfig(configDir string, testMode bool, interval int64, plugins, url, l
 			if err != nil {
 				return fmt.Errorf("failed to get outbound ip: %v", err)
 			}
-			Config.Global.Labels[k] = strings.Replace(v, "$ip", fmt.Sprint(ip), -1)
+			Config.Global.Labels[k] = strings.ReplaceAll(Config.Global.Labels[k], "$ip", fmt.Sprint(ip))
 		}
 
-		Config.Global.Labels[k] = os.Expand(Config.Global.Labels[k], GetEnv)
+		Config.Global.Labels[k] = os.Expand(Config.Global.Labels[k], func(key string) string {
+			if key == "hostname" {
+				return "$hostname"
+			}
+			return GetEnv(key)
+		})
 	}
 
 	return nil

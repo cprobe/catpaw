@@ -9,6 +9,7 @@ import (
 	"os"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"flashcat.cloud/catpaw/config"
@@ -18,6 +19,30 @@ import (
 	"flashcat.cloud/catpaw/types"
 	"github.com/toolkits/pkg/str"
 )
+
+var (
+	cachedHostname string
+	hostnameExpiry time.Time
+	hostnameMu     sync.Mutex
+)
+
+func getCachedHostname() (string, error) {
+	hostnameMu.Lock()
+	defer hostnameMu.Unlock()
+
+	now := time.Now()
+	if cachedHostname != "" && now.Before(hostnameExpiry) {
+		return cachedHostname, nil
+	}
+
+	h, err := os.Hostname()
+	if err != nil {
+		return "", err
+	}
+	cachedHostname = h
+	hostnameExpiry = now.Add(5 * time.Second)
+	return h, nil
+}
 
 func PushRawEvents(pluginName string, pluginObj plugins.Plugin, ins plugins.Instance, queue *safe.Queue[*types.Event]) {
 	if queue.Len() == 0 {
@@ -116,6 +141,7 @@ func handleAlertEvent(ins plugins.Instance, event *types.Event) {
 	}
 
 	// 最后，可以发了
+	event.FirstFireTime = old.FirstFireTime
 	event.NotifyCount = old.NotifyCount + 1
 	if forward(event) {
 		event.LastSent = event.EventTime
@@ -152,13 +178,10 @@ func clean(event *types.Event, now int64, pluginName string, pluginObj plugins.P
 	}
 
 	// append label: global labels
-	var (
-		hostname string
-		err      error
-	)
-
+	var hostname string
 	if config.Config.Global.LabelHasHostname {
-		hostname, err = os.Hostname()
+		var err error
+		hostname, err = getCachedHostname()
 		if err != nil {
 			return fmt.Errorf("failed to get hostname: %s", err.Error())
 		}
