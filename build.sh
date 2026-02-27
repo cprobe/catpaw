@@ -1,6 +1,7 @@
 #!/bin/sh
 
 export GOPROXY=https://goproxy.cn
+export CGO_ENABLED=0
 
 if ! go build; then
     echo "build failed"
