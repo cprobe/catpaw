@@ -19,6 +19,7 @@ import (
 	_ "github.com/cprobe/catpaw/plugins/http"
 	_ "github.com/cprobe/catpaw/plugins/journaltail"
 	_ "github.com/cprobe/catpaw/plugins/net"
+	_ "github.com/cprobe/catpaw/plugins/ntp"
 	_ "github.com/cprobe/catpaw/plugins/ping"
 	_ "github.com/cprobe/catpaw/plugins/procnum"
 	_ "github.com/cprobe/catpaw/plugins/scriptfilter"

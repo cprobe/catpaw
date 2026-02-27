@@ -1,0 +1,43 @@
+[[instances]]
+## ===== 最小可用示例 =====
+## 默认自动探测 chronyc / ntpq / timedatectl，检查 NTP 是否同步。
+## 大多数情况下只需要配置 sync.severity 即可。
+
+## NTP 工具模式：auto（默认，按 chronyc → ntpq → timedatectl 顺序探测）
+## 也可以手动指定：chrony, ntpd, timedatectl
+# mode = "auto"
+
+## 命令执行超时，默认 10s
+# timeout = 10
+
+## NTP 查询失败时的告警级别，默认 Critical
+# error_severity = "Critical"
+
+## 采集间隔，不配则继承全局 interval
+# interval = "60s"
+
+## 同步状态检查：NTP 未同步时告警
+[instances.sync]
+severity = "Critical"
+# title_rule = "[check] [target]"
+
+## 时间偏移检查（仅 chrony/ntpd 模式支持，timedatectl 不提供偏移数据）
+## 对偏移量取绝对值后与阈值比较
+[instances.offset]
+warn_ge = "100ms"
+critical_ge = "500ms"
+# title_rule = "[check] [target]"
+
+## 时间源层级检查（仅 chrony/ntpd 模式支持）
+## stratum 越大表示时间源离原子钟越远，16 表示未同步
+[instances.stratum]
+warn_ge = 10
+critical_ge = 16
+# title_rule = "[check] [target]"
+
+[instances.alerting]
+for_duration = 0
+repeat_interval = "5m"
+repeat_number = 3
+# disabled = false
+# disable_recovery_notification = false
