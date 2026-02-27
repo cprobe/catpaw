@@ -1,5 +1,5 @@
 #!/bin/sh
-# use plugin sfilter
+# use plugin scriptfilter
 
 output=`df -hT`
 count=`echo "$output" | grep -c '100%'`

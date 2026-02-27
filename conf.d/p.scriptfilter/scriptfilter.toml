@@ -1,0 +1,32 @@
+[[instances]]
+## Command to execute. Its stdout will be filtered line by line.
+## e.g. /path/to/scriptfilter-scripts/system-health.sh
+## Must not be empty or whitespace-only.
+command = ""
+
+## Script execution timeout (default: 10s, must be >= 0)
+timeout = "10s"
+
+## Line-level filtering (applied to each output line)
+## Glob and regex patterns can be mixed in the same list (OR logic: any match triggers).
+## Patterns wrapped in / are treated as regex, e.g. "/(?i)error|critical/"
+## Other patterns are treated as glob, e.g. "*WARNING*"
+filter_include = ["*WARNING*", "*CRITICAL*"]
+# filter_exclude = ["*expected*"]
+
+## Maximum matched lines in alert description (default: 10)
+# max_lines = 10
+
+## Gather interval
+interval = "30s"
+
+## check label auto-set to "scriptfilter::match"
+## target label auto-set to command basename (e.g. "health.sh")
+[instances.match]
+severity = "Warning"
+# title_rule = "[check] [target]"
+
+[instances.alerting]
+for_duration = 0
+repeat_interval = "5m"
+repeat_number = 3

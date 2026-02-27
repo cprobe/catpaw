@@ -21,7 +21,7 @@ import (
 	_ "flashcat.cloud/catpaw/plugins/net"
 	_ "flashcat.cloud/catpaw/plugins/ping"
 	_ "flashcat.cloud/catpaw/plugins/procnum"
-	_ "flashcat.cloud/catpaw/plugins/sfilter"
+	_ "flashcat.cloud/catpaw/plugins/scriptfilter"
 )
 
 type PluginConfig struct {
