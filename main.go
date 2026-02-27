@@ -6,10 +6,10 @@ import (
 	"os"
 	"runtime"
 
-	"flashcat.cloud/catpaw/agent"
-	"flashcat.cloud/catpaw/config"
-	"flashcat.cloud/catpaw/logger"
-	"flashcat.cloud/catpaw/winx"
+	"github.com/cprobe/catpaw/agent"
+	"github.com/cprobe/catpaw/config"
+	"github.com/cprobe/catpaw/logger"
+	"github.com/cprobe/catpaw/winx"
 	"github.com/chai2010/winsvc"
 	"github.com/toolkits/pkg/runner"
 )

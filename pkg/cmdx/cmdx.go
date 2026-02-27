@@ -8,7 +8,7 @@ import (
 	"runtime"
 	"time"
 
-	"flashcat.cloud/catpaw/pkg/shell"
+	"github.com/cprobe/catpaw/pkg/shell"
 )
 
 const MaxStderrBytes = 512

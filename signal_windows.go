@@ -7,8 +7,8 @@ import (
 	"os/signal"
 	"syscall"
 
-	"flashcat.cloud/catpaw/agent"
-	"flashcat.cloud/catpaw/logger"
+	"github.com/cprobe/catpaw/agent"
+	"github.com/cprobe/catpaw/logger"
 )
 
 func waitForSignal(ag *agent.Agent) {

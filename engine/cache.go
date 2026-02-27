@@ -3,7 +3,7 @@ package engine
 import (
 	"sync"
 
-	"flashcat.cloud/catpaw/types"
+	"github.com/cprobe/catpaw/types"
 )
 
 type EventCache struct {

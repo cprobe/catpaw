@@ -6,7 +6,7 @@ import (
 	"net/url"
 	"time"
 
-	"flashcat.cloud/catpaw/pkg/tls"
+	"github.com/cprobe/catpaw/pkg/tls"
 )
 
 type HTTPConfig struct {

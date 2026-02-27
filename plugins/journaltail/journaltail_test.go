@@ -3,7 +3,7 @@ package journaltail
 import (
 	"testing"
 
-	"flashcat.cloud/catpaw/pkg/filter"
+	"github.com/cprobe/catpaw/pkg/filter"
 )
 
 func TestExtractCursor(t *testing.T) {

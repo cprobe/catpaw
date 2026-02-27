@@ -3,13 +3,13 @@ package agent
 import (
 	"time"
 
-	"flashcat.cloud/catpaw/config"
-	"flashcat.cloud/catpaw/engine"
-	"flashcat.cloud/catpaw/logger"
-	"flashcat.cloud/catpaw/pkg/runtimex"
-	"flashcat.cloud/catpaw/pkg/safe"
-	"flashcat.cloud/catpaw/plugins"
-	"flashcat.cloud/catpaw/types"
+	"github.com/cprobe/catpaw/config"
+	"github.com/cprobe/catpaw/engine"
+	"github.com/cprobe/catpaw/logger"
+	"github.com/cprobe/catpaw/pkg/runtimex"
+	"github.com/cprobe/catpaw/pkg/safe"
+	"github.com/cprobe/catpaw/plugins"
+	"github.com/cprobe/catpaw/types"
 )
 
 type PluginRunner struct {

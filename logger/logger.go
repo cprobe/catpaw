@@ -3,7 +3,7 @@ package logger
 import (
 	"time"
 
-	"flashcat.cloud/catpaw/config"
+	"github.com/cprobe/catpaw/config"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 )

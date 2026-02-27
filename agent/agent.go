@@ -5,23 +5,23 @@ import (
 	"strings"
 	"sync"
 
-	"flashcat.cloud/catpaw/config"
-	"flashcat.cloud/catpaw/logger"
-	"flashcat.cloud/catpaw/pkg/choice"
-	"flashcat.cloud/catpaw/plugins"
+	"github.com/cprobe/catpaw/config"
+	"github.com/cprobe/catpaw/logger"
+	"github.com/cprobe/catpaw/pkg/choice"
+	"github.com/cprobe/catpaw/plugins"
 	"github.com/BurntSushi/toml"
 	"github.com/toolkits/pkg/file"
 
 	// auto registry
-	_ "flashcat.cloud/catpaw/plugins/disk"
-	_ "flashcat.cloud/catpaw/plugins/exec"
-	_ "flashcat.cloud/catpaw/plugins/filecheck"
-	_ "flashcat.cloud/catpaw/plugins/http"
-	_ "flashcat.cloud/catpaw/plugins/journaltail"
-	_ "flashcat.cloud/catpaw/plugins/net"
-	_ "flashcat.cloud/catpaw/plugins/ping"
-	_ "flashcat.cloud/catpaw/plugins/procnum"
-	_ "flashcat.cloud/catpaw/plugins/scriptfilter"
+	_ "github.com/cprobe/catpaw/plugins/disk"
+	_ "github.com/cprobe/catpaw/plugins/exec"
+	_ "github.com/cprobe/catpaw/plugins/filecheck"
+	_ "github.com/cprobe/catpaw/plugins/http"
+	_ "github.com/cprobe/catpaw/plugins/journaltail"
+	_ "github.com/cprobe/catpaw/plugins/net"
+	_ "github.com/cprobe/catpaw/plugins/ping"
+	_ "github.com/cprobe/catpaw/plugins/procnum"
+	_ "github.com/cprobe/catpaw/plugins/scriptfilter"
 )
 
 type PluginConfig struct {

@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"flashcat.cloud/catpaw/pkg/cfg"
+	"github.com/cprobe/catpaw/pkg/cfg"
 	"github.com/jackpal/gateway"
 	"github.com/toolkits/pkg/file"
 )

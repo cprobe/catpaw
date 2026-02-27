@@ -6,7 +6,7 @@ import (
 	"sort"
 	"strings"
 
-	"flashcat.cloud/catpaw/config"
+	"github.com/cprobe/catpaw/config"
 	"github.com/toolkits/pkg/file"
 )
 

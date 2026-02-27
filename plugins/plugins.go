@@ -1,9 +1,9 @@
 package plugins
 
 import (
-	"flashcat.cloud/catpaw/config"
-	"flashcat.cloud/catpaw/pkg/safe"
-	"flashcat.cloud/catpaw/types"
+	"github.com/cprobe/catpaw/config"
+	"github.com/cprobe/catpaw/pkg/safe"
+	"github.com/cprobe/catpaw/types"
 )
 
 type Instance interface {

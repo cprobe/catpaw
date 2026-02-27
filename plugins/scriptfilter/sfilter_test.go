@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"flashcat.cloud/catpaw/config"
-	"flashcat.cloud/catpaw/pkg/filter"
+	"github.com/cprobe/catpaw/config"
+	"github.com/cprobe/catpaw/pkg/filter"
 )
 
 func TestInitRejectsNegativeTimeout(t *testing.T) {

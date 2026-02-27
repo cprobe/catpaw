@@ -18,10 +18,10 @@ plugins/
 package myplugin
 
 import (
-    "flashcat.cloud/catpaw/config"
-    "flashcat.cloud/catpaw/pkg/safe"
-    "flashcat.cloud/catpaw/plugins"
-    "flashcat.cloud/catpaw/types"
+    "github.com/cprobe/catpaw/config"
+    "github.com/cprobe/catpaw/pkg/safe"
+    "github.com/cprobe/catpaw/plugins"
+    "github.com/cprobe/catpaw/types"
 )
 
 const pluginName = "myplugin"
@@ -96,7 +96,7 @@ func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
 在 `agent/agent.go` 的 import 块中添加：
 
 ```go
-_ "flashcat.cloud/catpaw/plugins/myplugin"
+_ "github.com/cprobe/catpaw/plugins/myplugin"
 ```
 
 ### 4. 创建配置文件

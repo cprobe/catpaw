@@ -7,7 +7,7 @@ import (
 	"os"
 	"strings"
 
-	"flashcat.cloud/catpaw/pkg/choice"
+	"github.com/cprobe/catpaw/pkg/choice"
 )
 
 // ClientConfig represents the standard client TLS config.

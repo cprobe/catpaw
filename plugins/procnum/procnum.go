@@ -5,11 +5,11 @@ import (
 	"runtime"
 	"strings"
 
-	"flashcat.cloud/catpaw/config"
-	"flashcat.cloud/catpaw/logger"
-	"flashcat.cloud/catpaw/pkg/safe"
-	"flashcat.cloud/catpaw/plugins"
-	"flashcat.cloud/catpaw/types"
+	"github.com/cprobe/catpaw/config"
+	"github.com/cprobe/catpaw/logger"
+	"github.com/cprobe/catpaw/pkg/safe"
+	"github.com/cprobe/catpaw/plugins"
+	"github.com/cprobe/catpaw/types"
 	"github.com/shirou/gopsutil/v3/process"
 )
 
