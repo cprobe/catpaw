@@ -13,7 +13,7 @@ catpaw 是一个轻量的事件监控工具：负责探测异常并产出标准�
 ## 插件列表
 
 | 插件 | 说明 |
-|---|---|
+| --- | --- |
 | `disk` | 磁盘空间、inode、可写性检查 |
 | `exec` | 执行脚本/命令并按约定输出产生事件（支持 JSON 和 Nagios 模式） |
 | `filecheck` | 文件存在性、mtime、checksum 检查 |
@@ -75,7 +75,7 @@ kill -HUP $(pidof catpaw)
 ## 详细文档
 
 | 文档 | 说明 |
-|---|---|
+| --- | --- |
 | [命令行参数](docs/cli.md) | 完整的命令行参数说明 |
 | [部署指南](docs/deployment.md) | 二进制部署、systemd 服务、Docker 部署 |
 | [事件数据模型](docs/event-model.md) | Event 结构、Labels 设计、AlertKey 规则、告警生命周期 |
