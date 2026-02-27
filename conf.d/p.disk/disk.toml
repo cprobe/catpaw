@@ -22,10 +22,10 @@ ignore_mount_points = [
 ]
 
 ## 排除的文件系统类型（多平台规则可共存，匹配不到的自动跳过）
+## 如果要排除网络文件系统，可以继续增加类型，比如 nfs nfs4 cifs
 ignore_fs_types = [
     "tmpfs", "devtmpfs", "squashfs", "overlay",            # Linux
     "devfs", "autofs", "nullfs",                            # macOS
-    "nfs", "nfs4", "cifs",                                  # 网络文件系统（通用）
 ]
 
 ## 磁盘空间使用率阈值（禁用：不写或两个都设0）

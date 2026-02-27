@@ -26,7 +26,7 @@ interval = "60s"
 ## mode = "stale"：在 time_span 内未修改则告警（用于检测“任务停跑/文件过旧”）
 ## check 标签固定为 "filecheck::mtime"
 [instances.mtime]
-severity = "Warning"
+severity = "Info"
 mode = "changed"
 time_span = "3m"
 # title_rule = "[check] [target]"

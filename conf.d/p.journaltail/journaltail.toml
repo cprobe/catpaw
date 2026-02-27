@@ -23,14 +23,14 @@
 ##   单值："err"
 ##   范围："emerg..err"
 ##   数字："0..3"
-# priority = "emerg..err"
+priority = "emerg..err"
 
 ## 行级过滤（在原生预过滤之后执行）
 ## include 规则是 OR：任一规则命中即算匹配
 ## 支持 glob + 正则混用：
 ##   glob 示例：*Out of memory*
 ##   正则示例：/(?i)oom|segfault/
-filter_include = ["*Out of memory*", "*nf_conntrack: table full*"]
+filter_include = ["*Out of memory*", "*nf_conntrack: table full*", "*kernel panic*", "*segfault*", "*oom-killer*", "*I/O error*", "*Read-only file system*", "*Hardware Error*", "*Hardware Error*"]
 ## exclude 为排除规则（优先级高于 include）
 # filter_exclude = ["*expected*"]
 

@@ -82,16 +82,16 @@ critical_within = "24h"
 
 ## 状态码检测（expect 为空则关闭）
 [instances.status_code]
-expect = ["20*", "30*"]
+expect = ["20*"]
 severity = "Warning"
 # title_rule = "[check] [target]"
 
 ## 响应体检测（expect_substring 和 expect_regex 不能同时配置）
 ## 两者都为空则关闭
-[instances.response_body]
-expect_substring = "html"
-# expect_regex = "<title>.+</title>"
-severity = "Warning"
+# [instances.response_body]
+# expect_substring = "pong"
+# expect_regex = ""
+# severity = "Warning"
 # title_rule = "[check] [target]"
 
 # 不常用的配置，默认值都是 false
