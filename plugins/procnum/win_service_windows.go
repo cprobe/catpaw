@@ -30,6 +30,7 @@ func queryPidWithWinServiceName(winServiceName string) (uint32, error) {
 	if err != nil {
 		return 0, err
 	}
+	defer srv.Close()
 
 	var p *windows.SERVICE_STATUS_PROCESS
 	var bytesNeeded uint32
@@ -37,6 +38,9 @@ func queryPidWithWinServiceName(winServiceName string) (uint32, error) {
 
 	if err := windows.QueryServiceStatusEx(srv.Handle, windows.SC_STATUS_PROCESS_INFO, nil, 0, &bytesNeeded); err != windows.ERROR_INSUFFICIENT_BUFFER {
 		return 0, err
+	}
+	if bytesNeeded == 0 {
+		return 0, windows.ERROR_INVALID_DATA
 	}
 
 	buf = make([]byte, bytesNeeded)

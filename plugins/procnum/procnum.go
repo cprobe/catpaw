@@ -2,6 +2,7 @@ package procnum
 
 import (
 	"fmt"
+	"runtime"
 	"strings"
 
 	"flashcat.cloud/catpaw/config"
@@ -9,10 +10,17 @@ import (
 	"flashcat.cloud/catpaw/pkg/safe"
 	"flashcat.cloud/catpaw/plugins"
 	"flashcat.cloud/catpaw/types"
+	"github.com/shirou/gopsutil/v3/process"
 )
 
+const pluginName = "procnum"
+
+type searchMode int
+
 const (
-	pluginName string = "procnum"
+	searchModeProcess    searchMode = iota // exec_name / cmdline / user — AND combination
+	searchModePidFile                      // standalone: read PID from file
+	searchModeWinService                   // standalone: Windows service query
 )
 
 type ProcessCountCheck struct {
@@ -26,11 +34,17 @@ type ProcessCountCheck struct {
 type Instance struct {
 	config.InternalConfig
 
-	SearchExecSubstring    string `toml:"search_exec_substring"`
-	SearchCmdlineSubstring string `toml:"search_cmdline_substring"`
-	SearchWinService       string `toml:"search_win_service"`
+	// Process filter conditions (AND-combined, at least one required)
+	SearchExecName string `toml:"search_exec_name"`
+	SearchCmdline  string `toml:"search_cmdline"`
+	SearchUser     string `toml:"search_user"`
 
-	searchString string
+	// Standalone modes (mutually exclusive with process filters)
+	SearchPidFile    string `toml:"search_pid_file"`
+	SearchWinService string `toml:"search_win_service"`
+
+	mode        searchMode
+	searchLabel string
 
 	ProcessCount ProcessCountCheck `toml:"process_count"`
 }
@@ -55,15 +69,56 @@ func init() {
 }
 
 func (ins *Instance) Init() error {
-	if ins.SearchExecSubstring != "" {
-		ins.searchString = ins.SearchExecSubstring
-	} else if ins.SearchCmdlineSubstring != "" {
-		ins.searchString = ins.SearchCmdlineSubstring
-	} else if ins.SearchWinService != "" {
-		ins.searchString = ins.SearchWinService
+	ins.SearchExecName = strings.TrimSpace(ins.SearchExecName)
+	ins.SearchCmdline = strings.TrimSpace(ins.SearchCmdline)
+	ins.SearchUser = strings.TrimSpace(ins.SearchUser)
+	ins.SearchPidFile = strings.TrimSpace(ins.SearchPidFile)
+	ins.SearchWinService = strings.TrimSpace(ins.SearchWinService)
+
+	hasProcessFilter := ins.SearchExecName != "" || ins.SearchCmdline != "" || ins.SearchUser != ""
+	hasPidFile := ins.SearchPidFile != ""
+	hasWinService := ins.SearchWinService != ""
+
+	modeCount := 0
+	if hasProcessFilter {
+		modeCount++
+	}
+	if hasPidFile {
+		modeCount++
+	}
+	if hasWinService {
+		modeCount++
 	}
 
+	if modeCount == 0 {
+		return fmt.Errorf("at least one search condition must be configured (search_exec_name, search_cmdline, search_user, search_pid_file, or search_win_service)")
+	}
+	if modeCount > 1 {
+		return fmt.Errorf("search_pid_file and search_win_service are mutually exclusive with process filters (search_exec_name/search_cmdline/search_user)")
+	}
+
+	switch {
+	case hasPidFile:
+		ins.mode = searchModePidFile
+	case hasWinService:
+		ins.mode = searchModeWinService
+	default:
+		ins.mode = searchModeProcess
+	}
+
+	if ins.SearchWinService != "" && runtime.GOOS != "windows" {
+		return fmt.Errorf("search_win_service is only supported on Windows, current OS: %s", runtime.GOOS)
+	}
+
+	ins.searchLabel = ins.buildSearchLabel()
+
 	pc := ins.ProcessCount
+	if pc.WarnLt < 0 || pc.CriticalLt < 0 || pc.WarnGt < 0 || pc.CriticalGt < 0 {
+		return fmt.Errorf("process_count thresholds must be non-negative")
+	}
+	if pc.WarnLt == 0 && pc.CriticalLt == 0 && pc.WarnGt == 0 && pc.CriticalGt == 0 {
+		return fmt.Errorf("at least one process_count threshold must be configured")
+	}
 	if pc.WarnLt > 0 && pc.CriticalLt > 0 && pc.WarnLt < pc.CriticalLt {
 		return fmt.Errorf("process_count.warn_lt(%d) must be >= process_count.critical_lt(%d)", pc.WarnLt, pc.CriticalLt)
 	}
@@ -74,25 +129,42 @@ func (ins *Instance) Init() error {
 	return nil
 }
 
-func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
-	if ins.searchString == "" {
-		return
+func (ins *Instance) buildSearchLabel() string {
+	if ins.SearchPidFile != "" {
+		return ins.SearchPidFile
+	}
+	if ins.SearchWinService != "" {
+		return ins.SearchWinService
 	}
 
+	var parts []string
+	if ins.SearchExecName != "" {
+		parts = append(parts, ins.SearchExecName)
+	}
+	if ins.SearchCmdline != "" {
+		parts = append(parts, ins.SearchCmdline)
+	}
+	if ins.SearchUser != "" {
+		parts = append(parts, "user:"+ins.SearchUser)
+	}
+	return strings.Join(parts, " && ")
+}
+
+func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
 	var (
 		pids []PID
 		err  error
 	)
 
-	pg := NewNativeFinder()
-	if ins.SearchExecSubstring != "" {
-		pids, err = pg.Pattern(ins.SearchExecSubstring)
-	} else if ins.SearchCmdlineSubstring != "" {
-		pids, err = pg.FullPattern(ins.SearchCmdlineSubstring)
-	} else if ins.SearchWinService != "" {
+	switch ins.mode {
+	case searchModePidFile:
+		pids, err = ins.findByPidFile()
+	case searchModeWinService:
 		pids, err = ins.winServicePIDs()
-	} else {
-		logger.Logger.Error("Oops... search string not found")
+	case searchModeProcess:
+		pids, err = ins.findProcesses()
+	default:
+		logger.Logger.Error("procnum: unreachable - unknown search mode")
 		return
 	}
 
@@ -100,17 +172,16 @@ func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
 		q.PushFront(ins.buildEvent(fmt.Sprintf(`[MD]
 - **target**: %s
 - **error**: %v
-`, ins.searchString, err)).SetEventStatus(types.EventStatusCritical))
+`, ins.searchLabel, err)).SetEventStatus(types.EventStatusCritical))
 		return
 	}
 
 	count := len(pids)
-	logger.Logger.Debugw("search result", "search_string", ins.searchString, "pids", pids, "count", count)
+	logger.Logger.Debugw("search result", "target", ins.searchLabel, "pids", pids, "count", count)
 
 	pc := ins.ProcessCount
 	desc := ins.buildDesc(count)
 
-	// "too few" check: critical_lt has higher priority than warn_lt
 	if pc.CriticalLt > 0 && count < pc.CriticalLt {
 		q.PushFront(ins.buildEvent(desc).SetEventStatus(types.EventStatusCritical))
 		return
@@ -120,7 +191,6 @@ func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
 		return
 	}
 
-	// "too many" check: critical_gt has higher priority than warn_gt
 	if pc.CriticalGt > 0 && count > pc.CriticalGt {
 		q.PushFront(ins.buildEvent(desc).SetEventStatus(types.EventStatusCritical))
 		return
@@ -130,27 +200,129 @@ func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
 		return
 	}
 
-	// everything is ok
 	q.PushFront(ins.buildEvent(desc))
+}
+
+// findProcesses enumerates all system processes and returns those matching
+// ALL configured conditions (exec_name, cmdline, user) via AND logic.
+func (ins *Instance) findProcesses() ([]PID, error) {
+	procs, err := FastProcessList()
+	if err != nil {
+		return nil, err
+	}
+
+	var pids []PID
+	for _, p := range procs {
+		if ins.matchProcess(p) {
+			pids = append(pids, PID(p.Pid))
+		}
+	}
+	return pids, nil
+}
+
+// matchProcess returns true only if the process satisfies ALL configured conditions.
+func (ins *Instance) matchProcess(p *process.Process) bool {
+	if ins.SearchExecName != "" {
+		name, err := processExecName(p)
+		if err != nil {
+			return false
+		}
+		if !strings.Contains(name, ins.SearchExecName) {
+			return false
+		}
+	}
+
+	if ins.SearchCmdline != "" {
+		cmd, err := p.Cmdline()
+		if err != nil {
+			return false
+		}
+		if !strings.Contains(cmd, ins.SearchCmdline) {
+			return false
+		}
+	}
+
+	if ins.SearchUser != "" {
+		username, err := p.Username()
+		if err != nil {
+			return false
+		}
+		if username != ins.SearchUser {
+			return false
+		}
+	}
+
+	return true
+}
+
+// findByPidFile reads a PID from a file and verifies the process is still alive.
+func (ins *Instance) findByPidFile() ([]PID, error) {
+	pids, err := ReadPidFile(ins.SearchPidFile)
+	if err != nil {
+		return nil, err
+	}
+
+	var alive []PID
+	for _, pid := range pids {
+		exists, err := process.PidExists(int32(pid))
+		if err != nil {
+			continue
+		}
+		if exists {
+			alive = append(alive, pid)
+		}
+	}
+	return alive, nil
+}
+
+func (ins *Instance) winServicePIDs() ([]PID, error) {
+	pid, err := queryPidWithWinServiceName(ins.SearchWinService)
+	if err != nil {
+		return nil, err
+	}
+	if pid == 0 {
+		return nil, nil
+	}
+	return []PID{PID(pid)}, nil
 }
 
 func (ins *Instance) buildDesc(count int) string {
 	pc := ins.ProcessCount
-	return fmt.Sprintf(`[MD]
-- **target**: %s
-- **process_count**: %d
-- **warn_lt**: %d
-- **critical_lt**: %d
-- **warn_gt**: %d
-- **critical_gt**: %d
+	var sb strings.Builder
+	sb.WriteString("[MD]\n")
+	fmt.Fprintf(&sb, "- **target**: %s\n", ins.searchLabel)
+	fmt.Fprintf(&sb, "- **process_count**: %d\n", count)
 
-**search config**:
-- search_exec_substring: %s
-- search_cmdline_substring: %s
-- search_win_service: %s
-`, ins.searchString, count,
-		pc.WarnLt, pc.CriticalLt, pc.WarnGt, pc.CriticalGt,
-		ins.SearchExecSubstring, ins.SearchCmdlineSubstring, ins.SearchWinService)
+	if pc.WarnLt > 0 {
+		fmt.Fprintf(&sb, "- **warn_lt**: %d\n", pc.WarnLt)
+	}
+	if pc.CriticalLt > 0 {
+		fmt.Fprintf(&sb, "- **critical_lt**: %d\n", pc.CriticalLt)
+	}
+	if pc.WarnGt > 0 {
+		fmt.Fprintf(&sb, "- **warn_gt**: %d\n", pc.WarnGt)
+	}
+	if pc.CriticalGt > 0 {
+		fmt.Fprintf(&sb, "- **critical_gt**: %d\n", pc.CriticalGt)
+	}
+
+	sb.WriteString("\n**search config**:\n")
+	if ins.SearchExecName != "" {
+		fmt.Fprintf(&sb, "- search_exec_name: %s\n", ins.SearchExecName)
+	}
+	if ins.SearchCmdline != "" {
+		fmt.Fprintf(&sb, "- search_cmdline: %s\n", ins.SearchCmdline)
+	}
+	if ins.SearchUser != "" {
+		fmt.Fprintf(&sb, "- search_user: %s\n", ins.SearchUser)
+	}
+	if ins.SearchPidFile != "" {
+		fmt.Fprintf(&sb, "- search_pid_file: %s\n", ins.SearchPidFile)
+	}
+	if ins.SearchWinService != "" {
+		fmt.Fprintf(&sb, "- search_win_service: %s\n", ins.SearchWinService)
+	}
+	return sb.String()
 }
 
 func (ins *Instance) buildEvent(desc ...string) *types.Event {
@@ -161,23 +333,10 @@ func (ins *Instance) buildEvent(desc ...string) *types.Event {
 
 	event := types.BuildEvent(map[string]string{
 		"check":  "procnum::process_count",
-		"target": ins.searchString,
+		"target": ins.searchLabel,
 	}).SetTitleRule(tr)
 	if len(desc) > 0 {
 		event.SetDescription(strings.Join(desc, "\n"))
 	}
 	return event
-}
-
-func (ins *Instance) winServicePIDs() ([]PID, error) {
-	var pids []PID
-
-	pid, err := queryPidWithWinServiceName(ins.SearchWinService)
-	if err != nil {
-		return pids, err
-	}
-
-	pids = append(pids, PID(pid))
-
-	return pids, nil
 }

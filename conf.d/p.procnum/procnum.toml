@@ -1,25 +1,29 @@
 [[instances]]
-# # executable name (ie, pgrep <search_exec_substring>)
-# search_exec_substring = ""
+## Process search conditions (AND-combined, at least one required)
+##
+## search_exec_name: match executable name (cross-platform, basename only)
+##   "nginx" matches /usr/sbin/nginx on Linux, nginx.exe on Windows
+## search_cmdline: match full command line (substring)
+##   "myapp.jar" matches "java -jar myapp.jar -Xmx512m"
+## search_user: filter by process owner (exact match, AND with above)
+##
+## Standalone modes (mutually exclusive with above):
+## search_pid_file: read PID from file, verify process is alive
+## search_win_service: query Windows service by name (Windows only)
 
-# # pattern as argument for pgrep (ie, pgrep -f <search_cmdline_substring>)
-search_cmdline_substring = ""
-
-# # windows service name
+search_exec_name = "nginx"
+# search_cmdline = ""
+# search_user = ""
+# search_pid_file = ""
 # search_win_service = ""
 
 interval = "30s"
 
-## Process count check
-## check label auto-set to "procnum::process_count", target label auto-set from search string
-##
-## "too few" thresholds (daemon alive check):
-##   warn_lt / critical_lt — alert when process count < threshold
-##   critical_lt has higher priority; warn_lt must be >= critical_lt
-##
-## "too many" thresholds (process leak / fork bomb check):
-##   warn_gt / critical_gt — alert when process count > threshold
-##   critical_gt has higher priority; warn_gt must be <= critical_gt
+## Process count thresholds (at least one required, non-negative)
+##   warn_lt / critical_lt — alert when count < threshold (daemon alive check)
+##     critical_lt has higher priority; warn_lt must be >= critical_lt
+##   warn_gt / critical_gt — alert when count > threshold (process leak check)
+##     critical_gt has higher priority; warn_gt must be <= critical_gt
 [instances.process_count]
 critical_lt = 1
 # warn_lt = 1
