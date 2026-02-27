@@ -205,7 +205,7 @@ func (ins *Instance) Init() error {
 		if addr.Scheme != "http" && addr.Scheme != "https" {
 			return fmt.Errorf("only http and https are supported, target: %s", target)
 		}
-		if addr.Scheme == "https" {
+		if addr.Scheme == "https" && !ins.UseTLS {
 			ins.UseTLS = true
 		}
 	}

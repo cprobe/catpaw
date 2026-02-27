@@ -28,9 +28,10 @@ type LogConfig struct {
 }
 
 type Flashduty struct {
-	Url     string       `toml:"url"`
-	Timeout Duration     `toml:"timeout"`
-	Client  *http.Client `toml:"-"`
+	Url        string       `toml:"url"`
+	Timeout    Duration     `toml:"timeout"`
+	MaxRetries int          `toml:"max_retries"`
+	Client     *http.Client `toml:"-"`
 }
 
 type ConfigType struct {
@@ -95,6 +96,10 @@ func InitConfig(configDir string, testMode bool, interval int64, plugins, url, l
 
 	if Config.Flashduty.Timeout == 0 {
 		Config.Flashduty.Timeout = Duration(10 * time.Second)
+	}
+
+	if Config.Flashduty.MaxRetries <= 0 {
+		Config.Flashduty.MaxRetries = 1
 	}
 
 	if Config.Url != "" {

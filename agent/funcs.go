@@ -68,6 +68,10 @@ func loadFileConfigs() (map[string]*PluginConfig, error) {
 			bytes = append(bytes, bs...)
 		}
 
+		if len(bytes) == 0 {
+			continue
+		}
+
 		ret[name] = &PluginConfig{
 			Digest:      fmt.Sprint(maxmt),
 			FileContent: bytes,
