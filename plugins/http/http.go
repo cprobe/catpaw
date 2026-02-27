@@ -307,7 +307,19 @@ func (ins *Instance) gather(q *safe.Queue[*types.Event], target string) {
 
 	request, err := http.NewRequest(ins.GetMethod(), target, payload)
 	if err != nil {
-		logger.Logger.Errorw("failed to create http request", "error", err, "plugin", pluginName)
+		connTR := ins.Connectivity.TitleRule
+		if connTR == "" {
+			connTR = "[check] [target]"
+		}
+		connEvent := types.BuildEvent(map[string]string{
+			"check": "http::connectivity",
+		}, labels).SetTitleRule(connTR)
+		connEvent.SetEventStatus(ins.Connectivity.Severity)
+		connEvent.SetDescription(fmt.Sprintf(`[MD]
+- **target**: %s
+- **method**: %s
+- **error**: failed to create request: %v`, target, ins.GetMethod(), err))
+		q.PushFront(connEvent)
 		return
 	}
 
@@ -354,6 +366,8 @@ func (ins *Instance) gather(q *safe.Queue[*types.Event], target string) {
 		logger.Logger.Errorw("failed to send http request", "error", err, "plugin", pluginName, "target", target)
 		return
 	}
+
+	defer resp.Body.Close()
 
 	// response time check
 	if ins.ResponseTime.WarnGe > 0 || ins.ResponseTime.CriticalGe > 0 {
@@ -433,17 +447,13 @@ func (ins *Instance) gather(q *safe.Queue[*types.Event], target string) {
 		q.PushFront(certEvent)
 	}
 
-	if resp.Body != nil {
-		defer resp.Body.Close()
-	}
-
 	statusCode := fmt.Sprint(resp.StatusCode)
 	needBody := len(ins.StatusCode.Expect) > 0 ||
 		ins.ResponseBody.ExpectSubstring != "" ||
 		ins.ResponseBody.compiledRegex != nil
 
 	var body []byte
-	if needBody && resp.Body != nil {
+	if needBody {
 		body, err = io.ReadAll(io.LimitReader(resp.Body, maxBodyReadSize))
 		if err != nil {
 			logger.Logger.Errorw("failed to read http response body", "error", err, "plugin", pluginName, "target", target)

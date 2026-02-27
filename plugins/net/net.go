@@ -271,7 +271,7 @@ func (ins *Instance) TCPGather(address string, labels map[string]string, q *safe
 		if !strings.Contains(data, ins.Expect) {
 			responseTime := time.Since(start)
 			q.PushFront(event.SetEventStatus(ins.Connectivity.Severity).SetDescription(
-				ins.buildDesc(address, fmt.Sprintf("response mismatch. expected: %s, real response: %s", ins.Expect, data), responseTime)))
+				ins.buildDesc(address, fmt.Sprintf("response mismatch. expected: %s, real response: %s", ins.Expect, truncateStr(data, maxResponseDisplaySize)), responseTime)))
 			return
 		}
 	}
@@ -344,9 +344,9 @@ func (ins *Instance) UDPGather(address string, labels map[string]string, q *safe
 	data := string(buf[:n])
 	if !strings.Contains(data, ins.Expect) {
 		responseTime := time.Since(start)
-		message := fmt.Sprintf("response mismatch. expect: %s, real: %s", ins.Expect, data)
+		message := fmt.Sprintf("response mismatch. expect: %s, real: %s", ins.Expect, truncateStr(data, maxResponseDisplaySize))
 		q.PushFront(event.SetEventStatus(ins.Connectivity.Severity).SetDescription(ins.buildDesc(address, message, responseTime)))
-		logger.Logger.Errorw("udp response mismatch", "address", address, "expect", ins.Expect, "actual", data)
+		logger.Logger.Errorw("udp response mismatch", "address", address, "expect", ins.Expect, "actual", truncateStr(data, maxResponseDisplaySize))
 		return
 	}
 
@@ -388,6 +388,15 @@ func (ins *Instance) checkResponseTime(q *safe.Queue[*types.Event], address stri
 		ins.ResponseTime.CriticalGe.HumanString()))
 
 	q.PushFront(rtEvent)
+}
+
+const maxResponseDisplaySize = 512
+
+func truncateStr(s string, max int) string {
+	if len(s) <= max {
+		return s
+	}
+	return s[:max] + "... (truncated)"
 }
 
 func (ins *Instance) buildDesc(target, message string, responseTime time.Duration) string {

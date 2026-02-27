@@ -203,10 +203,24 @@ func (ins *Instance) Init() error {
 			if len(addrs) == 0 {
 				return fmt.Errorf("interface %q has no addresses", ins.Interface)
 			}
+			wantV6 := ins.IPv6 != nil && *ins.IPv6
 			for _, addr := range addrs {
-				if ipNet, ok := addr.(*net.IPNet); ok {
+				ipNet, ok := addr.(*net.IPNet)
+				if !ok {
+					continue
+				}
+				isV6 := ipNet.IP.To4() == nil
+				if wantV6 == isV6 {
 					ins.sourceAddress = ipNet.IP.String()
 					break
+				}
+			}
+			if ins.sourceAddress == "" {
+				for _, addr := range addrs {
+					if ipNet, ok := addr.(*net.IPNet); ok {
+						ins.sourceAddress = ipNet.IP.String()
+						break
+					}
 				}
 			}
 			if ins.sourceAddress == "" {
