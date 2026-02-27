@@ -1,0 +1,36 @@
+## filecheck plugin: monitors file mtime, checksum (SHA256), and existence
+## Replaces the old filechange and mtime plugins
+
+[[instances]]
+## Targets support three forms:
+## - Exact path: "/etc/shadow"
+## - Glob pattern: "/etc/*.conf"
+## - Directory (recursive scan): "/opt/myapp/config/"
+targets = ["/etc/shadow", "/etc/passwd"]
+interval = "60s"
+
+## Dimension 1: mtime - alert if any file was modified within time_span
+## check label: "filecheck::mtime", target label: targets joined by comma
+[instances.mtime]
+severity = "Warning"
+time_span = "3m"
+# title_rule = "[check] [target]"
+
+## Dimension 2: checksum - alert if file SHA256 changed since last check
+## First run stores baselines only; alerts start from the second run
+## max_file_size: files larger than this are skipped, default "50MB"
+## Supports: "512KB", "50MB", "1GB", etc.
+# [instances.checksum]
+# severity = "Critical"
+# max_file_size = "50MB"
+# title_rule = "[check] [target]"
+
+## Dimension 3: existence - alert if any target is missing or glob matches nothing
+# [instances.existence]
+# severity = "Critical"
+# title_rule = "[check] [target]"
+
+[instances.alerting]
+for_duration = 0
+repeat_interval = "5m"
+repeat_number = 3
