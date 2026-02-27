@@ -182,6 +182,9 @@ func clean(event *types.Event, now int64, pluginName string, pluginObj plugins.P
 
 	var sb strings.Builder
 	for _, k := range keys {
+		if strings.HasPrefix(k, types.AttrPrefix) {
+			continue
+		}
 		sb.WriteString(k)
 		sb.WriteString(":")
 		sb.WriteString(event.Labels[k])

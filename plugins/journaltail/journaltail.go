@@ -203,27 +203,28 @@ func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
 		tr = "[check] [target]"
 	}
 
-	e := types.BuildEvent(map[string]string{
+	labels := map[string]string{
 		"check":  "journaltail::match",
 		"target": target,
-	}).SetTitleRule(tr)
+	}
+	if len(ins.Units) > 0 {
+		labels[types.AttrPrefix+"units"] = strings.Join(ins.Units, ", ")
+	}
+	if ins.Priority != "" {
+		labels[types.AttrPrefix+"priority"] = ins.Priority
+	}
+
+	e := types.BuildEvent(labels).SetTitleRule(tr)
 
 	if len(matched) == 0 {
 		q.PushFront(e)
 		return
 	}
 
-	var desc bytes.Buffer
-	desc.WriteString("[MD]\n")
-	fmt.Fprintf(&desc, "- **target**: %s\n", target)
-	if len(ins.Units) > 0 {
-		fmt.Fprintf(&desc, "- **units**: %s\n", strings.Join(ins.Units, ", "))
-	}
-	if ins.Priority != "" {
-		fmt.Fprintf(&desc, "- **priority**: %s\n", ins.Priority)
-	}
-	desc.WriteString("\n**matched lines**:\n\n```\n")
+	labels[types.AttrPrefix+"matched_count"] = fmt.Sprintf("%d", len(matched))
 
+	var desc strings.Builder
+	fmt.Fprintf(&desc, "matched %d lines:\n", len(matched))
 	for i, line := range matched {
 		if i >= ins.MaxLines {
 			break
@@ -231,11 +232,9 @@ func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
 		desc.WriteString(line)
 		desc.WriteByte('\n')
 	}
-
 	if len(matched) > ins.MaxLines {
 		fmt.Fprintf(&desc, "... and %d more lines\n", len(matched)-ins.MaxLines)
 	}
-	desc.WriteString("```")
 
 	e.SetEventStatus(ins.Match.Severity)
 	e.SetDescription(desc.String())
@@ -253,7 +252,7 @@ func (ins *Instance) buildErrorEvent(target, errMsg string) *types.Event {
 		"target": target,
 	}).SetTitleRule(tr).
 		SetEventStatus(types.EventStatusCritical).
-		SetDescription(fmt.Sprintf("[MD]\n- **target**: %s\n- **error**: %s\n", target, errMsg))
+		SetDescription(errMsg)
 }
 
 // extractCursor parses the journal cursor from `--show-cursor` output.

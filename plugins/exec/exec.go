@@ -240,26 +240,29 @@ func (ins *Instance) gatherNagios(q *safe.Queue[*types.Event], command string, s
 		}
 	}
 
-	var desc strings.Builder
-	desc.WriteString("[MD]\n")
-	desc.WriteString(fmt.Sprintf("- **target**: %s\n", command))
-	desc.WriteString(fmt.Sprintf("- **exit_code**: %d\n", exitCode))
+	eventLabels := map[string]string{
+		"check":                            "exec::nagios",
+		"target":                           command,
+		types.AttrPrefix + "exit_code":     fmt.Sprintf("%d", exitCode),
+	}
 	if statusLine != "" {
-		desc.WriteString(fmt.Sprintf("- **status**: %s\n", statusLine))
+		eventLabels[types.AttrPrefix+"status"] = statusLine
 	}
 	if perfData != "" {
-		desc.WriteString(fmt.Sprintf("- **perfdata**: `%s`\n", perfData))
-	}
-	if longText != "" {
-		desc.WriteString(fmt.Sprintf("\n**detail**:\n\n```\n%s\n```\n", longText))
+		eventLabels[types.AttrPrefix+"perfdata"] = perfData
 	}
 
-	event := types.BuildEvent(map[string]string{
-		"check":  "exec::nagios",
-		"target": command,
-	}).SetTitleRule("[check] [target]").
+	desc := statusLine
+	if desc == "" {
+		desc = fmt.Sprintf("exit code %d", exitCode)
+	}
+	if longText != "" {
+		desc += "\n" + longText
+	}
+
+	event := types.BuildEvent(eventLabels).SetTitleRule("[check] [target]").
 		SetEventStatus(status).
-		SetDescription(desc.String())
+		SetDescription(desc)
 
 	q.PushFront(event)
 }
@@ -329,13 +332,9 @@ func combineOutput(stdout, stderr []byte) []byte {
 }
 
 func (ins *Instance) buildErrorEvent(command string, err error, output []byte) *types.Event {
-	var desc strings.Builder
-	desc.WriteString("[MD]\n")
-	desc.WriteString(fmt.Sprintf("- **target**: %s\n", command))
-	desc.WriteString(fmt.Sprintf("- **error**: %v\n", err))
+	desc := fmt.Sprintf("command exec failed: %v", err)
 	if len(output) > 0 {
-		truncated := truncateUTF8(output, 1024)
-		desc.WriteString(fmt.Sprintf("\n**output**:\n\n```\n%s\n```\n", truncated))
+		desc += "\n" + truncateUTF8(output, 1024)
 	}
 
 	return types.BuildEvent(map[string]string{
@@ -343,7 +342,7 @@ func (ins *Instance) buildErrorEvent(command string, err error, output []byte) *
 		"target": command,
 	}).SetTitleRule("[check] [target]").
 		SetEventStatus(types.EventStatusCritical).
-		SetDescription(desc.String())
+		SetDescription(desc)
 }
 
 func truncateUTF8(b []byte, max int) string {

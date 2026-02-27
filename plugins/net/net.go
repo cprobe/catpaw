@@ -225,9 +225,9 @@ func (ins *Instance) TCPGather(address string, labels map[string]string, q *safe
 
 	conn, err := net.DialTimeout("tcp", address, time.Duration(ins.Timeout))
 	if err != nil {
-		responseTime := time.Since(start)
-		q.PushFront(event.SetEventStatus(ins.Connectivity.Severity).SetDescription(
-			ins.buildDesc(address, fmt.Sprintf("connection error: %v", err), responseTime)))
+		event.Labels[types.AttrPrefix+"response_time"] = time.Since(start).String()
+		q.PushFront(event.SetEventStatus(ins.Connectivity.Severity).
+			SetDescription(fmt.Sprintf("connection error: %v", err)))
 		logger.Logger.Errorw("failed to send tcp request", "error", err, "plugin", pluginName, "target", address)
 		return
 	}
@@ -236,18 +236,18 @@ func (ins *Instance) TCPGather(address string, labels map[string]string, q *safe
 
 	if ins.Send != "" {
 		if _, err = conn.Write([]byte(ins.Send)); err != nil {
-			responseTime := time.Since(start)
-			q.PushFront(event.SetEventStatus(ins.Connectivity.Severity).SetDescription(
-				ins.buildDesc(address, fmt.Sprintf("failed to send message: %s, error: %v", ins.Send, err), responseTime)))
+			event.Labels[types.AttrPrefix+"response_time"] = time.Since(start).String()
+			q.PushFront(event.SetEventStatus(ins.Connectivity.Severity).
+				SetDescription(fmt.Sprintf("failed to send message: %s, error: %v", ins.Send, err)))
 			return
 		}
 	}
 
 	if ins.Expect != "" {
 		if err := conn.SetReadDeadline(time.Now().Add(time.Duration(ins.ReadTimeout))); err != nil {
-			responseTime := time.Since(start)
-			q.PushFront(event.SetEventStatus(ins.Connectivity.Severity).SetDescription(
-				ins.buildDesc(address, fmt.Sprintf("failed to set read deadline, error: %v", err), responseTime)))
+			event.Labels[types.AttrPrefix+"response_time"] = time.Since(start).String()
+			q.PushFront(event.SetEventStatus(ins.Connectivity.Severity).
+				SetDescription(fmt.Sprintf("failed to set read deadline, error: %v", err)))
 			return
 		}
 
@@ -269,15 +269,16 @@ func (ins *Instance) TCPGather(address string, labels map[string]string, q *safe
 		data := dataBuf.String()
 
 		if !strings.Contains(data, ins.Expect) {
-			responseTime := time.Since(start)
-			q.PushFront(event.SetEventStatus(ins.Connectivity.Severity).SetDescription(
-				ins.buildDesc(address, fmt.Sprintf("response mismatch. expected: %s, real response: %s", ins.Expect, truncateStr(data, maxResponseDisplaySize)), responseTime)))
+			event.Labels[types.AttrPrefix+"response_time"] = time.Since(start).String()
+			q.PushFront(event.SetEventStatus(ins.Connectivity.Severity).
+				SetDescription(fmt.Sprintf("response mismatch. expected: %s, real response: %s", ins.Expect, truncateStr(data, maxResponseDisplaySize))))
 			return
 		}
 	}
 
 	responseTime := time.Since(start)
-	event.SetDescription(ins.buildDesc(address, "everything is ok", responseTime))
+	event.Labels[types.AttrPrefix+"response_time"] = responseTime.String()
+	event.SetDescription("everything is ok")
 	q.PushFront(event)
 
 	ins.checkResponseTime(q, address, labels, responseTime)
@@ -297,18 +298,18 @@ func (ins *Instance) UDPGather(address string, labels map[string]string, q *safe
 
 	udpAddr, err := net.ResolveUDPAddr("udp", address)
 	if err != nil {
-		responseTime := time.Since(start)
-		message := fmt.Sprintf("resolve udp address(%s) error: %v", address, err)
-		q.PushFront(event.SetEventStatus(ins.Connectivity.Severity).SetDescription(ins.buildDesc(address, message, responseTime)))
+		event.Labels[types.AttrPrefix+"response_time"] = time.Since(start).String()
+		q.PushFront(event.SetEventStatus(ins.Connectivity.Severity).
+			SetDescription(fmt.Sprintf("resolve udp address(%s) error: %v", address, err)))
 		logger.Logger.Errorw("resolve udp address fail", "address", address, "error", err)
 		return
 	}
 
 	conn, err := net.DialUDP("udp", nil, udpAddr)
 	if err != nil {
-		responseTime := time.Since(start)
-		message := fmt.Sprintf("dial udp address(%s) error: %v", address, err)
-		q.PushFront(event.SetEventStatus(ins.Connectivity.Severity).SetDescription(ins.buildDesc(address, message, responseTime)))
+		event.Labels[types.AttrPrefix+"response_time"] = time.Since(start).String()
+		q.PushFront(event.SetEventStatus(ins.Connectivity.Severity).
+			SetDescription(fmt.Sprintf("dial udp address(%s) error: %v", address, err)))
 		logger.Logger.Errorw("dial udp address fail", "address", address, "error", err)
 		return
 	}
@@ -316,17 +317,17 @@ func (ins *Instance) UDPGather(address string, labels map[string]string, q *safe
 	defer conn.Close()
 
 	if _, err = conn.Write([]byte(ins.Send)); err != nil {
-		responseTime := time.Since(start)
-		message := fmt.Sprintf("write string(%s) to udp address(%s) error: %v", ins.Send, address, err)
-		q.PushFront(event.SetEventStatus(ins.Connectivity.Severity).SetDescription(ins.buildDesc(address, message, responseTime)))
+		event.Labels[types.AttrPrefix+"response_time"] = time.Since(start).String()
+		q.PushFront(event.SetEventStatus(ins.Connectivity.Severity).
+			SetDescription(fmt.Sprintf("write string(%s) to udp address(%s) error: %v", ins.Send, address, err)))
 		logger.Logger.Errorw("write to udp address fail", "address", address, "send", ins.Send, "error", err)
 		return
 	}
 
 	if err = conn.SetReadDeadline(time.Now().Add(time.Duration(ins.ReadTimeout))); err != nil {
-		responseTime := time.Since(start)
-		message := fmt.Sprintf("set connection deadline to udp address(%s) error: %v", address, err)
-		q.PushFront(event.SetEventStatus(ins.Connectivity.Severity).SetDescription(ins.buildDesc(address, message, responseTime)))
+		event.Labels[types.AttrPrefix+"response_time"] = time.Since(start).String()
+		q.PushFront(event.SetEventStatus(ins.Connectivity.Severity).
+			SetDescription(fmt.Sprintf("set connection deadline to udp address(%s) error: %v", address, err)))
 		logger.Logger.Errorw("set udp read deadline fail", "address", address, "error", err)
 		return
 	}
@@ -334,24 +335,25 @@ func (ins *Instance) UDPGather(address string, labels map[string]string, q *safe
 	buf := make([]byte, 65536)
 	n, _, err := conn.ReadFromUDP(buf)
 	if err != nil {
-		responseTime := time.Since(start)
-		message := fmt.Sprintf("read from udp address(%s) error: %v", address, err)
-		q.PushFront(event.SetEventStatus(ins.Connectivity.Severity).SetDescription(ins.buildDesc(address, message, responseTime)))
+		event.Labels[types.AttrPrefix+"response_time"] = time.Since(start).String()
+		q.PushFront(event.SetEventStatus(ins.Connectivity.Severity).
+			SetDescription(fmt.Sprintf("read from udp address(%s) error: %v", address, err)))
 		logger.Logger.Errorw("read from udp address fail", "address", address, "error", err)
 		return
 	}
 
 	data := string(buf[:n])
 	if !strings.Contains(data, ins.Expect) {
-		responseTime := time.Since(start)
-		message := fmt.Sprintf("response mismatch. expect: %s, real: %s", ins.Expect, truncateStr(data, maxResponseDisplaySize))
-		q.PushFront(event.SetEventStatus(ins.Connectivity.Severity).SetDescription(ins.buildDesc(address, message, responseTime)))
+		event.Labels[types.AttrPrefix+"response_time"] = time.Since(start).String()
+		q.PushFront(event.SetEventStatus(ins.Connectivity.Severity).
+			SetDescription(fmt.Sprintf("response mismatch. expect: %s, real: %s", ins.Expect, truncateStr(data, maxResponseDisplaySize))))
 		logger.Logger.Errorw("udp response mismatch", "address", address, "expect", ins.Expect, "actual", truncateStr(data, maxResponseDisplaySize))
 		return
 	}
 
 	responseTime := time.Since(start)
-	event.SetDescription(ins.buildDesc(address, "everything is ok", responseTime))
+	event.Labels[types.AttrPrefix+"response_time"] = responseTime.String()
+	event.SetDescription("everything is ok")
 	q.PushFront(event)
 
 	ins.checkResponseTime(q, address, labels, responseTime)
@@ -368,24 +370,21 @@ func (ins *Instance) checkResponseTime(q *safe.Queue[*types.Event], address stri
 	}
 
 	rtEvent := types.BuildEvent(map[string]string{
-		"check": "net::response_time",
+		"check":                                    "net::response_time",
+		types.AttrPrefix + "response_time":         responseTime.String(),
+		types.AttrPrefix + "warn_threshold":        ins.ResponseTime.WarnGe.HumanString(),
+		types.AttrPrefix + "critical_threshold":    ins.ResponseTime.CriticalGe.HumanString(),
 	}, labels).SetTitleRule(tr)
 
 	if ins.ResponseTime.CriticalGe > 0 && responseTime >= time.Duration(ins.ResponseTime.CriticalGe) {
 		rtEvent.SetEventStatus(types.EventStatusCritical)
+		rtEvent.SetDescription(fmt.Sprintf("response time %s >= critical threshold %s", responseTime, ins.ResponseTime.CriticalGe.HumanString()))
 	} else if ins.ResponseTime.WarnGe > 0 && responseTime >= time.Duration(ins.ResponseTime.WarnGe) {
 		rtEvent.SetEventStatus(types.EventStatusWarning)
+		rtEvent.SetDescription(fmt.Sprintf("response time %s >= warning threshold %s", responseTime, ins.ResponseTime.WarnGe.HumanString()))
+	} else {
+		rtEvent.SetDescription(fmt.Sprintf("response time %s, everything is ok", responseTime))
 	}
-
-	rtEvent.SetDescription(fmt.Sprintf(`[MD]
-- **target**: %s
-- **protocol**: %s
-- **response_time**: %s
-- **warn_threshold**: %s
-- **critical_threshold**: %s
-`, address, ins.Protocol, responseTime.String(),
-		ins.ResponseTime.WarnGe.HumanString(),
-		ins.ResponseTime.CriticalGe.HumanString()))
 
 	q.PushFront(rtEvent)
 }
@@ -399,20 +398,3 @@ func truncateStr(s string, max int) string {
 	return s[:max] + "... (truncated)"
 }
 
-func (ins *Instance) buildDesc(target, message string, responseTime time.Duration) string {
-	var b strings.Builder
-	b.WriteString("[MD]\n")
-	b.WriteString("- **target**: " + target + "\n")
-	b.WriteString("- **protocol**: " + ins.Protocol + "\n")
-	b.WriteString("- **response_time**: " + responseTime.String() + "\n")
-	if ins.Send != "" {
-		b.WriteString("- **config.send**: " + ins.Send + "\n")
-	}
-	if ins.Expect != "" {
-		b.WriteString("- **config.expect**: " + ins.Expect + "\n")
-	}
-	b.WriteString("\n**message**:\n\n```\n")
-	b.WriteString(message)
-	b.WriteString("\n```\n")
-	return b.String()
-}

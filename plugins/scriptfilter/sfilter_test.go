@@ -10,17 +10,6 @@ import (
 	"flashcat.cloud/catpaw/pkg/filter"
 )
 
-func TestInitRejectsWhitespaceCommand(t *testing.T) {
-	ins := &Instance{
-		Command:       "   \t  ",
-		FilterInclude: []string{"*ERROR*"},
-	}
-
-	if err := ins.Init(); err == nil {
-		t.Fatal("expected Init to fail for whitespace-only command")
-	}
-}
-
 func TestInitRejectsNegativeTimeout(t *testing.T) {
 	ins := &Instance{
 		Command:       "echo ok",

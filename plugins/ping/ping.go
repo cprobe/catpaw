@@ -278,29 +278,29 @@ func (ins *Instance) gather(q *safe.Queue[*types.Event], target string) {
 	if err != nil {
 		message := fmt.Sprintf("ping %s failed: %v", target, err)
 		logger.Logger.Errorw("ping failed", "target", target, "error", err)
-		q.PushFront(connEvent.SetEventStatus(ins.Connectivity.Severity).SetDescription(ins.buildDesc(target, message, nil)))
+		q.PushFront(connEvent.SetEventStatus(ins.Connectivity.Severity).SetDescription(message))
 		return
 	}
 
 	if stats.PacketsSent == 0 {
-		message := fmt.Sprintf("no packets sent to %s", target)
 		logger.Logger.Errorw("no packets sent", "target", target)
-		q.PushFront(connEvent.SetEventStatus(ins.Connectivity.Severity).SetDescription(ins.buildDesc(target, message, nil)))
+		q.PushFront(connEvent.SetEventStatus(ins.Connectivity.Severity).
+			SetDescription(fmt.Sprintf("no packets sent to %s", target)))
 		return
 	}
 
 	if stats.PacketsRecv == 0 {
-		message := fmt.Sprintf("no packets received from %s, 100%% packet loss", target)
 		logger.Logger.Errorw("no packets received", "target", target)
-		q.PushFront(connEvent.SetEventStatus(ins.Connectivity.Severity).SetDescription(ins.buildDesc(target, message, stats)))
+		ins.setStatsLabels(connEvent, stats)
+		q.PushFront(connEvent.SetEventStatus(ins.Connectivity.Severity).
+			SetDescription(fmt.Sprintf("no packets received from %s, 100%% packet loss", target)))
 		return
 	}
 
-	// Connectivity OK
-	connEvent.SetDescription(ins.buildDesc(target, "everything is ok", stats))
+	ins.setStatsLabels(connEvent, stats)
+	connEvent.SetDescription("everything is ok")
 	q.PushFront(connEvent)
 
-	// Packet loss threshold check (separate event)
 	if ins.PacketLoss.WarnGe > 0 || ins.PacketLoss.CriticalGe > 0 {
 		plTR := ins.PacketLoss.TitleRule
 		if plTR == "" {
@@ -308,26 +308,25 @@ func (ins *Instance) gather(q *safe.Queue[*types.Event], target string) {
 		}
 
 		plEvent := types.BuildEvent(map[string]string{
-			"check": "ping::packet_loss",
+			"check":                                    "ping::packet_loss",
+			types.AttrPrefix + "packet_loss":           fmt.Sprintf("%.2f%%", stats.PacketLoss),
+			types.AttrPrefix + "warn_threshold":        fmt.Sprintf("%.1f%%", ins.PacketLoss.WarnGe),
+			types.AttrPrefix + "critical_threshold":    fmt.Sprintf("%.1f%%", ins.PacketLoss.CriticalGe),
 		}, labels).SetTitleRule(plTR)
 
 		if ins.PacketLoss.CriticalGe > 0 && stats.PacketLoss >= ins.PacketLoss.CriticalGe {
 			plEvent.SetEventStatus(types.EventStatusCritical)
+			plEvent.SetDescription(fmt.Sprintf("packet loss %.2f%% >= critical threshold %.1f%%", stats.PacketLoss, ins.PacketLoss.CriticalGe))
 		} else if ins.PacketLoss.WarnGe > 0 && stats.PacketLoss >= ins.PacketLoss.WarnGe {
 			plEvent.SetEventStatus(types.EventStatusWarning)
+			plEvent.SetDescription(fmt.Sprintf("packet loss %.2f%% >= warning threshold %.1f%%", stats.PacketLoss, ins.PacketLoss.WarnGe))
+		} else {
+			plEvent.SetDescription(fmt.Sprintf("packet loss %.2f%%, everything is ok", stats.PacketLoss))
 		}
-
-		plEvent.SetDescription(fmt.Sprintf(`[MD]
-- **target**: %s
-- **packet_loss**: %.2f%%
-- **warn_threshold**: %.1f%%
-- **critical_threshold**: %.1f%%
-`, target, stats.PacketLoss, ins.PacketLoss.WarnGe, ins.PacketLoss.CriticalGe))
 
 		q.PushFront(plEvent)
 	}
 
-	// RTT threshold check (separate event)
 	if ins.Rtt.WarnGe > 0 || ins.Rtt.CriticalGe > 0 {
 		rttTR := ins.Rtt.TitleRule
 		if rttTR == "" {
@@ -335,27 +334,37 @@ func (ins *Instance) gather(q *safe.Queue[*types.Event], target string) {
 		}
 
 		rttEvent := types.BuildEvent(map[string]string{
-			"check": "ping::rtt",
+			"check":                                    "ping::rtt",
+			types.AttrPrefix + "avg_rtt":               stats.AvgRtt.String(),
+			types.AttrPrefix + "min_rtt":               stats.MinRtt.String(),
+			types.AttrPrefix + "max_rtt":               stats.MaxRtt.String(),
+			types.AttrPrefix + "warn_threshold":        ins.Rtt.WarnGe.HumanString(),
+			types.AttrPrefix + "critical_threshold":    ins.Rtt.CriticalGe.HumanString(),
 		}, labels).SetTitleRule(rttTR)
 
 		if ins.Rtt.CriticalGe > 0 && stats.AvgRtt >= time.Duration(ins.Rtt.CriticalGe) {
 			rttEvent.SetEventStatus(types.EventStatusCritical)
+			rttEvent.SetDescription(fmt.Sprintf("avg RTT %s >= critical threshold %s", stats.AvgRtt, ins.Rtt.CriticalGe.HumanString()))
 		} else if ins.Rtt.WarnGe > 0 && stats.AvgRtt >= time.Duration(ins.Rtt.WarnGe) {
 			rttEvent.SetEventStatus(types.EventStatusWarning)
+			rttEvent.SetDescription(fmt.Sprintf("avg RTT %s >= warning threshold %s", stats.AvgRtt, ins.Rtt.WarnGe.HumanString()))
+		} else {
+			rttEvent.SetDescription(fmt.Sprintf("avg RTT %s, everything is ok", stats.AvgRtt))
 		}
 
-		rttEvent.SetDescription(fmt.Sprintf(`[MD]
-- **target**: %s
-- **avg_rtt**: %s
-- **min_rtt**: %s
-- **max_rtt**: %s
-- **warn_threshold**: %s
-- **critical_threshold**: %s
-`, target, stats.AvgRtt, stats.MinRtt, stats.MaxRtt,
-			ins.Rtt.WarnGe.HumanString(),
-			ins.Rtt.CriticalGe.HumanString()))
-
 		q.PushFront(rttEvent)
+	}
+}
+
+func (ins *Instance) setStatsLabels(event *types.Event, stats *pingStats) {
+	event.Labels[types.AttrPrefix+"packets_sent"] = fmt.Sprintf("%d", stats.PacketsSent)
+	event.Labels[types.AttrPrefix+"packets_recv"] = fmt.Sprintf("%d", stats.PacketsRecv)
+	event.Labels[types.AttrPrefix+"packet_loss"] = fmt.Sprintf("%.2f%%", stats.PacketLoss)
+	if stats.PacketsRecv > 0 {
+		event.Labels[types.AttrPrefix+"min_rtt"] = stats.MinRtt.String()
+		event.Labels[types.AttrPrefix+"avg_rtt"] = stats.AvgRtt.String()
+		event.Labels[types.AttrPrefix+"max_rtt"] = stats.MaxRtt.String()
+		event.Labels[types.AttrPrefix+"std_dev_rtt"] = stats.StdDevRtt.String()
 	}
 }
 
@@ -411,23 +420,3 @@ func (ins *Instance) ping(destination string) (*pingStats, error) {
 	return ps, nil
 }
 
-func (ins *Instance) buildDesc(target, message string, stats *pingStats) string {
-	var b strings.Builder
-	b.WriteString("[MD]\n")
-	b.WriteString("- **target**: " + target + "\n")
-	if stats != nil {
-		b.WriteString(fmt.Sprintf("- **packets_sent**: %d\n", stats.PacketsSent))
-		b.WriteString(fmt.Sprintf("- **packets_recv**: %d\n", stats.PacketsRecv))
-		b.WriteString(fmt.Sprintf("- **packet_loss**: %.2f%%\n", stats.PacketLoss))
-		if stats.PacketsRecv > 0 {
-			b.WriteString(fmt.Sprintf("- **min_rtt**: %s\n", stats.MinRtt))
-			b.WriteString(fmt.Sprintf("- **avg_rtt**: %s\n", stats.AvgRtt))
-			b.WriteString(fmt.Sprintf("- **max_rtt**: %s\n", stats.MaxRtt))
-			b.WriteString(fmt.Sprintf("- **std_dev_rtt**: %s\n", stats.StdDevRtt))
-		}
-	}
-	b.WriteString("\n**message**:\n\n```\n")
-	b.WriteString(message)
-	b.WriteString("\n```\n")
-	return b.String()
-}

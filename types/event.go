@@ -5,6 +5,8 @@ const (
 	EventStatusWarning  = "Warning"
 	EventStatusInfo     = "Info"
 	EventStatusOk       = "Ok"
+
+	AttrPrefix = "_attr_"
 )
 
 type Event struct {

@@ -315,10 +315,7 @@ func (ins *Instance) gather(q *safe.Queue[*types.Event], target string) {
 			"check": "http::connectivity",
 		}, labels).SetTitleRule(connTR)
 		connEvent.SetEventStatus(ins.Connectivity.Severity)
-		connEvent.SetDescription(fmt.Sprintf(`[MD]
-- **target**: %s
-- **method**: %s
-- **error**: failed to create request: %v`, target, ins.GetMethod(), err))
+		connEvent.SetDescription(fmt.Sprintf("failed to create request: %v", err))
 		q.PushFront(connEvent)
 		return
 	}
@@ -346,19 +343,15 @@ func (ins *Instance) gather(q *safe.Queue[*types.Event], target string) {
 
 	connEvent := types.BuildEvent(map[string]string{
 		"check": "http::connectivity",
+		types.AttrPrefix + "response_time": responseTime.String(),
 	}, labels).SetTitleRule(connTR)
 
-	errString := "null. everything is ok"
 	if err != nil {
 		connEvent.SetEventStatus(ins.Connectivity.Severity)
-		errString = err.Error()
+		connEvent.SetDescription(err.Error())
+	} else {
+		connEvent.SetDescription("everything is ok")
 	}
-
-	connEvent.SetDescription(`[MD]
-- **target**: ` + target + `
-- **method**: ` + ins.GetMethod() + `
-- **response_time**: ` + responseTime.String() + `
-- **error**: ` + errString)
 
 	q.PushFront(connEvent)
 
@@ -377,24 +370,21 @@ func (ins *Instance) gather(q *safe.Queue[*types.Event], target string) {
 		}
 
 		rtEvent := types.BuildEvent(map[string]string{
-			"check": "http::response_time",
+			"check":                                    "http::response_time",
+			types.AttrPrefix + "response_time":         responseTime.String(),
+			types.AttrPrefix + "warn_threshold":        ins.ResponseTime.WarnGe.HumanString(),
+			types.AttrPrefix + "critical_threshold":    ins.ResponseTime.CriticalGe.HumanString(),
 		}, labels).SetTitleRule(rtTR)
 
 		if ins.ResponseTime.CriticalGe > 0 && responseTime >= time.Duration(ins.ResponseTime.CriticalGe) {
 			rtEvent.SetEventStatus(types.EventStatusCritical)
+			rtEvent.SetDescription(fmt.Sprintf("response time %s >= critical threshold %s", responseTime, ins.ResponseTime.CriticalGe.HumanString()))
 		} else if ins.ResponseTime.WarnGe > 0 && responseTime >= time.Duration(ins.ResponseTime.WarnGe) {
 			rtEvent.SetEventStatus(types.EventStatusWarning)
+			rtEvent.SetDescription(fmt.Sprintf("response time %s >= warning threshold %s", responseTime, ins.ResponseTime.WarnGe.HumanString()))
+		} else {
+			rtEvent.SetDescription(fmt.Sprintf("response time %s, everything is ok", responseTime))
 		}
-
-		rtEvent.SetDescription(fmt.Sprintf(`[MD]
-- **target**: %s
-- **method**: %s
-- **response_time**: %s
-- **warn_threshold**: %s
-- **critical_threshold**: %s
-`, target, ins.GetMethod(), responseTime.String(),
-			ins.ResponseTime.WarnGe.HumanString(),
-			ins.ResponseTime.CriticalGe.HumanString()))
 
 		q.PushFront(rtEvent)
 	}
@@ -416,32 +406,25 @@ func (ins *Instance) gather(q *safe.Queue[*types.Event], target string) {
 
 		if certExpiry.IsZero() {
 			certEvent.SetEventStatus(types.EventStatusCritical)
-			certEvent.SetDescription(fmt.Sprintf(`[MD]
-- **target**: %s
-- **method**: %s
-- **error**: no peer certificates found in TLS connection
-`, target, ins.GetMethod()))
+			certEvent.SetDescription("no peer certificates found in TLS connection")
 		} else {
 			timeUntilExpiry := time.Until(certExpiry)
+			certEvent.Labels[types.AttrPrefix+"cert_expires_at"] = certExpiry.Format("2006-01-02 15:04:05")
+			certEvent.Labels[types.AttrPrefix+"time_until_expiry"] = timeUntilExpiry.Truncate(time.Minute).String()
+			certEvent.Labels[types.AttrPrefix+"warn_within"] = ins.CertExpiry.WarnWithin.HumanString()
+			certEvent.Labels[types.AttrPrefix+"critical_within"] = ins.CertExpiry.CriticalWithin.HumanString()
 
 			if ins.CertExpiry.CriticalWithin > 0 && timeUntilExpiry <= time.Duration(ins.CertExpiry.CriticalWithin) {
 				certEvent.SetEventStatus(types.EventStatusCritical)
+				certEvent.SetDescription(fmt.Sprintf("cert expires in %s, within critical threshold %s",
+					timeUntilExpiry.Truncate(time.Minute), ins.CertExpiry.CriticalWithin.HumanString()))
 			} else if ins.CertExpiry.WarnWithin > 0 && timeUntilExpiry <= time.Duration(ins.CertExpiry.WarnWithin) {
 				certEvent.SetEventStatus(types.EventStatusWarning)
+				certEvent.SetDescription(fmt.Sprintf("cert expires in %s, within warning threshold %s",
+					timeUntilExpiry.Truncate(time.Minute), ins.CertExpiry.WarnWithin.HumanString()))
+			} else {
+				certEvent.SetDescription(fmt.Sprintf("cert expires at %s, everything is ok", certExpiry.Format("2006-01-02 15:04:05")))
 			}
-
-			certEvent.SetDescription(fmt.Sprintf(`[MD]
-- **target**: %s
-- **method**: %s
-- **cert_expires_at**: %s
-- **time_until_expiry**: %s
-- **warn_within**: %s
-- **critical_within**: %s
-`, target, ins.GetMethod(),
-				certExpiry.Format("2006-01-02 15:04:05"),
-				timeUntilExpiry.Truncate(time.Minute).String(),
-				ins.CertExpiry.WarnWithin.HumanString(),
-				ins.CertExpiry.CriticalWithin.HumanString()))
 		}
 
 		q.PushFront(certEvent)
@@ -468,25 +451,18 @@ func (ins *Instance) gather(q *safe.Queue[*types.Event], target string) {
 		}
 
 		scEvent := types.BuildEvent(map[string]string{
-			"check": "http::status_code",
+			"check":                                "http::status_code",
+			types.AttrPrefix + "status_code":       statusCode,
+			types.AttrPrefix + "expect_code":       fmt.Sprintf("%v", ins.StatusCode.Expect),
+			types.AttrPrefix + "response_body":     truncateBody(body, maxBodyDisplaySize),
 		}, labels).SetTitleRule(scTR)
 
 		if !ins.StatusCode.filter.Match(statusCode) {
 			scEvent.SetEventStatus(ins.StatusCode.Severity)
+			scEvent.SetDescription(fmt.Sprintf("status code %s does not match expected %v", statusCode, ins.StatusCode.Expect))
+		} else {
+			scEvent.SetDescription(fmt.Sprintf("status code %s matches expected %v", statusCode, ins.StatusCode.Expect))
 		}
-
-		scEvent.SetDescription(fmt.Sprintf(`[MD]
-- **target**: %s
-- **method**: %s
-- **status_code**: %s
-- **expect_code**: %v
-
-**response body**:
-
-`+"```"+`
-%s
-`+"```"+`
-`, target, ins.GetMethod(), statusCode, ins.StatusCode.Expect, truncateBody(body, maxBodyDisplaySize)))
 
 		q.PushFront(scEvent)
 	}
@@ -499,35 +475,29 @@ func (ins *Instance) gather(q *safe.Queue[*types.Event], target string) {
 		}
 
 		rbEvent := types.BuildEvent(map[string]string{
-			"check": "http::response_body",
+			"check":                                "http::response_body",
+			types.AttrPrefix + "status_code":       statusCode,
+			types.AttrPrefix + "response_body":     truncateBody(body, maxBodyDisplaySize),
 		}, labels).SetTitleRule(rbTR)
 
 		var matched bool
 		var expectDesc string
 		if ins.ResponseBody.compiledRegex != nil {
 			matched = ins.ResponseBody.compiledRegex.Match(body)
-			expectDesc = fmt.Sprintf("expect_regex: `%s`", ins.ResponseBody.ExpectRegex)
+			expectDesc = fmt.Sprintf("expect_regex: %s", ins.ResponseBody.ExpectRegex)
+			rbEvent.Labels[types.AttrPrefix+"expect_regex"] = ins.ResponseBody.ExpectRegex
 		} else {
 			matched = strings.Contains(string(body), ins.ResponseBody.ExpectSubstring)
 			expectDesc = fmt.Sprintf("expect_substring: %s", ins.ResponseBody.ExpectSubstring)
+			rbEvent.Labels[types.AttrPrefix+"expect_substring"] = ins.ResponseBody.ExpectSubstring
 		}
 
 		if !matched {
 			rbEvent.SetEventStatus(ins.ResponseBody.Severity)
+			rbEvent.SetDescription(fmt.Sprintf("response body does not match %s", expectDesc))
+		} else {
+			rbEvent.SetDescription(fmt.Sprintf("response body matches %s", expectDesc))
 		}
-
-		rbEvent.SetDescription(fmt.Sprintf(`[MD]
-- **target**: %s
-- **method**: %s
-- **status_code**: %s
-- **%s**
-
-**response body**:
-
-`+"```"+`
-%s
-`+"```"+`
-`, target, ins.GetMethod(), statusCode, expectDesc, truncateBody(body, maxBodyDisplaySize)))
 
 		q.PushFront(rbEvent)
 	}

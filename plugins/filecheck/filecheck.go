@@ -229,20 +229,24 @@ func (ins *Instance) checkExistence(q *safe.Queue[*types.Event], missing []strin
 		return
 	}
 
-	var desc strings.Builder
-	desc.WriteString("[MD]\n")
+	labels := map[string]string{
+		"check":  "filecheck::existence",
+		"target": target,
+	}
 	if len(missing) > 0 {
-		desc.WriteString("Missing targets:\n\n")
+		labels[types.AttrPrefix+"missing_count"] = fmt.Sprintf("%d", len(missing))
+	}
+
+	var desc strings.Builder
+	if len(missing) > 0 {
+		fmt.Fprintf(&desc, "%d targets missing:\n", len(missing))
 		for _, m := range missing {
-			desc.WriteString(fmt.Sprintf("- `%s`\n", m))
+			fmt.Fprintf(&desc, "  %s\n", m)
 		}
 	}
 	appendAccessErrors(&desc, accessErrors)
 
-	q.PushFront(types.BuildEvent(map[string]string{
-		"check":  "filecheck::existence",
-		"target": target,
-	}).SetTitleRule(tr).
+	q.PushFront(types.BuildEvent(labels).SetTitleRule(tr).
 		SetEventStatus(ins.Existence.Severity).
 		SetDescription(desc.String()))
 }
@@ -289,7 +293,7 @@ func (ins *Instance) checkMtime(q *safe.Queue[*types.Event], files []string) {
 	if len(matched) == 0 {
 		var okDesc strings.Builder
 		if ins.Mtime.Mode == "stale" {
-			okDesc.WriteString(fmt.Sprintf("all files updated within %s", timeSpan))
+			fmt.Fprintf(&okDesc, "all files updated within %s", timeSpan)
 		} else {
 			okDesc.WriteString("files not changed")
 		}
@@ -303,32 +307,34 @@ func (ins *Instance) checkMtime(q *safe.Queue[*types.Event], files []string) {
 		return
 	}
 
-	var desc strings.Builder
-	desc.WriteString("[MD]\n")
-	if ins.Mtime.Mode == "stale" {
-		desc.WriteString(fmt.Sprintf("%d files not updated for more than %s\n\n", len(matched), timeSpan))
-	} else {
-		desc.WriteString(fmt.Sprintf("%d files changed within %s\n\n", len(matched), timeSpan))
+	labels := map[string]string{
+		"check":                                "filecheck::mtime",
+		"target":                               target,
+		types.AttrPrefix + "matched_count":     fmt.Sprintf("%d", len(matched)),
+		types.AttrPrefix + "mode":              ins.Mtime.Mode,
+		types.AttrPrefix + "time_span":         timeSpan.String(),
 	}
-	desc.WriteString("| File | MTime |\n")
-	desc.WriteString("| :-- | --: |\n")
+
+	var desc strings.Builder
+	if ins.Mtime.Mode == "stale" {
+		fmt.Fprintf(&desc, "%d files not updated for more than %s:\n", len(matched), timeSpan)
+	} else {
+		fmt.Fprintf(&desc, "%d files changed within %s:\n", len(matched), timeSpan)
+	}
 	display := len(matched)
 	if display > maxDisplayFiles {
 		display = maxDisplayFiles
 	}
 	for i := 0; i < display; i++ {
-		desc.WriteString(fmt.Sprintf("| %s | %s |\n",
-			matched[i].path, matched[i].mtime.Format("2006-01-02 15:04:05")))
+		fmt.Fprintf(&desc, "  %s (%s)\n",
+			matched[i].path, matched[i].mtime.Format("2006-01-02 15:04:05"))
 	}
 	if len(matched) > maxDisplayFiles {
-		desc.WriteString(fmt.Sprintf("\n... and %d more files\n", len(matched)-maxDisplayFiles))
+		fmt.Fprintf(&desc, "  ... and %d more files\n", len(matched)-maxDisplayFiles)
 	}
 	appendAccessErrors(&desc, errs)
 
-	q.PushFront(types.BuildEvent(map[string]string{
-		"check":  "filecheck::mtime",
-		"target": target,
-	}).SetTitleRule(tr).
+	q.PushFront(types.BuildEvent(labels).SetTitleRule(tr).
 		SetEventStatus(ins.Mtime.Severity).
 		SetDescription(desc.String()))
 }
@@ -383,27 +389,27 @@ func (ins *Instance) checkChecksum(q *safe.Queue[*types.Event], files []string) 
 		return
 	}
 
+	labels := map[string]string{
+		"check":                                "filecheck::checksum",
+		"target":                               target,
+		types.AttrPrefix + "changed_count":     fmt.Sprintf("%d", len(changedFiles)),
+	}
+
 	var desc strings.Builder
-	desc.WriteString("[MD]\n")
-	desc.WriteString(fmt.Sprintf("%d file checksums changed:\n\n", len(changedFiles)))
-	desc.WriteString("| File | New SHA256 |\n")
-	desc.WriteString("| :-- | :-- |\n")
+	fmt.Fprintf(&desc, "%d file checksums changed:\n", len(changedFiles))
 	display := len(changedFiles)
 	if display > maxDisplayFiles {
 		display = maxDisplayFiles
 	}
 	for i := 0; i < display; i++ {
-		desc.WriteString(fmt.Sprintf("| %s | `%s...` |\n", changedFiles[i][0], changedFiles[i][1][:16]))
+		fmt.Fprintf(&desc, "  %s (sha256: %s...)\n", changedFiles[i][0], changedFiles[i][1][:16])
 	}
 	if len(changedFiles) > maxDisplayFiles {
-		desc.WriteString(fmt.Sprintf("\n... and %d more files\n", len(changedFiles)-maxDisplayFiles))
+		fmt.Fprintf(&desc, "  ... and %d more files\n", len(changedFiles)-maxDisplayFiles)
 	}
 	appendAccessErrors(&desc, errs)
 
-	q.PushFront(types.BuildEvent(map[string]string{
-		"check":  "filecheck::checksum",
-		"target": target,
-	}).SetTitleRule(tr).
+	q.PushFront(types.BuildEvent(labels).SetTitleRule(tr).
 		SetEventStatus(ins.Checksum.Severity).
 		SetDescription(desc.String()))
 }
@@ -428,15 +434,15 @@ func appendAccessErrors(desc *strings.Builder, errs []string) {
 	if len(errs) == 0 {
 		return
 	}
-	desc.WriteString(fmt.Sprintf("\n\n**%d files could not be accessed:**\n\n", len(errs)))
+	fmt.Fprintf(desc, "\n%d files could not be accessed:\n", len(errs))
 	display := len(errs)
 	if display > 5 {
 		display = 5
 	}
 	for i := 0; i < display; i++ {
-		desc.WriteString(fmt.Sprintf("- `%s`\n", errs[i]))
+		fmt.Fprintf(desc, "  %s\n", errs[i])
 	}
 	if len(errs) > 5 {
-		desc.WriteString(fmt.Sprintf("- ... and %d more\n", len(errs)-5))
+		fmt.Fprintf(desc, "  ... and %d more\n", len(errs)-5)
 	}
 }

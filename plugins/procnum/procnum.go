@@ -169,10 +169,8 @@ func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
 	}
 
 	if err != nil {
-		q.PushFront(ins.buildEvent(fmt.Sprintf(`[MD]
-- **target**: %s
-- **error**: %v
-`, ins.searchLabel, err)).SetEventStatus(types.EventStatusCritical))
+		q.PushFront(ins.newEvent().SetEventStatus(types.EventStatusCritical).
+			SetDescription(fmt.Sprintf("search error: %v", err)))
 		return
 	}
 
@@ -180,27 +178,44 @@ func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
 	logger.Logger.Debugw("search result", "target", ins.searchLabel, "pids", pids, "count", count)
 
 	pc := ins.ProcessCount
-	desc := ins.buildDesc(count)
+	event := ins.newEvent()
+	event.Labels[types.AttrPrefix+"process_count"] = fmt.Sprintf("%d", count)
+	if pc.WarnLt > 0 {
+		event.Labels[types.AttrPrefix+"warn_lt"] = fmt.Sprintf("%d", pc.WarnLt)
+	}
+	if pc.CriticalLt > 0 {
+		event.Labels[types.AttrPrefix+"critical_lt"] = fmt.Sprintf("%d", pc.CriticalLt)
+	}
+	if pc.WarnGt > 0 {
+		event.Labels[types.AttrPrefix+"warn_gt"] = fmt.Sprintf("%d", pc.WarnGt)
+	}
+	if pc.CriticalGt > 0 {
+		event.Labels[types.AttrPrefix+"critical_gt"] = fmt.Sprintf("%d", pc.CriticalGt)
+	}
 
 	if pc.CriticalLt > 0 && count < pc.CriticalLt {
-		q.PushFront(ins.buildEvent(desc).SetEventStatus(types.EventStatusCritical))
+		q.PushFront(event.SetEventStatus(types.EventStatusCritical).
+			SetDescription(fmt.Sprintf("process count %d < critical threshold %d", count, pc.CriticalLt)))
 		return
 	}
 	if pc.WarnLt > 0 && count < pc.WarnLt {
-		q.PushFront(ins.buildEvent(desc).SetEventStatus(types.EventStatusWarning))
+		q.PushFront(event.SetEventStatus(types.EventStatusWarning).
+			SetDescription(fmt.Sprintf("process count %d < warning threshold %d", count, pc.WarnLt)))
 		return
 	}
-
 	if pc.CriticalGt > 0 && count > pc.CriticalGt {
-		q.PushFront(ins.buildEvent(desc).SetEventStatus(types.EventStatusCritical))
+		q.PushFront(event.SetEventStatus(types.EventStatusCritical).
+			SetDescription(fmt.Sprintf("process count %d > critical threshold %d", count, pc.CriticalGt)))
 		return
 	}
 	if pc.WarnGt > 0 && count > pc.WarnGt {
-		q.PushFront(ins.buildEvent(desc).SetEventStatus(types.EventStatusWarning))
+		q.PushFront(event.SetEventStatus(types.EventStatusWarning).
+			SetDescription(fmt.Sprintf("process count %d > warning threshold %d", count, pc.WarnGt)))
 		return
 	}
 
-	q.PushFront(ins.buildEvent(desc))
+	event.SetDescription(fmt.Sprintf("process count %d, everything is ok", count))
+	q.PushFront(event)
 }
 
 // findProcesses enumerates all system processes and returns those matching
@@ -286,57 +301,31 @@ func (ins *Instance) winServicePIDs() ([]PID, error) {
 	return []PID{PID(pid)}, nil
 }
 
-func (ins *Instance) buildDesc(count int) string {
-	pc := ins.ProcessCount
-	var sb strings.Builder
-	sb.WriteString("[MD]\n")
-	fmt.Fprintf(&sb, "- **target**: %s\n", ins.searchLabel)
-	fmt.Fprintf(&sb, "- **process_count**: %d\n", count)
-
-	if pc.WarnLt > 0 {
-		fmt.Fprintf(&sb, "- **warn_lt**: %d\n", pc.WarnLt)
-	}
-	if pc.CriticalLt > 0 {
-		fmt.Fprintf(&sb, "- **critical_lt**: %d\n", pc.CriticalLt)
-	}
-	if pc.WarnGt > 0 {
-		fmt.Fprintf(&sb, "- **warn_gt**: %d\n", pc.WarnGt)
-	}
-	if pc.CriticalGt > 0 {
-		fmt.Fprintf(&sb, "- **critical_gt**: %d\n", pc.CriticalGt)
-	}
-
-	sb.WriteString("\n**search config**:\n")
-	if ins.SearchExecName != "" {
-		fmt.Fprintf(&sb, "- search_exec_name: %s\n", ins.SearchExecName)
-	}
-	if ins.SearchCmdline != "" {
-		fmt.Fprintf(&sb, "- search_cmdline: %s\n", ins.SearchCmdline)
-	}
-	if ins.SearchUser != "" {
-		fmt.Fprintf(&sb, "- search_user: %s\n", ins.SearchUser)
-	}
-	if ins.SearchPidFile != "" {
-		fmt.Fprintf(&sb, "- search_pid_file: %s\n", ins.SearchPidFile)
-	}
-	if ins.SearchWinService != "" {
-		fmt.Fprintf(&sb, "- search_win_service: %s\n", ins.SearchWinService)
-	}
-	return sb.String()
-}
-
-func (ins *Instance) buildEvent(desc ...string) *types.Event {
+func (ins *Instance) newEvent() *types.Event {
 	tr := ins.ProcessCount.TitleRule
 	if tr == "" {
 		tr = "[check] [target]"
 	}
 
-	event := types.BuildEvent(map[string]string{
+	labels := map[string]string{
 		"check":  "procnum::process_count",
 		"target": ins.searchLabel,
-	}).SetTitleRule(tr)
-	if len(desc) > 0 {
-		event.SetDescription(strings.Join(desc, "\n"))
 	}
-	return event
+	if ins.SearchExecName != "" {
+		labels[types.AttrPrefix+"search_exec_name"] = ins.SearchExecName
+	}
+	if ins.SearchCmdline != "" {
+		labels[types.AttrPrefix+"search_cmdline"] = ins.SearchCmdline
+	}
+	if ins.SearchUser != "" {
+		labels[types.AttrPrefix+"search_user"] = ins.SearchUser
+	}
+	if ins.SearchPidFile != "" {
+		labels[types.AttrPrefix+"search_pid_file"] = ins.SearchPidFile
+	}
+	if ins.SearchWinService != "" {
+		labels[types.AttrPrefix+"search_win_service"] = ins.SearchWinService
+	}
+
+	return types.BuildEvent(labels).SetTitleRule(tr)
 }

@@ -160,8 +160,9 @@ func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
 	}
 
 	e := types.BuildEvent(map[string]string{
-		"check":  "scriptfilter::match",
-		"target": ins.target,
+		"check":                        "scriptfilter::match",
+		"target":                       ins.target,
+		types.AttrPrefix + "command":   ins.Command,
 	}).SetTitleRule(tr)
 
 	if len(matched) == 0 {
@@ -169,12 +170,10 @@ func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
 		return
 	}
 
-	var desc bytes.Buffer
-	desc.WriteString("[MD]\n")
-	fmt.Fprintf(&desc, "- **target**: %s\n", ins.target)
-	fmt.Fprintf(&desc, "- **command**: `%s`\n", ins.Command)
-	desc.WriteString("\n**matched lines**:\n\n```\n")
+	e.Labels[types.AttrPrefix+"matched_count"] = fmt.Sprintf("%d", len(matched))
 
+	var desc strings.Builder
+	fmt.Fprintf(&desc, "matched %d lines:\n", len(matched))
 	for i, line := range matched {
 		if i >= ins.MaxLines {
 			break
@@ -182,11 +181,9 @@ func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
 		desc.WriteString(line)
 		desc.WriteByte('\n')
 	}
-
 	if len(matched) > ins.MaxLines {
 		fmt.Fprintf(&desc, "... and %d more lines\n", len(matched)-ins.MaxLines)
 	}
-	desc.WriteString("```")
 
 	e.SetEventStatus(ins.Match.Severity)
 	e.SetDescription(desc.String())
@@ -204,7 +201,7 @@ func (ins *Instance) buildErrorEvent(errMsg string) *types.Event {
 		"target": ins.target,
 	}).SetTitleRule(tr).
 		SetEventStatus(types.EventStatusCritical).
-		SetDescription(fmt.Sprintf("[MD]\n- **target**: %s\n- **error**: %s\n", ins.target, errMsg))
+		SetDescription(errMsg)
 }
 
 // splitLines splits output into non-empty lines.
