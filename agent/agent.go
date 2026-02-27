@@ -153,46 +153,29 @@ func (a *Agent) HandleChangedPlugin(names []string) {
 	for _, name := range names {
 		pc := a.GetPluginConfig(name)
 		if pc.Source != "file" {
-			// not supported
 			continue
 		}
 
-		mtime, err := getMTime(name)
+		mtime, content, err := readPluginDir(name)
 		if err != nil {
-			logger.Logger.Errorw("get mtime fail", "plugin", name, "error", err)
+			logger.Logger.Errorw("read plugin dir fail", "plugin", name, "error", err)
 			continue
 		}
 
-		if mtime == -1 {
-			// files deleted
+		if mtime == -1 || len(content) == 0 {
 			a.DelPlugin(name)
 			continue
 		}
 
 		if pc.Digest == fmt.Sprint(mtime) {
-			// not changed
 			continue
 		}
 
-		// configuration changed
-		// delete old plugin
 		a.DelPlugin(name)
-
-		bs, err := getFileContent(name)
-		if err != nil {
-			logger.Logger.Errorw("get file content fail", "plugin", name, "error", err)
-			continue
-		}
-
-		if bs == nil {
-			// files deleted
-			continue
-		}
-
 		a.LoadPlugin(name, &PluginConfig{
 			Source:      "file",
 			Digest:      fmt.Sprint(mtime),
-			FileContent: bs,
+			FileContent: content,
 		})
 	}
 }
@@ -222,34 +205,23 @@ func (a *Agent) HandleNewPlugin(names []string) {
 		name := dir[len("p."):]
 
 		if choice.Contains(name, names) {
-			// already running
 			continue
 		}
 
-		mtime, err := getMTime(name)
+		mtime, content, err := readPluginDir(name)
 		if err != nil {
-			logger.Logger.Errorw("get mtime fail", "error", err)
+			logger.Logger.Errorw("read plugin dir fail", "plugin", name, "error", err)
 			continue
 		}
 
-		if mtime == -1 {
-			continue
-		}
-
-		bs, err := getFileContent(name)
-		if err != nil {
-			logger.Logger.Errorw("get file content fail", "error", err)
-			continue
-		}
-
-		if bs == nil {
+		if mtime == -1 || len(content) == 0 {
 			continue
 		}
 
 		a.LoadPlugin(name, &PluginConfig{
 			Source:      "file",
 			Digest:      fmt.Sprint(mtime),
-			FileContent: bs,
+			FileContent: content,
 		})
 	}
 }

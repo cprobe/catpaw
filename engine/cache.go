@@ -6,6 +6,9 @@ import (
 	"github.com/cprobe/catpaw/types"
 )
 
+// 这里不需要定期清理，原因：
+// 1. 内存里的事件数量不大
+// 2. 有些事件就是很久才恢复，恢复的时候如果发现之前告警的事件已经被清理了，就无法生成恢复事件了
 type EventCache struct {
 	sync.RWMutex
 	records map[string]*types.Event

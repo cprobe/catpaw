@@ -23,58 +23,20 @@ func loadFileConfigs() (map[string]*PluginConfig, error) {
 			continue
 		}
 
-		// use this as map key
 		name := dir[len("p."):]
 
-		pluginDir := path.Join(config.Config.ConfigDir, dir)
-		files, err := file.FilesUnder(pluginDir)
+		mtime, content, err := readPluginDir(name)
 		if err != nil {
-			return nil, fmt.Errorf("failed to list files under %s: %v", pluginDir, err)
+			return nil, err
 		}
 
-		if len(files) == 0 {
-			continue
-		}
-
-		sort.Strings(files)
-
-		var maxmt int64
-		var bytes []byte
-		for i := 0; i < len(files); i++ {
-			if !strings.HasSuffix(files[i], ".toml") {
-				continue
-			}
-
-			filepath := path.Join(pluginDir, files[i])
-			mtime, err := file.FileMTime(filepath)
-			if err != nil {
-				return nil, fmt.Errorf("failed to get mtime of %s: %v", filepath, err)
-			}
-
-			if mtime > maxmt {
-				maxmt = mtime
-			}
-
-			if i > 0 {
-				bytes = append(bytes, '\n')
-				bytes = append(bytes, '\n')
-			}
-
-			bs, err := file.ReadBytes(filepath)
-			if err != nil {
-				return nil, fmt.Errorf("failed to read %s: %v", filepath, err)
-			}
-
-			bytes = append(bytes, bs...)
-		}
-
-		if len(bytes) == 0 {
+		if mtime == -1 || len(content) == 0 {
 			continue
 		}
 
 		ret[name] = &PluginConfig{
-			Digest:      fmt.Sprint(maxmt),
-			FileContent: bytes,
+			Digest:      fmt.Sprint(mtime),
+			FileContent: content,
 			Source:      "file",
 		}
 	}
@@ -82,72 +44,51 @@ func loadFileConfigs() (map[string]*PluginConfig, error) {
 	return ret, nil
 }
 
-// return -1 means no configuration files under plugin directory
-func getMTime(name string) (int64, error) {
+// readPluginDir reads all .toml files under conf.d/p.{name}/, returning
+// the max mtime and concatenated content. mtime == -1 means no .toml files found.
+func readPluginDir(name string) (int64, []byte, error) {
 	pluginDir := path.Join(config.Config.ConfigDir, "p."+name)
 
 	files, err := file.FilesUnder(pluginDir)
 	if err != nil {
-		return 0, fmt.Errorf("failed to list files under %s: %v", pluginDir, err)
+		return 0, nil, fmt.Errorf("failed to list files under %s: %v", pluginDir, err)
 	}
 
+	sort.Strings(files)
+
 	var maxmt int64 = -1
-	for i := 0; i < len(files); i++ {
-		if !strings.HasSuffix(files[i], ".toml") {
+	var content []byte
+	var tomlCount int
+
+	for _, f := range files {
+		if !strings.HasSuffix(f, ".toml") {
 			continue
 		}
 
-		filepath := path.Join(pluginDir, files[i])
-		mtime, err := file.FileMTime(filepath)
+		fp := path.Join(pluginDir, f)
+		mtime, err := file.FileMTime(fp)
 		if err != nil {
-			return 0, fmt.Errorf("failed to get mtime of %s: %v", filepath, err)
+			return 0, nil, fmt.Errorf("failed to get mtime of %s: %v", fp, err)
 		}
 
 		if mtime > maxmt {
 			maxmt = mtime
 		}
-	}
 
-	return maxmt, nil
-}
-
-// get plugin configuration file content
-func getFileContent(name string) ([]byte, error) {
-	pluginDir := path.Join(config.Config.ConfigDir, "p."+name)
-
-	files, err := file.FilesUnder(pluginDir)
-	if err != nil {
-		return nil, fmt.Errorf("failed to list files under %s: %v", pluginDir, err)
-	}
-
-	if len(files) == 0 {
-		return nil, nil
-	}
-
-	sort.Strings(files)
-
-	var bytes []byte
-	for i := 0; i < len(files); i++ {
-		if !strings.HasSuffix(files[i], ".toml") {
-			continue
+		if tomlCount > 0 {
+			content = append(content, '\n', '\n')
 		}
 
-		filepath := path.Join(pluginDir, files[i])
-
-		if i > 0 {
-			bytes = append(bytes, '\n')
-			bytes = append(bytes, '\n')
-		}
-
-		bs, err := file.ReadBytes(filepath)
+		bs, err := file.ReadBytes(fp)
 		if err != nil {
-			return nil, fmt.Errorf("failed to read %s: %v", filepath, err)
+			return 0, nil, fmt.Errorf("failed to read %s: %v", fp, err)
 		}
 
-		bytes = append(bytes, bs...)
+		content = append(content, bs...)
+		tomlCount++
 	}
 
-	return bytes, nil
+	return maxmt, content, nil
 }
 
 func parseFilter(filterStr string) map[string]struct{} {
