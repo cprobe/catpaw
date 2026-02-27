@@ -1,70 +1,64 @@
 # catpaw
 
-这是一个极为轻量的事件监控系统，用于探测一些异常事件并生成告警。通常和 Flashduty 协同使用（当然，你也可以写个接收事件的小服务来做告警分发），catpaw 负责产生事件，Flashduty 负责发送事件。
+catpaw 是一个轻量的事件监控工具：负责探测异常并产出标准事件。  
+它通常与 Flashduty 配合使用（catpaw 产出事件，Flashduty 负责告警分发），也可以对接你自己的事件接收服务。
 
-## 插件简介
+## 核心特点
 
-catpaw 是插件机制，提供了不同功能的插件用于不同的监控场景。
+- 轻量无重依赖，部署简单
+- 插件化架构，按需启用
+- 配置直观，适合“快速补监控”
+- 适合监控系统自监控，避免循环依赖
 
-### exec
+## 插件列表
 
-自定义脚本执行的插件。脚本用什么语言写都可以，只要按照规定的格式输出即可。
+当前内置插件如下（与代码保持一致）：
 
-### filechange
+- `disk`：磁盘空间、inode、可写性检查
+- `exec`：执行脚本/命令并按约定输出产生事件
+- `filecheck`：文件存在性、mtime、checksum、大小等检查
+- `http`：HTTP 可用性、状态码、内容匹配检查
+- `journaltail`：通过 `journalctl` 增量读取日志并匹配关键行
+- `net`：TCP/UDP 连通性与响应能力检查
+- `ping`：ICMP 可达性、丢包率、时延检查
+- `procnum`：进程数量检查（支持多种查找方式）
+- `scriptfilter`：执行脚本并按输出行过滤匹配告警
 
-监控近期是否有文件发生变化，比如 `/etc/shadow` 等重要文件。
+## 典型场景
 
-### http
-
-监控 HTTP URL，检查返回的状态码和内容是否符合预期。
-
-### journaltail
-
-使用 journalctl 命令检查日志，如果日志里有关键字就产生事件。
-
-### mtime
-
-递归检查某个目录下的所有文件的 mtime，如果有文件在近期发生变化就产生事件。
-
-### net
-
-通过 tcp、udp 方式探测远端端口是否可用。
-
-### ping
-
-通过 icmp 方式探测远端主机是否可用。
-
-### procnum
-
-检查某个进程的数量，如果数量不够（通常是进程挂了）就产生事件。
-
-### scriptfilter
-
-执行脚本，检查输出，只要输出中包含关键字就产生事件。
-
-## 使用场景
-
-- 不想引入大型监控系统，不想有太多依赖，就想对一些重要的事情做一些简单的监控。
-- 监控系统的自监控。为了避免循环依赖，对监控系统做监控，通常需要另一个系统，catpaw 轻量，合适。
-- 对一些日志、字符串、事件文本做监控，直接读取匹配了关键字就告警。
+- 不想引入大型监控系统，但需要可靠地覆盖关键风险点
+- 对现有监控系统做“旁路自监控”，降低单点失效风险
+- 对日志、命令输出、文本事件做快速匹配告警
 
 ## 安装
 
-从 [github releases](https://github.com/cprobe/catpaw/releases) 页面下载编译好的二进制。
+从 [GitHub Releases](https://github.com/cprobe/catpaw/releases) 下载对应平台的二进制。
 
-## 使用
+## 快速开始
 
-首先你需要注册一个 Flashduty 账号。
+1. 准备配置目录（默认使用 `conf.d`）
+2. 在 `conf.d/config.toml` 配置全局参数与 `flashduty.url`
+3. 在 `conf.d/p.<plugin>/` 下启用你需要的插件配置（例如 `conf.d/p.http/`）
+4. 启动 catpaw
 
-- [Flashduty产品介绍](https://flashcat.cloud/product/flashduty/)
-- [Flashduty免费注册](https://console.flashcat.cloud/)
+可通过 `./catpaw --help` 查看可用参数。
 
-然后在集成中心创建一个“标准告警事件”的集成，随便起个名字，保存，就可以得到一个 webhook 地址。如果搞不定，Flashduty 页面右上角有较为详细的文档和视频教程。
+## 对接 Flashduty（推荐）
 
-把 webhook 地址配置到 catpaw 的配置文件中：`conf.d/config.toml`，配置到 flashduty 下面的 url 字段。然后，就可以启动 catpaw 玩耍了。catpaw 有几个命令行参数，通过 `./catpaw --help` 可以看到。
+先注册 Flashduty：
 
-当然了，具体要监控什么，需要去修改各个插件的配置，每个插件的配置文件在 `conf.d` 目录下，比如 `conf.d/p.http` 就是 http 插件的配置文件。里边有详尽的注释。
+- [Flashduty 产品介绍](https://flashcat.cloud/product/flashduty/)
+- [Flashduty 免费注册](https://console.flashcat.cloud/)
+
+然后在 Flashduty 集成中心创建“标准告警事件”集成，获取 webhook，填入 `conf.d/config.toml` 的 `flashduty.url` 字段。
+
+## 配置说明
+
+- 每个插件都有独立配置目录：`conf.d/p.<plugin>/`
+- 每个目录下可放置一个或多个 `.toml` 文件
+- 示例：`conf.d/p.http/`、`conf.d/p.procnum/`、`conf.d/p.scriptfilter/`
+- 插件示例配置文件内都带有详细注释，建议从示例改起
 
 ## 交流
 
-可以加我微信：`picobyte` 进群交流。备注 `catpaw`。
+可加微信 `picobyte` 进群交流，备注 `catpaw`。
