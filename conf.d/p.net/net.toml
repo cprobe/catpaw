@@ -1,36 +1,45 @@
 [[partials]]
+## ===== 最小可用示例（30 秒跑起来）=====
+## 1) 在 instances.targets 里填 host:port
+## 2) protocol 默认 tcp；如果是 udp，建议配 send + expect
+## 例子：
+## targets = ["127.0.0.1:22", "10.0.0.8:6379"]
+## # protocol = "udp"
+## # send = "ping"
+## # expect = "pong"
+## 常见误区：
+## - UDP 不配置 send/expect 时，通常只能判断“端口可达”，难以判断“服务可用”
+## - read_timeout 只有配置 expect 时才生效
+## - targets 必须是 host:port 形式
+
 id = "default"
 
-# # Concurrent requests to make per instance
+## 每个 instance 并发探测数
 # concurrency = 10
 
-## Set connect timeout (default 1s)
+## 连接超时（默认 1s）
 # timeout = "1s"
 
-## Set read timeout (only used if expecting a response)
+## 读超时（只有配置了 expect 时才有意义）
 # read_timeout = "1s"
 
-## Protocol, must be "tcp" or "udp"
-## NOTE: because the "udp" protocol does not respond to requests, it requires
-## a send/expect string pair (see below).
+## 协议类型：必须是 "tcp" 或 "udp"
+## 注意：UDP 天然无连接，通常需要配 send/expect 才能判断服务是否正常
 # protocol = "tcp"
 
-## The following options are required for UDP checks. For TCP, they are
-## optional. The plugin will send the given string to the server and then
-## expect to receive the given 'expect' string back.
-## string sent to the server
+## 发送内容（UDP 建议必配；TCP 可选）
 # send = "ssh"
-## expected string in answer
+## 期望返回内容（与 send 配合使用）
 # expect = "ssh"
 
-## Connectivity check (always enabled, defaults to Critical)
-## check label auto-set to "net::connectivity"
+## 连通性检测（默认启用，默认 Critical）
+## check 标签固定为 "net::connectivity"
 [partials.connectivity]
 severity = "Critical"
 # title_rule = "[check] [target]"
 
-## Response time check (disabled if both thresholds are 0)
-## check label auto-set to "net::response_time"
+## 响应时间检测（warn_ge 和 critical_ge 都为 0 则关闭）
+## check 标签固定为 "net::response_time"
 # [partials.response_time]
 # warn_ge = "200ms"
 # critical_ge = "1s"
@@ -38,6 +47,7 @@ severity = "Critical"
 
 
 [[instances]]
+## 目标地址列表，格式 host:port
 targets = [
 #     "127.0.0.1:22",
 #     "localhost:6379",
@@ -46,10 +56,10 @@ targets = [
 
 partial = "default"
 
-# # gather interval
+## 采集间隔
 # interval = "30s"
 
-# # Optional append labels
+## 追加标签（可选）
 # labels = { env="production", team="devops" }
 
 # 不常用的配置，默认值都是 false

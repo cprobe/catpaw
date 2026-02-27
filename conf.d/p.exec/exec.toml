@@ -1,46 +1,56 @@
-# ========== JSON mode (default) ==========
-# Script must output a JSON array of events to stdout:
-# [
-#     {
-#         "event_status": "Warning",
-#         "labels": { "check": "oom killed" },
-#         "title_rule": "[check]",
-#         "description": "kernel: Out of memory: Kill process 9163 (mysqld)"
-#     }
-# ]
-#
-# ========== Nagios mode ==========
-# Compatible with all Nagios/Monitoring plugins.
-# Exit code determines status: 0=OK, 1=Warning, 2=Critical, other=Critical
-# Stdout format: STATUS TEXT | perfdata\nlong text
-#
-# Example:
-#   mode = "nagios"
-#   commands = ["/usr/lib/nagios/plugins/check_load -w 5,4,3 -c 10,8,6"]
+## exec 插件用于“直接执行命令/脚本，并把结果转成事件”
+## ===== 最小可用示例（30 秒跑起来）=====
+## 1) 取消 commands 中一条命令注释并改成你的脚本
+## 2) 默认 mode=json，脚本需要输出 JSON 事件数组
+## 3) 如果脚本是 Nagios 风格，设置 mode="nagios"
+## 常见误区：
+## - json 模式下输出不是合法 JSON 数组：该条命令会失败
+## - commands 留空：插件不会执行任何检查
+## - nagios 模式下脚本输出格式不规范，会导致解析结果不符合预期
+##
+## 支持两种模式：
+## 1) json（默认）：脚本输出 JSON 事件数组
+##    示例：
+##    [
+##      {
+##        "event_status": "Warning",
+##        "labels": { "check": "oom killed" },
+##        "title_rule": "[check]",
+##        "description": "kernel: Out of memory: Kill process 9163 (mysqld)"
+##      }
+##    ]
+##
+## 2) nagios：兼容 Nagios 插件输出
+##    退出码映射：0=OK, 1=Warning, 2=Critical, 其他=Critical
+##    stdout 格式：STATUS TEXT | perfdata\nlong text
+##    示例：
+##      mode = "nagios"
+##      commands = ["/usr/lib/nagios/plugins/check_load -w 5,4,3 -c 10,8,6"]
 
 [[instances]]
-# commands, support glob
+## 要执行的命令列表（支持 glob）
+## 每条命令独立执行，任一命令异常会产生对应事件
 commands = [
-    # "/opt/catpaw/scripts/*.sh"
-    # "/usr/lib/nagios/plugins/check_load -w 5,4,3 -c 10,8,6"
+    # "/opt/catpaw/scripts/*.sh",
+    # "/usr/lib/nagios/plugins/check_load -w 5,4,3 -c 10,8,6",
 ]
 
-## Execution mode: "json" (default) or "nagios"
+## 执行模式："json"（默认）或 "nagios"
 # mode = "json"
 
-## Script timeout
+## 单条命令超时
 # timeout = "10s"
 
-## Max concurrent script executions
+## 最大并发执行数
 # concurrency = 5
 
-## Environment variables passed to scripts
+## 传递给命令的环境变量
 # env_vars = { DB_HOST = "10.0.0.1", DB_PORT = "3306" }
 
-## Gather interval
+## 采集间隔
 # interval = "30s"
 
-## Optional append labels
+## 追加标签（可选）
 # labels = { env="production", team="devops" }
 
 # 不常用的配置，默认值都是 false

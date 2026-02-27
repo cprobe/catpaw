@@ -1,27 +1,43 @@
 ## 一个 instance = 一组 filter + 一个 severity
 ## 需要不同严重级别？配多个 instance 即可
+## ===== 最小可用示例（30 秒跑起来）=====
+## 1) filter_include 填你的关键字（支持 glob + /regex/）
+## 2) severity 设为 Warning 或 Critical
+## 3) Linux 上直接生效（依赖 journalctl）
+## 例子：
+## filter_include = ["*Out of memory*", "/(?i)panic|segfault/"]
+## [instances.match]
+## severity = "Warning"
+## 常见误区：
+## - 仅支持 Linux（依赖 journalctl）
+## - filter_include 不能为空
+## - 一条 include 规则写成 /.../ 才是正则，否则按 glob 处理
 
 ## 示例1：常规异常日志 → Warning
 [[instances]]
-## journalctl native pre-filters (applied at the journal engine level, very efficient)
-## units: filter by systemd unit names (can specify multiple)
+## journalctl 原生预过滤（性能最好，优先推荐）
+## units：按 systemd 单元名过滤（可多个）
 # units = ["nginx", "sshd", "docker"]
 
-## priority: filter by message priority or range
-##   single: "err", range: "emerg..err", numeric: "0..3"
+## priority：按日志级别过滤
+##   单值："err"
+##   范围："emerg..err"
+##   数字："0..3"
 # priority = "emerg..err"
 
-## Line-level filtering (applied to each journal line after native pre-filtering)
-## Glob and regex patterns can be mixed in the same list (OR logic: any match triggers).
-## Patterns wrapped in / are treated as regex, e.g. "/(?i)oom|segfault/"
-## Other patterns are treated as glob, e.g. "*Out of memory*"
+## 行级过滤（在原生预过滤之后执行）
+## include 规则是 OR：任一规则命中即算匹配
+## 支持 glob + 正则混用：
+##   glob 示例：*Out of memory*
+##   正则示例：/(?i)oom|segfault/
 filter_include = ["*Out of memory*", "*nf_conntrack: table full*"]
+## exclude 为排除规则（优先级高于 include）
 # filter_exclude = ["*expected*"]
 
-## Maximum matched lines included in the alert description (default: 10)
+## 告警描述中最多展示多少条命中日志（默认 10）
 max_lines = 10
 
-## Timeout for journalctl command execution (default: 30s)
+## journalctl 执行超时（默认 30s）
 timeout = "30s"
 
 ## Gather interval

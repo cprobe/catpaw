@@ -1,36 +1,47 @@
-## filecheck plugin: monitors file mtime, checksum (SHA256), and existence
-## Replaces the old filechange and mtime plugins
+## filecheck：文件类监控插件（mtime / checksum / existence 三个维度）
+## ===== 最小可用示例（30 秒跑起来）=====
+## 1) 在 targets 填你关心的文件
+## 2) mtime 保持默认 changed 模式（检测近期被改动）
+## 3) 如需“长时间没更新就告警”，把 mode 改成 stale
+## 例子：
+## targets = ["/etc/shadow", "/etc/passwd"]
+## [instances.mtime]
+## mode = "changed"
+## 常见误区：
+## - checksum 首次采集只建基线，不会立刻告警
+## - 目录递归 + 大量文件会增加开销，建议先缩小 targets 范围
+## - max_file_size 过小会导致大文件被跳过，误以为“没变化”
 
 [[instances]]
-## Targets support three forms:
-## - Exact path: "/etc/shadow"
-## - Glob pattern: "/etc/*.conf"
-## - Directory (recursive scan): "/opt/myapp/config/"
-## Max 10000 files after expansion; excess files are truncated with a warning
+## targets 支持三种写法：
+## 1) 精确路径："/etc/shadow"
+## 2) glob："/etc/*.conf"
+## 3) 目录："/opt/myapp/config/"（递归扫描）
+## 展开后最多监控 10000 个文件，超出会截断并告警提示
 targets = ["/etc/shadow", "/etc/passwd"]
 interval = "60s"
 
-## Dimension 1: mtime - monitors file modification time
-## mode = "changed" (default): alert if file modified within time_span (detect unexpected changes)
-## mode = "stale":  alert if file NOT modified within time_span (detect stale backups, broken pipelines)
-## check label: "filecheck::mtime", target label: targets joined by comma
+## 维度1：mtime（修改时间）
+## mode = "changed"（默认）：在 time_span 内被修改则告警（用于检测“被篡改/被改动”）
+## mode = "stale"：在 time_span 内未修改则告警（用于检测“任务停跑/文件过旧”）
+## check 标签固定为 "filecheck::mtime"
 [instances.mtime]
 severity = "Warning"
 mode = "changed"
 time_span = "3m"
 # title_rule = "[check] [target]"
 
-## Dimension 2: checksum - alert if file SHA256 changed since last check
-## First run stores baselines only; alerts start from the second run
-## max_file_size: files larger than this are skipped, default "50MB"
-## Supports: "512KB", "50MB", "1GB", etc.
+## 维度2：checksum（文件内容哈希）
+## 从第二次采集开始，若 SHA256 变化则告警
+## 首次采集只建立基线，不告警
+## max_file_size：超过该大小的文件跳过（默认 50MB）
 # [instances.checksum]
 # severity = "Critical"
 # max_file_size = "50MB"
 # title_rule = "[check] [target]"
 
-## Dimension 3: existence - alert if any target is missing or glob matches nothing
-## Also reports targets that exist but cannot be accessed (permission denied, etc.)
+## 维度3：existence（存在性）
+## 任一目标不存在、glob 无匹配，或文件无权限访问时告警
 # [instances.existence]
 # severity = "Critical"
 # title_rule = "[check] [target]"

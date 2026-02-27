@@ -1,15 +1,26 @@
 [[instances]]
-## Process search conditions (AND-combined, at least one required)
+## ===== 最小可用示例（30 秒跑起来）=====
+## 1) 用 search_exec_name 指定进程名
+## 2) process_count.critical_lt = 1 表示“找不到进程就 Critical”
+## 例子：
+## search_exec_name = "nginx"
+## [instances.process_count]
+## critical_lt = 1
+## 常见误区：
+## - search_pid_file / search_win_service 与其他 search_* 条件互斥
+## - search_win_service 仅 Windows 可用
+## - 阈值必须为非负数，且 warn/critical 需满足大小关系约束
+
+## 进程查找条件（以下三项是 AND 关系，至少配置一项）
+## 1) search_exec_name：按可执行文件名匹配（跨平台统一，取 basename）
+##    例如 "nginx" 可匹配 Linux 的 /usr/sbin/nginx、Windows 的 nginx.exe
+## 2) search_cmdline：按完整命令行做“包含匹配”
+##    例如 "myapp.jar" 可匹配 "java -jar myapp.jar -Xmx512m"
+## 3) search_user：按进程所属用户精确匹配
 ##
-## search_exec_name: match executable name (cross-platform, basename only)
-##   "nginx" matches /usr/sbin/nginx on Linux, nginx.exe on Windows
-## search_cmdline: match full command line (substring)
-##   "myapp.jar" matches "java -jar myapp.jar -Xmx512m"
-## search_user: filter by process owner (exact match, AND with above)
-##
-## Standalone modes (mutually exclusive with above):
-## search_pid_file: read PID from file, verify process is alive
-## search_win_service: query Windows service by name (Windows only)
+## 下面两种是“独立模式”，与上面三项互斥：
+## - search_pid_file：从 pid 文件读取 PID，并验证进程是否存活
+## - search_win_service：按 Windows 服务名查 PID（仅 Windows）
 
 search_exec_name = "nginx"
 # search_cmdline = ""
@@ -20,10 +31,11 @@ search_exec_name = "nginx"
 interval = "30s"
 
 ## Process count thresholds (at least one required, non-negative)
-##   warn_lt / critical_lt — alert when count < threshold (daemon alive check)
-##     critical_lt has higher priority; warn_lt must be >= critical_lt
-##   warn_gt / critical_gt — alert when count > threshold (process leak check)
-##     critical_gt has higher priority; warn_gt must be <= critical_gt
+## 进程数量阈值（至少配一项，且必须 >= 0）
+## - warn_lt / critical_lt：数量“小于阈值”时告警（常用于守护进程存活检查）
+##   优先级：critical_lt 高于 warn_lt，且 warn_lt 必须 >= critical_lt
+## - warn_gt / critical_gt：数量“大于阈值”时告警（常用于进程泄漏检测）
+##   优先级：critical_gt 高于 warn_gt，且 warn_gt 必须 <= critical_gt
 [instances.process_count]
 critical_lt = 1
 # warn_lt = 1

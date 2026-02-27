@@ -1,37 +1,47 @@
 [[partials]]
+## ===== 最小可用示例（30 秒跑起来）=====
+## 1) 在 instances.targets 里填你的 URL
+## 2) 保持 connectivity 开启（默认 Critical）
+## 3) 可选开启 status_code / response_body 做内容级校验
+## 例子：
+## targets = ["https://example.com/healthz"]
+## [instances.status_code]
+## expect = ["20*"]
+
 id = "default"
 
-# # Concurrent requests to make per instance
+## 每个 instance 的并发请求数
 # concurrency = 10
 
-## Set http_proxy (catpaw uses the system wide proxy settings if it's is not set)
+## HTTP 代理（不填则使用系统代理）
 # http_proxy = "http://localhost:8888"
 
-## Interface to use when dialing an address
+## 指定发起请求的网卡
 # interface = "eth0"
 
-## HTTP Request Method
+## HTTP 方法
 # method = "GET"
 
-## Set timeout (default 5 seconds)
+## 请求超时（默认 5s）
 # timeout = "5s"
 
-## Whether to follow redirects from the server (defaults to false)
+## 是否跟随重定向（默认 false）
 # follow_redirects = false
 
-## Optional HTTP Basic Auth Credentials
+## Basic Auth（可选）
 # basic_auth_user = "username"
 # basic_auth_pass = "pa$$word"
 
-## Optional headers
+## 自定义请求头（键值交替书写）
 # headers = ["Header-Key-1", "Header-Value-1", "Header-Key-2", "Header-Value-2"]
 
-## Optional HTTP Request Body
+## 请求体（可选，常用于 POST/PUT）
 # payload = '''
 # {'fake':'data'}
 # '''
 
 [[instances]]
+## 目标 URL 列表
 targets = [
     # "https://baidu.com",
     # "http://127.0.0.1:8888/request",
@@ -39,45 +49,45 @@ targets = [
 
 partial = "default"
 
-# # gather interval
+## 采集间隔
 # interval = "30s"
 
-# # Optional append labels
+## 追加标签（可选）
 # labels = { env="production", team="devops" }
 
-## Optional TLS Config (use_tls is auto-detected from https:// targets)
+## TLS 可选配置（https 目标会自动启用 TLS）
 # tls_ca = "/etc/catpaw/ca.pem"
 # tls_cert = "/etc/catpaw/cert.pem"
 # tls_key = "/etc/catpaw/key.pem"
-## Skip TLS certificate chain & host verification
+## 是否跳过证书链和主机名校验（生产环境慎用）
 # insecure_skip_verify = false
 
-## Connectivity check (always enabled, defaults to Critical)
-## check label auto-set to "http::connectivity"
+## 连通性检测（默认启用，默认 Critical）
+## check 标签固定为 "http::connectivity"
 [instances.connectivity]
 severity = "Critical"
 # title_rule = "[check] [target]"
 
-## Response time check (disabled if both thresholds are 0)
+## 响应时间检测（warn_ge 和 critical_ge 都为 0 则关闭）
 # [instances.response_time]
 # warn_ge = "500ms"
 # critical_ge = "2s"
 # title_rule = "[check] [target]"
 
-## TLS cert expiry check (disabled if both thresholds are 0, HTTPS only)
+## 证书过期检测（仅 HTTPS 生效，两个阈值都为 0 则关闭）
 [instances.cert_expiry]
 warn_within = "72h"
 critical_within = "24h"
 # title_rule = "[check] [target]"
 
-## HTTP status code check (disabled if expect is empty)
+## 状态码检测（expect 为空则关闭）
 [instances.status_code]
 expect = ["20*", "30*"]
 severity = "Warning"
 # title_rule = "[check] [target]"
 
-## HTTP response body check (disabled if both expect_substring and expect_regex are empty)
-## expect_substring and expect_regex are mutually exclusive
+## 响应体检测（expect_substring 和 expect_regex 不能同时配置）
+## 两者都为空则关闭
 [instances.response_body]
 expect_substring = "html"
 # expect_regex = "<title>.+</title>"

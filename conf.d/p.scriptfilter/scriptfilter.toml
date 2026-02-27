@@ -1,27 +1,45 @@
 [[instances]]
-## Command to execute. Its stdout will be filtered line by line.
-## e.g. /path/to/scriptfilter-scripts/system-health.sh
-## Must not be empty or whitespace-only.
+## ===== 最小可用示例（30 秒跑起来）=====
+## 1) 把 command 改成你的脚本路径
+## 2) 把 filter_include 改成你关心的关键词
+## 3) 启动后，脚本输出命中关键词就会产生 Warning 事件
+##
+## 例子：
+## command = "/opt/catpaw/scripts/check-log.sh"
+## filter_include = ["*ERROR*", "/(?i)panic|fatal/"]
+##
+## 常见误区：
+## - 只配置 filter_exclude、不配置 filter_include：不允许，启动会报错
+## - 正则必须写成 /.../ 形式；否则按 glob 处理
+## - command 非零退出码不一定是错误：只要 stdout 有命中，仍会产生匹配事件
+
+## 要执行的命令（必填）
+## catpaw 会逐行读取命令的 stdout，并按 filter_include/filter_exclude 做匹配
+## 例如："/opt/catpaw/scripts/system-health.sh"
+## 注意：不能是空字符串，也不能只写空格
 command = ""
 
-## Script execution timeout (default: 10s, must be >= 0)
+## 命令超时时间（默认 10s，必须 >= 0）
 timeout = "10s"
 
-## Line-level filtering (applied to each output line)
-## Glob and regex patterns can be mixed in the same list (OR logic: any match triggers).
-## Patterns wrapped in / are treated as regex, e.g. "/(?i)error|critical/"
-## Other patterns are treated as glob, e.g. "*WARNING*"
+## 行过滤规则（核心配置）
+## 规则之间是 OR：任意一条命中就算匹配
+## 支持两种写法混用：
+##   1) glob：如 "*WARNING*"
+##   2) 正则：用 /.../ 包裹，如 "/(?i)error|critical/"
 filter_include = ["*WARNING*", "*CRITICAL*"]
+## 排除规则（可选），优先级高于 include
 # filter_exclude = ["*expected*"]
 
-## Maximum matched lines in alert description (default: 10)
+## 告警描述里最多展示多少条命中行（默认 10）
 # max_lines = 10
 
-## Gather interval
+## 采集间隔
 interval = "30s"
 
-## check label auto-set to "scriptfilter::match"
-## target label auto-set to command basename (e.g. "health.sh")
+## 匹配到内容后的事件级别
+## check 标签固定为 "scriptfilter::match"
+## target 标签自动取命令 basename（例如 "health.sh"）
 [instances.match]
 severity = "Warning"
 # title_rule = "[check] [target]"

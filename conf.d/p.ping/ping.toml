@@ -1,63 +1,71 @@
 [[partials]]
+## ===== 最小可用示例（30 秒跑起来）=====
+## 1) 在 instances.targets 里填主机/IP
+## 2) connectivity 默认启用（不可达即 Critical）
+## 3) packet_loss 默认已配置告警阈值
+## 例子：
+## targets = ["127.0.0.1", "8.8.8.8"]
+## 常见误区：
+## - ping_interval 最小 200ms，设得更小通常无效或报错
+## - 部分环境禁用 ICMP，可能导致“网络通但 ping 不通”
+
 id = "default"
 
-# # Concurrent requests to make per instance
+## 每个 instance 并发探测数
 # concurrency = 10
 
-## Number of ping packets to send per interval.  Corresponds to the "-c"
-## option of the ping command.
+## 每次采集发送的 ping 包数量（等价 ping -c）
 # count = 3
 
-## Time to wait between sending ping packets. Operates like the "-i" option
-## of the ping command. Minimum 200ms. Supports: "200ms", "1s", or float seconds (0.2)
+## 包间隔（等价 ping -i），最小 200ms
+## 支持 "200ms"、"1s" 等
 # ping_interval = "200ms"
 
-## If set, the time to wait for a ping response. Operates like the "-W"
-## option of the ping command. Supports: "2s", "500ms", or float seconds (2.0)
+## 单包等待超时（等价 ping -W）
 # timeout = "3s"
 
-## Interface or source address to send ping from.  Operates like the -I or -S
-## option of the ping command.
+## 指定源网卡/源地址（等价 ping -I / -S）
 # interface = ""
 
-## Use only IPv6 addresses when resolving a hostname.
+## 仅使用 IPv6 解析
 # ipv6 = false
 
-## Number of data bytes to be sent. Corresponds to the "-s"
-## option of the ping command.
+## 报文 payload 大小（等价 ping -s）
 # size = 56
 
-## Connectivity check (always enabled, defaults to Critical)
-## check label auto-set to "ping::connectivity"
+## 连通性检测（默认启用，默认 Critical）
+## check 标签固定为 "ping::connectivity"
 [partials.connectivity]
 severity = "Critical"
 # title_rule = "[check] [target]"
 
-## Packet loss check (disabled if both thresholds are 0)
-## check label auto-set to "ping::packet_loss"
+## 丢包率检测（warn_ge 和 critical_ge 都为 0 则关闭）
+## 单位是百分比（0~100）
+## check 标签固定为 "ping::packet_loss"
 [partials.packet_loss]
 warn_ge = 1.0
 critical_ge = 50.0
 # title_rule = "[check] [target]"
 
-## Average RTT check (disabled if both thresholds are 0)
-## check label auto-set to "ping::rtt"
+## 平均 RTT 检测（warn_ge 和 critical_ge 都为 0 则关闭）
+## check 标签固定为 "ping::rtt"
 # [partials.rtt]
 # warn_ge = "100ms"
 # critical_ge = "500ms"
 # title_rule = "[check] [target]"
 
 [[instances]]
+## 目标主机列表（IP 或域名）
 targets = [
 #    "127.0.0.1",
 ]
 
 partial = "default"
 
-# # gather interval
+## 采集间隔
 # interval = "30s"
 
-# # Optional append labels
+## 追加标签（可选）
 # labels = { env="production", team="devops" }
 
 # 不常用的配置，默认值都是 false
