@@ -22,7 +22,7 @@
 ## - search_pid_file：从 pid 文件读取 PID，并验证进程是否存活
 ## - search_win_service：按 Windows 服务名查 PID（仅 Windows）
 
-search_exec_name = "nginx"
+search_exec_name = "sshd"
 # search_cmdline = ""
 # search_user = ""
 # search_pid_file = ""
