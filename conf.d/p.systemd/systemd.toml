@@ -1,0 +1,33 @@
+[[instances]]
+## ===== 最小可用示例 =====
+## 填入要监控的 systemd unit 名称列表即可。
+## 不带后缀的名称会自动补 ".service"，如 "nginx" → "nginx.service"
+## 带后缀的名称保持原样，如 "my-backup.timer"
+
+units = ["sshd"]
+
+## 期望的 ActiveState，默认 "active"。
+## 注意：oneshot 类型的 service 执行完后变为 inactive，timer 在两次触发之间也是 inactive，
+## 如需监控这类 unit，请根据实际情况修改此值。
+# expected_active_state = "active"
+
+## systemctl 执行超时，默认 5s
+# timeout = 5
+
+## 并发检查数量，默认 5
+# concurrency = 5
+
+## 采集间隔，不配则继承全局 interval
+# interval = "30s"
+
+## 状态检查维度
+[instances.state]
+severity = "Critical"
+# title_rule = "[check] [target]"
+
+[instances.alerting]
+for_duration = 0
+repeat_interval = "5m"
+repeat_number = 3
+# disabled = false
+# disable_recovery_notification = false

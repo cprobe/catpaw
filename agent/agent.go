@@ -22,6 +22,7 @@ import (
 	_ "github.com/cprobe/catpaw/plugins/ping"
 	_ "github.com/cprobe/catpaw/plugins/procnum"
 	_ "github.com/cprobe/catpaw/plugins/scriptfilter"
+	_ "github.com/cprobe/catpaw/plugins/systemd"
 )
 
 type PluginConfig struct {
