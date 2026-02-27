@@ -1,0 +1,42 @@
+[[instances]]
+## ===== 最小可用示例 =====
+## 只需要配置 targets 即可开始监控 DNS 解析。
+
+## 要检查的域名列表（必填）
+targets = ["www.baidu.com"]
+
+## 自定义 DNS 服务器，留空则使用系统默认 DNS
+## 格式为 IP 或 IP:port，支持配置多个，按轮询方式使用
+# servers = ["8.8.8.8", "1.1.1.1"]
+
+## 预期解析到的 IP 列表（任一命中即视为正常）
+## 如不配置则不做 IP 匹配检查
+# expected_ips = ["1.2.3.4"]
+
+## DNS 查询超时，默认 5s
+# timeout = "5s"
+
+## 并发数，默认 10
+# concurrency = 10
+
+## 采集间隔，不配则继承全局 interval
+# interval = "60s"
+
+## 解析失败时的告警级别，默认 Critical
+[instances.resolution]
+severity = "Critical"
+# title_rule = "[check] [target]"
+
+## DNS 响应时间检查（可选）
+## 响应时间超过阈值时告警
+# [instances.response_time]
+# warn_ge = "200ms"
+# critical_ge = "1s"
+# title_rule = "[check] [target]"
+
+[instances.alerting]
+for_duration = 0
+repeat_interval = "5m"
+repeat_number = 3
+# disabled = false
+# disable_recovery_notification = false
