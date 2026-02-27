@@ -6,13 +6,17 @@
 ## - Exact path: "/etc/shadow"
 ## - Glob pattern: "/etc/*.conf"
 ## - Directory (recursive scan): "/opt/myapp/config/"
+## Max 10000 files after expansion; excess files are truncated with a warning
 targets = ["/etc/shadow", "/etc/passwd"]
 interval = "60s"
 
-## Dimension 1: mtime - alert if any file was modified within time_span
+## Dimension 1: mtime - monitors file modification time
+## mode = "changed" (default): alert if file modified within time_span (detect unexpected changes)
+## mode = "stale":  alert if file NOT modified within time_span (detect stale backups, broken pipelines)
 ## check label: "filecheck::mtime", target label: targets joined by comma
 [instances.mtime]
 severity = "Warning"
+mode = "changed"
 time_span = "3m"
 # title_rule = "[check] [target]"
 
@@ -26,6 +30,7 @@ time_span = "3m"
 # title_rule = "[check] [target]"
 
 ## Dimension 3: existence - alert if any target is missing or glob matches nothing
+## Also reports targets that exist but cannot be accessed (permission denied, etc.)
 # [instances.existence]
 # severity = "Critical"
 # title_rule = "[check] [target]"

@@ -3,6 +3,7 @@ package filecheck
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 	"io/fs"
@@ -21,10 +22,17 @@ import (
 
 const pluginName = "filecheck"
 
-const defaultMaxFileSize = 50 * config.MB
+const (
+	defaultMaxFileSize = 50 * config.MB
+	maxDisplayFiles    = 20
+	maxWalkFiles       = 10000
+)
+
+var errWalkLimitReached = errors.New("file limit reached")
 
 type MtimeCheck struct {
 	Severity  string          `toml:"severity"`
+	Mode      string          `toml:"mode"`
 	TimeSpan  config.Duration `toml:"time_span"`
 	TitleRule string          `toml:"title_rule"`
 }
@@ -79,8 +87,16 @@ func (ins *Instance) Init() error {
 		return fmt.Errorf("at least one check dimension (mtime/checksum/existence) must be configured")
 	}
 
-	if ins.Mtime.Severity != "" && ins.Mtime.TimeSpan == 0 {
-		ins.Mtime.TimeSpan = config.Duration(3 * time.Minute)
+	if ins.Mtime.Severity != "" {
+		if ins.Mtime.TimeSpan == 0 {
+			ins.Mtime.TimeSpan = config.Duration(3 * time.Minute)
+		}
+		if ins.Mtime.Mode == "" {
+			ins.Mtime.Mode = "changed"
+		}
+		if ins.Mtime.Mode != "changed" && ins.Mtime.Mode != "stale" {
+			return fmt.Errorf("mtime mode must be 'changed' or 'stale', got '%s'", ins.Mtime.Mode)
+		}
 	}
 
 	if ins.Checksum.Severity != "" && ins.Checksum.MaxFileSize == 0 {
@@ -91,10 +107,10 @@ func (ins *Instance) Init() error {
 }
 
 func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
-	resolvedFiles, missingTargets := ins.resolveTargets()
+	resolvedFiles, missingTargets, accessErrors := ins.resolveTargets()
 
 	if ins.Existence.Severity != "" {
-		ins.checkExistence(q, missingTargets)
+		ins.checkExistence(q, missingTargets, accessErrors)
 	}
 
 	if ins.Mtime.Severity != "" {
@@ -107,12 +123,27 @@ func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
 }
 
 // resolveTargets expands all targets to concrete file paths.
-// Supports exact paths, glob patterns, and directories (recursive walk).
-// Returns deduplicated resolved files and targets that could not be found.
-func (ins *Instance) resolveTargets() (files []string, missing []string) {
+// Tries exact path first (handles Windows paths containing '['),
+// then falls back to glob. Distinguishes missing targets from access errors.
+func (ins *Instance) resolveTargets() (files []string, missing []string, accessErrors []string) {
 	seen := make(map[string]struct{})
 
 	for _, target := range ins.Targets {
+		fi, statErr := os.Stat(target)
+		if statErr == nil {
+			if fi.IsDir() {
+				walkDir(target, &files, seen)
+			} else {
+				addUnique(target, &files, seen)
+			}
+			continue
+		}
+
+		if !os.IsNotExist(statErr) {
+			accessErrors = append(accessErrors, fmt.Sprintf("%s: %v", target, statErr))
+			continue
+		}
+
 		if strings.ContainsAny(target, "*?[") {
 			matches, err := filepath.Glob(target)
 			if err != nil {
@@ -127,22 +158,23 @@ func (ins *Instance) resolveTargets() (files []string, missing []string) {
 				collectPath(m, &files, seen)
 			}
 		} else {
-			fi, err := os.Stat(target)
-			if err != nil {
-				missing = append(missing, target)
-				continue
-			}
-			if fi.IsDir() {
-				walkDir(target, &files, seen)
-			} else {
-				addUnique(target, &files, seen)
-			}
+			missing = append(missing, target)
 		}
 	}
+
+	if len(files) > maxWalkFiles {
+		logger.Logger.Warnw("resolved file count exceeds limit, truncating",
+			"total", len(files), "limit", maxWalkFiles)
+		files = files[:maxWalkFiles]
+	}
+
 	return
 }
 
 func collectPath(path string, files *[]string, seen map[string]struct{}) {
+	if len(*files) >= maxWalkFiles {
+		return
+	}
 	fi, err := os.Stat(path)
 	if err != nil {
 		return
@@ -158,6 +190,9 @@ func walkDir(dir string, files *[]string, seen map[string]struct{}) {
 	_ = filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
 		if err != nil || d.IsDir() {
 			return nil
+		}
+		if len(*files) >= maxWalkFiles {
+			return errWalkLimitReached
 		}
 		addUnique(path, files, seen)
 		return nil
@@ -177,14 +212,14 @@ func (ins *Instance) targetLabel() string {
 
 // --- Existence dimension ---
 
-func (ins *Instance) checkExistence(q *safe.Queue[*types.Event], missing []string) {
+func (ins *Instance) checkExistence(q *safe.Queue[*types.Event], missing []string, accessErrors []string) {
 	target := ins.targetLabel()
 	tr := ins.Existence.TitleRule
 	if tr == "" {
 		tr = "[check] [target]"
 	}
 
-	if len(missing) == 0 {
+	if len(missing) == 0 && len(accessErrors) == 0 {
 		q.PushFront(types.BuildEvent(map[string]string{
 			"check":  "filecheck::existence",
 			"target": target,
@@ -196,10 +231,13 @@ func (ins *Instance) checkExistence(q *safe.Queue[*types.Event], missing []strin
 
 	var desc strings.Builder
 	desc.WriteString("[MD]\n")
-	desc.WriteString("Missing targets:\n\n")
-	for _, m := range missing {
-		desc.WriteString(fmt.Sprintf("- `%s`\n", m))
+	if len(missing) > 0 {
+		desc.WriteString("Missing targets:\n\n")
+		for _, m := range missing {
+			desc.WriteString(fmt.Sprintf("- `%s`\n", m))
+		}
 	}
+	appendAccessErrors(&desc, accessErrors)
 
 	q.PushFront(types.BuildEvent(map[string]string{
 		"check":  "filecheck::existence",
@@ -211,17 +249,34 @@ func (ins *Instance) checkExistence(q *safe.Queue[*types.Event], missing []strin
 
 // --- Mtime dimension ---
 
+type mtimeEntry struct {
+	path  string
+	mtime time.Time
+}
+
 func (ins *Instance) checkMtime(q *safe.Queue[*types.Event], files []string) {
 	now := time.Now()
-	changed := make(map[string]time.Time)
+	timeSpan := time.Duration(ins.Mtime.TimeSpan)
+	var matched []mtimeEntry
+	var errs []string
 
 	for _, fp := range files {
 		fi, err := os.Stat(fp)
 		if err != nil {
+			errs = append(errs, fmt.Sprintf("%s: %v", fp, err))
 			continue
 		}
-		if now.Sub(fi.ModTime()) < time.Duration(ins.Mtime.TimeSpan) {
-			changed[fp] = fi.ModTime()
+		age := now.Sub(fi.ModTime())
+
+		switch ins.Mtime.Mode {
+		case "stale":
+			if age > timeSpan {
+				matched = append(matched, mtimeEntry{fp, fi.ModTime()})
+			}
+		default:
+			if age < timeSpan {
+				matched = append(matched, mtimeEntry{fp, fi.ModTime()})
+			}
 		}
 	}
 
@@ -231,24 +286,44 @@ func (ins *Instance) checkMtime(q *safe.Queue[*types.Event], files []string) {
 		tr = "[check] [target]"
 	}
 
-	if len(changed) == 0 {
+	if len(matched) == 0 {
+		var okDesc strings.Builder
+		if ins.Mtime.Mode == "stale" {
+			okDesc.WriteString(fmt.Sprintf("all files updated within %s", timeSpan))
+		} else {
+			okDesc.WriteString("files not changed")
+		}
+		appendAccessErrors(&okDesc, errs)
 		q.PushFront(types.BuildEvent(map[string]string{
 			"check":  "filecheck::mtime",
 			"target": target,
 		}).SetTitleRule(tr).
 			SetEventStatus(types.EventStatusOk).
-			SetDescription("files not changed"))
+			SetDescription(okDesc.String()))
 		return
 	}
 
 	var desc strings.Builder
 	desc.WriteString("[MD]\n")
-	desc.WriteString(fmt.Sprintf("files changed within %s\n\n", time.Duration(ins.Mtime.TimeSpan)))
+	if ins.Mtime.Mode == "stale" {
+		desc.WriteString(fmt.Sprintf("%d files not updated for more than %s\n\n", len(matched), timeSpan))
+	} else {
+		desc.WriteString(fmt.Sprintf("%d files changed within %s\n\n", len(matched), timeSpan))
+	}
 	desc.WriteString("| File | MTime |\n")
 	desc.WriteString("| :-- | --: |\n")
-	for fp, mtime := range changed {
-		desc.WriteString(fmt.Sprintf("| %s | %s |\n", fp, mtime.Format("2006-01-02 15:04:05")))
+	display := len(matched)
+	if display > maxDisplayFiles {
+		display = maxDisplayFiles
 	}
+	for i := 0; i < display; i++ {
+		desc.WriteString(fmt.Sprintf("| %s | %s |\n",
+			matched[i].path, matched[i].mtime.Format("2006-01-02 15:04:05")))
+	}
+	if len(matched) > maxDisplayFiles {
+		desc.WriteString(fmt.Sprintf("\n... and %d more files\n", len(matched)-maxDisplayFiles))
+	}
+	appendAccessErrors(&desc, errs)
 
 	q.PushFront(types.BuildEvent(map[string]string{
 		"check":  "filecheck::mtime",
@@ -262,21 +337,23 @@ func (ins *Instance) checkMtime(q *safe.Queue[*types.Event], files []string) {
 
 func (ins *Instance) checkChecksum(q *safe.Queue[*types.Event], files []string) {
 	var changedFiles [][2]string
+	var errs []string
 
 	for _, fp := range files {
 		fi, err := os.Stat(fp)
 		if err != nil {
+			errs = append(errs, fmt.Sprintf("%s: %v", fp, err))
 			continue
 		}
 		if fi.Size() > int64(ins.Checksum.MaxFileSize) {
-			logger.Logger.Warnw("file too large for checksum, skipping",
+			logger.Logger.Debugw("file too large for checksum, skipping",
 				"file", fp, "size", fi.Size(), "max", ins.Checksum.MaxFileSize.String())
 			continue
 		}
 
 		hash, err := sha256File(fp)
 		if err != nil {
-			logger.Logger.Errorw("checksum error", "file", fp, "error", err)
+			errs = append(errs, fmt.Sprintf("%s: %v", fp, err))
 			continue
 		}
 
@@ -294,23 +371,34 @@ func (ins *Instance) checkChecksum(q *safe.Queue[*types.Event], files []string) 
 	}
 
 	if len(changedFiles) == 0 {
+		var okDesc strings.Builder
+		okDesc.WriteString("file checksums unchanged")
+		appendAccessErrors(&okDesc, errs)
 		q.PushFront(types.BuildEvent(map[string]string{
 			"check":  "filecheck::checksum",
 			"target": target,
 		}).SetTitleRule(tr).
 			SetEventStatus(types.EventStatusOk).
-			SetDescription("file checksums unchanged"))
+			SetDescription(okDesc.String()))
 		return
 	}
 
 	var desc strings.Builder
 	desc.WriteString("[MD]\n")
-	desc.WriteString("File checksums changed:\n\n")
+	desc.WriteString(fmt.Sprintf("%d file checksums changed:\n\n", len(changedFiles)))
 	desc.WriteString("| File | New SHA256 |\n")
 	desc.WriteString("| :-- | :-- |\n")
-	for _, cf := range changedFiles {
-		desc.WriteString(fmt.Sprintf("| %s | `%s...` |\n", cf[0], cf[1][:16]))
+	display := len(changedFiles)
+	if display > maxDisplayFiles {
+		display = maxDisplayFiles
 	}
+	for i := 0; i < display; i++ {
+		desc.WriteString(fmt.Sprintf("| %s | `%s...` |\n", changedFiles[i][0], changedFiles[i][1][:16]))
+	}
+	if len(changedFiles) > maxDisplayFiles {
+		desc.WriteString(fmt.Sprintf("\n... and %d more files\n", len(changedFiles)-maxDisplayFiles))
+	}
+	appendAccessErrors(&desc, errs)
 
 	q.PushFront(types.BuildEvent(map[string]string{
 		"check":  "filecheck::checksum",
@@ -332,4 +420,23 @@ func sha256File(path string) (string, error) {
 		return "", err
 	}
 	return hex.EncodeToString(h.Sum(nil)), nil
+}
+
+// --- helpers ---
+
+func appendAccessErrors(desc *strings.Builder, errs []string) {
+	if len(errs) == 0 {
+		return
+	}
+	desc.WriteString(fmt.Sprintf("\n\n**%d files could not be accessed:**\n\n", len(errs)))
+	display := len(errs)
+	if display > 5 {
+		display = 5
+	}
+	for i := 0; i < display; i++ {
+		desc.WriteString(fmt.Sprintf("- `%s`\n", errs[i]))
+	}
+	if len(errs) > 5 {
+		desc.WriteString(fmt.Sprintf("- ... and %d more\n", len(errs)-5))
+	}
 }
