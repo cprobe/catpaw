@@ -10,9 +10,6 @@
 ## 命令执行超时，默认 10s
 # timeout = 10
 
-## NTP 查询失败时的告警级别，默认 Critical
-# error_severity = "Critical"
-
 ## 采集间隔，不配则继承全局 interval
 # interval = "60s"
 

@@ -47,10 +47,9 @@ type StratumCheck struct {
 type Instance struct {
 	config.InternalConfig
 
-	Mode          string          `toml:"mode"`
-	Timeout       config.Duration `toml:"timeout"`
-	ErrorSeverity string          `toml:"error_severity"`
-	Sync          SyncCheck       `toml:"sync"`
+	Mode    string          `toml:"mode"`
+	Timeout config.Duration `toml:"timeout"`
+	Sync    SyncCheck       `toml:"sync"`
 	Offset        OffsetCheck     `toml:"offset"`
 	Stratum       StratumCheck    `toml:"stratum"`
 
@@ -84,12 +83,6 @@ func (ins *Instance) Init() error {
 
 	if ins.Timeout == 0 {
 		ins.Timeout = config.Duration(10 * time.Second)
-	}
-
-	if ins.ErrorSeverity == "" {
-		ins.ErrorSeverity = types.EventStatusCritical
-	} else if !types.EventStatusValid(ins.ErrorSeverity) {
-		return fmt.Errorf("invalid error_severity %q", ins.ErrorSeverity)
 	}
 
 	if ins.Sync.Severity == "" {
@@ -407,10 +400,6 @@ func parseTimedatectl(data []byte) (*ntpResult, error) {
 // --- check dimensions ---
 
 func (ins *Instance) checkSync(q *safe.Queue[*types.Event], r *ntpResult) {
-	if ins.Sync.Severity == "" {
-		return
-	}
-
 	tr := ins.Sync.TitleRule
 	if tr == "" {
 		tr = "[check] [target]"
@@ -541,6 +530,6 @@ func (ins *Instance) buildErrorEvent(errMsg string) *types.Event {
 		"target":                       "ntp",
 		types.AttrPrefix + "mode":      ins.detectedMode,
 	}).SetTitleRule("[check] [target]").
-		SetEventStatus(ins.ErrorSeverity).
+		SetEventStatus(ins.Sync.Severity).
 		SetDescription(errMsg)
 }
