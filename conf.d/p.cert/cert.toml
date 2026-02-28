@@ -1,0 +1,70 @@
+[[instances]]
+## ===== 最小可用示例（30 秒跑起来）=====
+## 1) remote_targets 填远程 TLS 服务地址（host:port）
+## 2) file_targets 填本地证书文件路径（支持 glob 模式）
+## 3) 默认 30 天 Warning、7 天 Critical
+## 两种模式可以同时使用，也可以只用其中一种
+## 例子：
+## remote_targets = ["example.com:443", "db.example.com:3306"]
+## file_targets = ["/etc/ssl/certs/app.pem", "/etc/nginx/ssl/*.crt"]
+
+## 远程 TLS 检查目标
+## 格式：host:port（端口省略默认 443）
+## 需要指定 SNI 时：host:port@sni（如 "10.0.0.1:443@api.example.com"）
+remote_targets = [
+    # "example.com:443",
+    # "db.example.com:3306",
+    # "redis.internal:6380",
+    # "10.0.0.1:443@api.example.com",
+]
+
+## 本地证书文件（支持 PEM 和 DER 格式，自动检测）
+## 支持 glob 模式，如 "/etc/letsencrypt/live/*/fullchain.pem"
+file_targets = [
+    # "/etc/ssl/certs/app.pem",
+    # "/etc/nginx/ssl/*.crt",
+    # "/etc/letsencrypt/live/*/fullchain.pem",
+]
+
+## STARTTLS 协议（默认空 = 直接 TLS）
+## 设为 "smtp" 用于检查 SMTP 邮件服务器（25/587 端口）
+# starttls = ""
+
+## SNI 覆盖（默认从 target hostname 自动提取）
+## 作为所有 remote_targets 的默认 SNI，per-target @sni 优先级更高
+# server_name = ""
+
+## 连接超时（默认 10s）
+# timeout = "10s"
+
+## 并发连接数（默认 10）
+# concurrency = 10
+
+## glob 模式解析的最大文件数（默认 100）
+## 超过此限制会产出 Warning 事件并截断
+# max_file_targets = 100
+
+## 采集间隔（证书过期变化慢，可设较长间隔）
+interval = "1h"
+
+## 远程证书过期检测
+## warn_within: 距过期多久开始 Warning（默认 30 天）
+## critical_within: 距过期多久升级 Critical（默认 7 天）
+## 同时检测已过期和尚未生效（NotBefore 在未来）的证书
+[instances.remote_expiry]
+warn_within = "720h"
+critical_within = "168h"
+# title_rule = "[check] [target]"
+
+## 文件证书过期检测（阈值含义同上）
+[instances.file_expiry]
+warn_within = "720h"
+critical_within = "168h"
+# title_rule = "[check] [target]"
+
+[instances.alerting]
+for_duration = 0
+repeat_interval = "4h"
+repeat_number = 0
+# disabled = false
+# disable_recovery_notification = false

@@ -312,7 +312,7 @@ type Instance struct {
 
 ### OK 事件
 
-基础 labels（check、target）即可，不需要额外 attr。OK 事件仍在 Description 中包含过期时间，便于一眼确认。
+OK 事件也携带完整 `_attr_` 标签（与 Warning/Critical 一致），便于巡检时一眼看到健康证书的到期时间、subject、issuer 等信息，无需额外查询。
 
 ## Init() 校验
 
@@ -435,16 +435,21 @@ checkRemote(q, target):
 checkFile(q, target):
     event = buildEvent("cert::file_expiry", target)
 
-    data, err = os.ReadFile(target)
+    info, err = os.Stat(target)
     if err:
         if os.IsNotExist(err):
             event → Critical: "certificate file not found: <target>"
         else:
-            event → Critical: "failed to read <target>: <error>"
+            event → Critical: "failed to stat <target>: <error>"
         return
 
-    if len(data) > maxCertFileSize:
+    if info.Size() > maxCertFileSize:
         event → Critical: "file too large (<size>), likely not a certificate: <target>"
+        return
+
+    data, err = os.ReadFile(target)
+    if err:
+        event → Critical: "failed to read <target>: <error>"
         return
 
     certs, err = parseCerts(data)
