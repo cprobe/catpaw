@@ -15,6 +15,7 @@ catpaw 是一个轻量的事件监控工具：负责探测异常并产出标准�
 | 插件 | 说明 |
 | --- | --- |
 | `cert` | TLS 证书有效期检查（远程 TLS 连接 + 本地证书文件，支持 STARTTLS、per-target SNI、glob） |
+| `conntrack` | Linux 连接跟踪表（nf_conntrack）使用率监控，预防表满导致静默丢包 |
 | `cpu` | CPU 使用率、Load Average（归一化每核负载）检查 |
 | `disk` | 磁盘空间、inode、可写性检查 |
 | `dns` | DNS 解析检查 |

@@ -14,6 +14,7 @@ import (
 
 	// auto registry
 	_ "github.com/cprobe/catpaw/plugins/cert"
+	_ "github.com/cprobe/catpaw/plugins/conntrack"
 	_ "github.com/cprobe/catpaw/plugins/cpu"
 	_ "github.com/cprobe/catpaw/plugins/disk"
 	_ "github.com/cprobe/catpaw/plugins/dns"

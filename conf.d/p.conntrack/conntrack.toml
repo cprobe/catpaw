@@ -1,0 +1,22 @@
+[[instances]]
+## ===== 最小可用示例（30 秒跑起来）=====
+## 监控 Linux 连接跟踪表（nf_conntrack）使用率
+## 表满时新连接被内核静默丢弃，是最难排查的网络问题之一
+## nf_conntrack 模块未加载时自动跳过（不告警）
+
+## 连接跟踪表使用率阈值（count / max 百分比）
+## 表满后果极为严重，默认阈值偏保守
+[instances.conntrack_usage]
+warn_ge = 75.0
+critical_ge = 90.0
+# title_rule = "[check]"
+
+## 采集间隔
+interval = "30s"
+
+[instances.alerting]
+for_duration = 0
+repeat_interval = "5m"
+repeat_number = 0
+# disabled = false
+# disable_recovery_notification = false
