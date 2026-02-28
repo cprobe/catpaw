@@ -44,15 +44,55 @@ func TestExtractCursor(t *testing.T) {
 	}
 }
 
-func TestExtractLines(t *testing.T) {
-	output := "line1\nline2\n\n-- cursor: s=abc\nline3\n"
-	lines := extractLines([]byte(output))
+func TestExtractLogLines(t *testing.T) {
+	output := "-- Logs begin at Fri 2025-09-26 09:42:36 CST, end at Sat 2026-02-28 18:10:29 CST. --\n" +
+		"line1\nline2\n\n-- cursor: s=abc\n-- No entries --\nline3\n"
+	lines := extractLogLines([]byte(output))
 
 	if len(lines) != 3 {
 		t.Fatalf("expected 3 lines, got %d: %v", len(lines), lines)
 	}
 	if lines[0] != "line1" || lines[1] != "line2" || lines[2] != "line3" {
 		t.Fatalf("unexpected lines: %v", lines)
+	}
+}
+
+func TestExtractLogLines_NoEntries(t *testing.T) {
+	output := "-- Logs begin at Fri 2025-09-26 09:42:36 CST, end at Sat 2026-02-28 18:10:29 CST. --\n-- No entries --\n"
+	lines := extractLogLines([]byte(output))
+
+	if len(lines) != 0 {
+		t.Fatalf("expected 0 lines for no-entries output, got %d: %v", len(lines), lines)
+	}
+}
+
+func TestLimitedBuffer(t *testing.T) {
+	buf := &limitedBuffer{max: 10}
+
+	n, err := buf.Write([]byte("hello"))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if n != 5 {
+		t.Fatalf("expected n=5, got %d", n)
+	}
+
+	n, err = buf.Write([]byte("world!!!"))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if n != 8 {
+		t.Fatalf("Write should report full len consumed, got %d", n)
+	}
+
+	if buf.String() != "helloworld" {
+		t.Fatalf("expected 'helloworld', got %q", buf.String())
+	}
+
+	// Further writes should be silently dropped
+	buf.Write([]byte("more"))
+	if len(buf.Bytes()) != 10 {
+		t.Fatalf("expected 10 bytes after overflow, got %d", len(buf.Bytes()))
 	}
 }
 

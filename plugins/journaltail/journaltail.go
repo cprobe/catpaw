@@ -18,6 +18,11 @@ import (
 
 const pluginName = "journaltail"
 
+const (
+	maxStdoutBytes = 1 << 20   // 1MB
+	maxStderrBytes = 256 << 10 // 256KB
+)
+
 type MatchCheck struct {
 	Severity  string `toml:"severity"`
 	TitleRule string `toml:"title_rule"`
@@ -166,9 +171,10 @@ func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
 	args := ins.buildArgs()
 
 	cmd := exec.Command(ins.bin, args...)
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
+	stdout := &limitedBuffer{max: maxStdoutBytes}
+	stderr := &limitedBuffer{max: maxStderrBytes}
+	cmd.Stdout = stdout
+	cmd.Stderr = stderr
 
 	runErr, timedOut := cmdx.RunTimeout(cmd, time.Duration(ins.Timeout))
 
@@ -192,7 +198,7 @@ func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
 	// Parse output and extract cursor from the last line
 	output := stdout.Bytes()
 	newCursor := extractCursor(output)
-	lines := extractLines(output)
+	lines := extractLogLines(output)
 
 	var matched []string
 	for _, line := range lines {
@@ -277,15 +283,43 @@ func extractCursor(output []byte) string {
 	return strings.TrimSpace(string(rest))
 }
 
-// extractLines returns all non-empty, non-cursor lines from journalctl output.
-func extractLines(output []byte) []string {
+// extractLogLines returns actual log lines from journalctl output,
+// filtering empty lines and all "-- " prefixed informational lines
+// (e.g. "-- Logs begin at ...", "-- No entries --", "-- cursor: ...").
+func extractLogLines(output []byte) []string {
 	var lines []string
 	for _, raw := range bytes.Split(output, []byte("\n")) {
 		line := string(raw)
-		if line == "" || strings.HasPrefix(line, "-- cursor: ") {
+		if line == "" || strings.HasPrefix(line, "-- ") {
 			continue
 		}
 		lines = append(lines, line)
 	}
 	return lines
+}
+
+// limitedBuffer wraps bytes.Buffer with a size cap to prevent OOM
+// from journalctl producing unbounded output.
+type limitedBuffer struct {
+	buf bytes.Buffer
+	max int
+}
+
+func (w *limitedBuffer) Write(p []byte) (int, error) {
+	if remaining := w.max - w.buf.Len(); remaining > 0 {
+		if len(p) > remaining {
+			w.buf.Write(p[:remaining])
+		} else {
+			w.buf.Write(p)
+		}
+	}
+	return len(p), nil
+}
+
+func (w *limitedBuffer) Bytes() []byte {
+	return w.buf.Bytes()
+}
+
+func (w *limitedBuffer) String() string {
+	return w.buf.String()
 }
