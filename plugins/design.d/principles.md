@@ -1,5 +1,10 @@
 # 设计与实现原则
 
+- catpaw 配合 Flashduty、PagerDuty 等 On-call 产品使用
+- catpaw 的实现可以参考 Sensu、Nagios 等同类产品，站在巨人的肩膀上，自然要超越他们
+- catpaw 的职能不能和 Prometheus + Node-Exporter 重叠
+- catpaw 应该更加关注异常，而不是关注历史指标趋势
+
 ## 1. 设计优雅、灵活、易用
 
 - 配置结构清晰，层次分明

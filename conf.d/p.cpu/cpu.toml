@@ -1,0 +1,39 @@
+[[instances]]
+## ===== 最小可用示例（30 秒跑起来）=====
+## 1) 默认监控 CPU 使用率和 Load Average（归一化为每核负载）
+## 2) 阈值已开启（CPU 80/90，Load 每核 3.0/5.0）
+## 注意：
+## - CPU 使用率是两次采集之间的平均值，采集间隔（interval）即平滑窗口
+##   默认 30s 间隔 = 30 秒平均值，比 top 的 3 秒更平滑，短暂尖峰不会触发
+##   如果需要更灵敏的检测，可以缩短 interval（如 10s），但会增加采集开销
+## - Load Average 阈值是归一化后的值（实际负载 / CPU核心数）
+##   1.0 表示每核满载，3.0 表示每核排队 3 个任务
+
+## CPU 使用率阈值（禁用：不写或两个都设0）
+## check label 自动设为 "cpu::cpu_usage"
+[instances.cpu_usage]
+warn_ge     = 80.0
+critical_ge = 90.0
+# title_rule = "[check]"
+
+## Load Average 阈值（归一化为每核负载）
+## check label 自动设为 "cpu::load_average"
+[instances.load_average]
+warn_ge     = 3.0
+critical_ge = 5.0
+## 使用哪个周期的负载值："1m", "5m"(默认), "15m"
+# period = "5m"
+# title_rule = "[check]"
+
+## 采集间隔，不配则继承全局 interval
+# interval = "30s"
+
+## 追加自定义标签
+# labels = { env = "production", team = "devops" }
+
+[instances.alerting]
+for_duration = "120s"
+repeat_interval = "5m"
+repeat_number = 3
+# disabled = false
+# disable_recovery_notification = false

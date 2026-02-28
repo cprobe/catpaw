@@ -94,7 +94,7 @@ type Instance struct {
 ## 默认配置关键决策
 
 - `memory_usage`: warn_ge=85.0, critical_ge=90.0
-- `swap_usage`: warn_ge=80.0, critical_ge=95.0（Swap 大量使用意味着严重性能退化，warn 阈值比内存更低）
+- `swap_usage`: warn_ge=10.0, critical_ge=30.0（现代机器内存充裕，任何可感知的 Swap 使用都值得关注）
 - `for_duration = "60s"` — 内存有波动性，持续确认后再告警，避免瞬间峰值误报（与 disk 的 for_duration=0 不同）
 
 ## 文件结构

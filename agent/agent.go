@@ -13,6 +13,7 @@ import (
 	"github.com/toolkits/pkg/file"
 
 	// auto registry
+	_ "github.com/cprobe/catpaw/plugins/cpu"
 	_ "github.com/cprobe/catpaw/plugins/disk"
 	_ "github.com/cprobe/catpaw/plugins/dns"
 	_ "github.com/cprobe/catpaw/plugins/exec"
