@@ -1,0 +1,21 @@
+[[instances]]
+## ===== 最小可用示例（30 秒跑起来）=====
+## 监控 Linux ARP/邻居表（neighbour table）使用率
+## 表满时新 IP 的通信静默失败，已缓存的正常，极难排查
+## Kubernetes / 容器密集型环境是重灾区（默认 gc_thresh3=1024 太小）
+
+## 邻居表使用率阈值（entries / gc_thresh3 百分比）
+[instances.neigh_usage]
+warn_ge = 75.0
+critical_ge = 90.0
+# title_rule = "[check]"
+
+## 采集间隔
+interval = "30s"
+
+[instances.alerting]
+for_duration = 0
+repeat_interval = "5m"
+repeat_number = 0
+# disabled = false
+# disable_recovery_notification = false

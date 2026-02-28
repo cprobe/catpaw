@@ -1,13 +1,5 @@
 # 插件规划
 
-## conntrack — 连接跟踪表监控
-
-- **检查维度**：`conntrack_usage`（`nf_conntrack_count / nf_conntrack_max` 使用率）
-- **价值**：连接跟踪表满时新连接被内核静默丢弃，表现为随机连接失败，是最难排查的网络问题之一
-- **实现**：读 `/proc/sys/net/netfilter/nf_conntrack_count` 和 `nf_conntrack_max`
-- **注意**：未加载 nf_conntrack 模块的机器应优雅跳过（返回 Ok 而非报错）
-- **参考**：Prometheus `node_exporter` 的 conntrack collector
-
 ## ulimit — 进程资源限制检查
 
 - **检查维度**：`fd_usage`（系统级文件描述符使用率 `fs.file-nr`）、`process_fd`（指定进程的 fd 使用率 = 实际打开 / nofile 上限）、`process_nproc`（指定进程的线程数使用率）
