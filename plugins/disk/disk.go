@@ -115,6 +115,12 @@ func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
 	partitions, err := disk.Partitions(true)
 	if err != nil {
 		logger.Logger.Errorw("failed to get disk partitions", "error", err)
+		q.PushFront(types.BuildEvent(map[string]string{
+			"check":  "disk::space_usage",
+			"target": "partitions",
+		}).SetTitleRule("[check]").
+			SetEventStatus(types.EventStatusCritical).
+			SetDescription(fmt.Sprintf("failed to get disk partitions: %v", err)))
 		return
 	}
 
@@ -169,10 +175,21 @@ func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
 		wg.Add(1)
 		go func(mi mountInfo) {
 			se.Acquire()
-			defer se.Release()
-			defer wg.Done()
+			defer func() {
+				if r := recover(); r != nil {
+					logger.Logger.Errorw("panic in disk gather goroutine", "mount_point", mi.MountPoint, "recover", r)
+					q.PushFront(types.BuildEvent(map[string]string{
+						"check":  "disk::space_usage",
+						"target": mi.MountPoint,
+					}).SetTitleRule("[check] [target]").
+						SetEventStatus(types.EventStatusCritical).
+						SetDescription(fmt.Sprintf("panic during check: %v", r)))
+				}
+				ins.inFlight.Delete(mi.MountPoint)
+				se.Release()
+				wg.Done()
+			}()
 			ins.inFlight.Store(mi.MountPoint, time.Now().Unix())
-			defer ins.inFlight.Delete(mi.MountPoint)
 			ins.gatherMountPoint(q, mi.MountPoint, mi.Device, mi.FSType)
 		}(t)
 	}
@@ -363,7 +380,7 @@ func (ins *Instance) buildHungEvent(mountPoint string, elapsedSec int64) *types.
 		"check":                                "disk::hung",
 		"target":                               mountPoint,
 		types.AttrPrefix + "elapsed_seconds":   fmt.Sprintf("%d", elapsedSec),
-	}).SetTitleRule("[check]").
+	}).SetTitleRule("[check] [target]").
 		SetEventStatus(types.EventStatusCritical).
 		SetDescription(fmt.Sprintf("disk check hung for %d seconds (possible NFS/network disk issue)", elapsedSec))
 }
@@ -372,8 +389,7 @@ func (ins *Instance) buildHungRecoveryEvent(mountPoint string) *types.Event {
 	return types.BuildEvent(map[string]string{
 		"check":  "disk::hung",
 		"target": mountPoint,
-	}).SetTitleRule("[check]").
+	}).SetTitleRule("[check] [target]").
 		SetDescription("disk check recovered from hung state")
 }
-
 

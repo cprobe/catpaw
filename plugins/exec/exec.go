@@ -143,6 +143,15 @@ func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
 		go func(command string) {
 			se.Acquire()
 			defer func() {
+				if r := recover(); r != nil {
+					logger.Logger.Errorw("panic in exec gather goroutine", "command", command, "recover", r)
+					q.PushFront(types.BuildEvent(map[string]string{
+						"check":  "exec::error",
+						"target": command,
+					}).SetTitleRule("[check] [target]").
+						SetEventStatus(types.EventStatusCritical).
+						SetDescription(fmt.Sprintf("panic during check: %v", r)))
+				}
 				se.Release()
 				wg.Done()
 			}()

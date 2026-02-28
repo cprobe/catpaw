@@ -25,7 +25,7 @@ type Gatherer interface {
 	Gather(*safe.Queue[*types.Event])
 }
 
-func MayApplyPartials(p interface{}) error {
+func MayApplyPartials(p any) error {
 	if ap, ok := p.(IApplyPartials); ok {
 		return ap.ApplyPartials()
 	}
@@ -36,7 +36,7 @@ type Initer interface {
 	Init() error
 }
 
-func MayInit(t interface{}) error {
+func MayInit(t any) error {
 	if initer, ok := t.(Initer); ok {
 		return initer.Init()
 	}
@@ -51,19 +51,19 @@ type InstancesGetter interface {
 	GetInstances() []Instance
 }
 
-func MayGather(t interface{}, q *safe.Queue[*types.Event]) {
+func MayGather(t any, q *safe.Queue[*types.Event]) {
 	if gather, ok := t.(Gatherer); ok {
 		gather.Gather(q)
 	}
 }
 
-func MayDrop(t interface{}) {
+func MayDrop(t any) {
 	if dropper, ok := t.(Dropper); ok {
 		dropper.Drop()
 	}
 }
 
-func MayGetInstances(t interface{}) []Instance {
+func MayGetInstances(t any) []Instance {
 	if instancesGetter, ok := t.(InstancesGetter); ok {
 		return instancesGetter.GetInstances()
 	}

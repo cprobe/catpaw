@@ -249,6 +249,12 @@ func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
 			defer func() {
 				if r := recover(); r != nil {
 					logger.Logger.Errorw("panic in ping gather goroutine", "target", target, "recover", r)
+					q.PushFront(types.BuildEvent(map[string]string{
+						"check":  "ping::connectivity",
+						"target": target,
+					}).SetTitleRule("[check] [target]").
+						SetEventStatus(types.EventStatusCritical).
+						SetDescription(fmt.Sprintf("panic during check: %v", r)))
 				}
 				se.Release()
 				wg.Done()

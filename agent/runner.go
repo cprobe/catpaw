@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"fmt"
 	"sync"
 	"time"
 
@@ -97,6 +98,16 @@ func (r *PluginRunner) gatherInstancePlugin(ins plugins.Instance) {
 	defer func() {
 		if rc := recover(); rc != nil {
 			logger.Logger.Errorw("gather instance plugin panic", "plugin", r.pluginName, "stack", string(runtimex.Stack(3)))
+
+			// 使用全新的 panicQueue，而非复用可能处于不一致状态的 queue
+			panicQueue := safe.NewQueue[*types.Event]()
+			panicQueue.PushFront(types.BuildEvent(map[string]string{
+				"check":  r.pluginName + "::panic",
+				"target": r.pluginName,
+			}).SetTitleRule("[check]").
+				SetEventStatus(types.EventStatusCritical).
+				SetDescription(fmt.Sprintf("plugin panic: %v", rc)))
+			engine.PushRawEvents(r.pluginName, r.pluginObject, ins, panicQueue)
 		}
 	}()
 
