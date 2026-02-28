@@ -83,7 +83,7 @@ func init() {
 
 func (ins *Instance) Init() error {
 	if len(ins.RemoteTargets) == 0 && len(ins.FileTargets) == 0 {
-		return fmt.Errorf("remote_targets and file_targets cannot both be empty")
+		return nil
 	}
 
 	// Parse remote targets: extract per-target SNI and normalize host:port
@@ -180,6 +180,10 @@ func validateAndFillThresholds(check *ExpiryCheck, hasTargets bool) error {
 }
 
 func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
+	if len(ins.RemoteTargets) == 0 && len(ins.FileTargets) == 0 {
+		return
+	}
+
 	wg := new(sync.WaitGroup)
 	se := semaphore.NewSemaphore(ins.Concurrency)
 

@@ -33,6 +33,7 @@ catpaw 是一个轻量的事件监控工具：负责探测异常并产出标准�
 | `ping` | ICMP 可达性、丢包率、时延检查 |
 | `procnum` | 进程数量检查（支持多种查找方式） |
 | `scriptfilter` | 执行脚本并按输出行过滤匹配告警 |
+| `sockstat` | TCP listen 队列溢出检测（ListenOverflows 增量监控，仅 Linux） |
 | `systemd` | systemd 服务状态检查（仅 Linux） |
 | `uptime` | 系统异常重启检测（uptime 低于阈值时告警，自愈型事件） |
 

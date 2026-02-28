@@ -1,0 +1,23 @@
+[[instances]]
+## ===== 最小可用示例（30 秒跑起来）=====
+## 监控 TCP listen 队列溢出（ListenOverflows）
+## accept backlog 满时 SYN 被静默丢弃，客户端看到连接超时
+## 与 conntrack 满的症状几乎一样，但根因不同（应用层 vs 内核层）
+
+## listen 溢出增量阈值（两次采集间新增溢出次数）
+## warn_ge = 1 表示任何溢出都告警，critical_ge = 100 表示大规模溢出
+[instances.listen_overflow]
+warn_ge = 1
+critical_ge = 100
+# title_rule = "[check]"
+
+## 采集间隔
+interval = "30s"
+
+[instances.alerting]
+## 持续 1 分钟有溢出才告警（过滤瞬间尖峰）
+for_duration = "1m"
+repeat_interval = "5m"
+repeat_number = 0
+# disabled = false
+# disable_recovery_notification = false
