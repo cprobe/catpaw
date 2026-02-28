@@ -30,7 +30,7 @@
 - **与 http 插件的区别**：http 的 cert_expiry 只能检查 HTTPS 端点，cert 插件覆盖所有 TLS 协议和磁盘上的证书文件
 - **参考**：Nagios `check_ssl_cert`、Sensu `check-tls-cert`
 
-### reboot — 异常重启检测
+### uptime — 异常重启检测
 
 - **检查维度**：uptime 小于阈值时产生一次性告警
 - **实现**：`gopsutil/v3/host` 的 `Uptime()` 或读 `/proc/uptime`

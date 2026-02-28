@@ -83,10 +83,6 @@ func (ins *Instance) Init() error {
 		return fmt.Errorf("targets is empty")
 	}
 
-	if ins.Mtime.Severity == "" && ins.Checksum.Severity == "" && ins.Existence.Severity == "" {
-		return fmt.Errorf("at least one check dimension (mtime/checksum/existence) must be configured")
-	}
-
 	if ins.Mtime.Severity != "" {
 		if ins.Mtime.TimeSpan == 0 {
 			ins.Mtime.TimeSpan = config.Duration(3 * time.Minute)

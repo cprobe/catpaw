@@ -45,9 +45,8 @@ func TestInitValidation(t *testing.T) {
 			},
 		},
 		{
-			name:    "no dimension enabled",
-			ins:     Instance{},
-			wantErr: true,
+			name: "no dimension enabled - silent skip",
+			ins:  Instance{},
 		},
 		{
 			name: "memory warn >= critical",

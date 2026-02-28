@@ -74,11 +74,6 @@ func (ins *Instance) Init() error {
 			ins.SwapUsage.WarnGe, ins.SwapUsage.CriticalGe)
 	}
 
-	if ins.MemoryUsage.WarnGe == 0 && ins.MemoryUsage.CriticalGe == 0 &&
-		ins.SwapUsage.WarnGe == 0 && ins.SwapUsage.CriticalGe == 0 {
-		return fmt.Errorf("at least one check dimension must be enabled (set warn_ge or critical_ge > 0)")
-	}
-
 	return nil
 }
 

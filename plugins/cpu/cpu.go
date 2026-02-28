@@ -73,11 +73,6 @@ func (ins *Instance) Init() error {
 			ins.LoadAverage.WarnGe, ins.LoadAverage.CriticalGe)
 	}
 
-	if ins.CpuUsage.WarnGe == 0 && ins.CpuUsage.CriticalGe == 0 &&
-		ins.LoadAverage.WarnGe == 0 && ins.LoadAverage.CriticalGe == 0 {
-		return fmt.Errorf("at least one check dimension must be enabled (set warn_ge or critical_ge > 0)")
-	}
-
 	if ins.LoadAverage.Period == "" {
 		ins.LoadAverage.Period = "5m"
 	}
