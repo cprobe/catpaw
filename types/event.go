@@ -52,6 +52,18 @@ func (e *Event) SetDescription(desc string) *Event {
 	return e
 }
 
+// EvaluateGeThreshold returns the event status for a "greater-than-or-equal"
+// threshold pair. A threshold value of 0 means "not configured / disabled".
+func EvaluateGeThreshold(value, warnGe, criticalGe float64) string {
+	if criticalGe > 0 && value >= criticalGe {
+		return EventStatusCritical
+	}
+	if warnGe > 0 && value >= warnGe {
+		return EventStatusWarning
+	}
+	return EventStatusOk
+}
+
 func BuildEvent(labelMaps ...map[string]string) *Event {
 	event := &Event{
 		EventStatus: EventStatusOk,

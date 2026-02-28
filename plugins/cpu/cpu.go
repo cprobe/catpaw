@@ -56,6 +56,11 @@ func init() {
 }
 
 func (ins *Instance) Init() error {
+	if ins.CpuUsage.WarnGe > 100 || ins.CpuUsage.CriticalGe > 100 {
+		return fmt.Errorf("cpu_usage thresholds must be between 0 and 100 (got warn_ge=%.1f, critical_ge=%.1f)",
+			ins.CpuUsage.WarnGe, ins.CpuUsage.CriticalGe)
+	}
+
 	if ins.CpuUsage.WarnGe > 0 && ins.CpuUsage.CriticalGe > 0 &&
 		ins.CpuUsage.WarnGe >= ins.CpuUsage.CriticalGe {
 		return fmt.Errorf("cpu_usage.warn_ge(%.1f) must be less than cpu_usage.critical_ge(%.1f)",
@@ -91,6 +96,10 @@ func (ins *Instance) Init() error {
 		cores = 1
 	}
 	ins.cpuCores = cores
+
+	// Warm up gopsutil's internal CPU snapshot so the first Gather
+	// gets a meaningful delta instead of a stale-or-zero value.
+	cpu.Percent(0, false)
 
 	return nil
 }
@@ -145,17 +154,17 @@ func (ins *Instance) checkCpuUsage(q *safe.Queue[*types.Event]) {
 		intervalHint = fmt.Sprintf("%s avg", time.Duration(ins.Interval))
 	}
 
-	if ins.CpuUsage.CriticalGe > 0 && usage >= ins.CpuUsage.CriticalGe {
-		q.PushFront(event.SetEventStatus(types.EventStatusCritical).
-			SetDescription(fmt.Sprintf("CPU usage %.1f%% (%s) >= critical threshold %.1f%%, cores: %d",
-				usage, intervalHint, ins.CpuUsage.CriticalGe, ins.cpuCores)))
-		return
-	}
-
-	if ins.CpuUsage.WarnGe > 0 && usage >= ins.CpuUsage.WarnGe {
-		q.PushFront(event.SetEventStatus(types.EventStatusWarning).
-			SetDescription(fmt.Sprintf("CPU usage %.1f%% (%s) >= warning threshold %.1f%%, cores: %d",
-				usage, intervalHint, ins.CpuUsage.WarnGe, ins.cpuCores)))
+	status := types.EvaluateGeThreshold(usage, ins.CpuUsage.WarnGe, ins.CpuUsage.CriticalGe)
+	if status != types.EventStatusOk {
+		threshold := ins.CpuUsage.WarnGe
+		level := "warning"
+		if status == types.EventStatusCritical {
+			threshold = ins.CpuUsage.CriticalGe
+			level = "critical"
+		}
+		q.PushFront(event.SetEventStatus(status).
+			SetDescription(fmt.Sprintf("CPU usage %.1f%% (%s) >= %s threshold %.1f%%, cores: %d",
+				usage, intervalHint, level, threshold, ins.cpuCores)))
 		return
 	}
 
@@ -206,17 +215,17 @@ func (ins *Instance) checkLoadAverage(q *safe.Queue[*types.Event]) {
 		types.AttrPrefix + "period":            ins.LoadAverage.Period,
 	}).SetTitleRule(tr).SetDescription("everything is ok")
 
-	if ins.LoadAverage.CriticalGe > 0 && perCoreLoad >= ins.LoadAverage.CriticalGe {
-		q.PushFront(event.SetEventStatus(types.EventStatusCritical).
-			SetDescription(fmt.Sprintf("load average (%s) per-core %.2f >= critical threshold %.2f, raw load: %.2f, cores: %d",
-				ins.LoadAverage.Period, perCoreLoad, ins.LoadAverage.CriticalGe, rawLoad, ins.cpuCores)))
-		return
-	}
-
-	if ins.LoadAverage.WarnGe > 0 && perCoreLoad >= ins.LoadAverage.WarnGe {
-		q.PushFront(event.SetEventStatus(types.EventStatusWarning).
-			SetDescription(fmt.Sprintf("load average (%s) per-core %.2f >= warning threshold %.2f, raw load: %.2f, cores: %d",
-				ins.LoadAverage.Period, perCoreLoad, ins.LoadAverage.WarnGe, rawLoad, ins.cpuCores)))
+	status := types.EvaluateGeThreshold(perCoreLoad, ins.LoadAverage.WarnGe, ins.LoadAverage.CriticalGe)
+	if status != types.EventStatusOk {
+		threshold := ins.LoadAverage.WarnGe
+		level := "warning"
+		if status == types.EventStatusCritical {
+			threshold = ins.LoadAverage.CriticalGe
+			level = "critical"
+		}
+		q.PushFront(event.SetEventStatus(status).
+			SetDescription(fmt.Sprintf("load average (%s) per-core %.2f >= %s threshold %.2f, raw load: %.2f, cores: %d",
+				ins.LoadAverage.Period, perCoreLoad, level, threshold, rawLoad, ins.cpuCores)))
 		return
 	}
 

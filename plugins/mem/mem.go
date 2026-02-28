@@ -52,6 +52,16 @@ func init() {
 }
 
 func (ins *Instance) Init() error {
+	if ins.MemoryUsage.WarnGe > 100 || ins.MemoryUsage.CriticalGe > 100 {
+		return fmt.Errorf("memory_usage thresholds must be between 0 and 100 (got warn_ge=%.1f, critical_ge=%.1f)",
+			ins.MemoryUsage.WarnGe, ins.MemoryUsage.CriticalGe)
+	}
+
+	if ins.SwapUsage.WarnGe > 100 || ins.SwapUsage.CriticalGe > 100 {
+		return fmt.Errorf("swap_usage thresholds must be between 0 and 100 (got warn_ge=%.1f, critical_ge=%.1f)",
+			ins.SwapUsage.WarnGe, ins.SwapUsage.CriticalGe)
+	}
+
 	if ins.MemoryUsage.WarnGe > 0 && ins.MemoryUsage.CriticalGe > 0 &&
 		ins.MemoryUsage.WarnGe >= ins.MemoryUsage.CriticalGe {
 		return fmt.Errorf("memory_usage.warn_ge(%.1f) must be less than memory_usage.critical_ge(%.1f)",
@@ -109,17 +119,17 @@ func (ins *Instance) checkMemoryUsage(q *safe.Queue[*types.Event]) {
 		types.AttrPrefix + "cached":        conv.HumanBytes(vm.Cached),
 	}).SetTitleRule(tr).SetDescription("everything is ok")
 
-	if ins.MemoryUsage.CriticalGe > 0 && vm.UsedPercent >= ins.MemoryUsage.CriticalGe {
-		q.PushFront(event.SetEventStatus(types.EventStatusCritical).
-			SetDescription(fmt.Sprintf("memory usage %.1f%% >= critical threshold %.1f%%, total: %s, available: %s",
-				vm.UsedPercent, ins.MemoryUsage.CriticalGe, conv.HumanBytes(vm.Total), conv.HumanBytes(vm.Available))))
-		return
-	}
-
-	if ins.MemoryUsage.WarnGe > 0 && vm.UsedPercent >= ins.MemoryUsage.WarnGe {
-		q.PushFront(event.SetEventStatus(types.EventStatusWarning).
-			SetDescription(fmt.Sprintf("memory usage %.1f%% >= warning threshold %.1f%%, total: %s, available: %s",
-				vm.UsedPercent, ins.MemoryUsage.WarnGe, conv.HumanBytes(vm.Total), conv.HumanBytes(vm.Available))))
+	status := types.EvaluateGeThreshold(vm.UsedPercent, ins.MemoryUsage.WarnGe, ins.MemoryUsage.CriticalGe)
+	if status != types.EventStatusOk {
+		threshold := ins.MemoryUsage.WarnGe
+		level := "warning"
+		if status == types.EventStatusCritical {
+			threshold = ins.MemoryUsage.CriticalGe
+			level = "critical"
+		}
+		q.PushFront(event.SetEventStatus(status).
+			SetDescription(fmt.Sprintf("memory usage %.1f%% >= %s threshold %.1f%%, total: %s, available: %s",
+				vm.UsedPercent, level, threshold, conv.HumanBytes(vm.Total), conv.HumanBytes(vm.Available))))
 		return
 	}
 
@@ -161,17 +171,17 @@ func (ins *Instance) checkSwapUsage(q *safe.Queue[*types.Event]) {
 		types.AttrPrefix + "swap_used_percent":  fmt.Sprintf("%.1f%%", swap.UsedPercent),
 	}).SetTitleRule(tr).SetDescription("everything is ok")
 
-	if ins.SwapUsage.CriticalGe > 0 && swap.UsedPercent >= ins.SwapUsage.CriticalGe {
-		q.PushFront(event.SetEventStatus(types.EventStatusCritical).
-			SetDescription(fmt.Sprintf("swap usage %.1f%% >= critical threshold %.1f%%, total: %s, free: %s",
-				swap.UsedPercent, ins.SwapUsage.CriticalGe, conv.HumanBytes(swap.Total), conv.HumanBytes(swap.Free))))
-		return
-	}
-
-	if ins.SwapUsage.WarnGe > 0 && swap.UsedPercent >= ins.SwapUsage.WarnGe {
-		q.PushFront(event.SetEventStatus(types.EventStatusWarning).
-			SetDescription(fmt.Sprintf("swap usage %.1f%% >= warning threshold %.1f%%, total: %s, free: %s",
-				swap.UsedPercent, ins.SwapUsage.WarnGe, conv.HumanBytes(swap.Total), conv.HumanBytes(swap.Free))))
+	status := types.EvaluateGeThreshold(swap.UsedPercent, ins.SwapUsage.WarnGe, ins.SwapUsage.CriticalGe)
+	if status != types.EventStatusOk {
+		threshold := ins.SwapUsage.WarnGe
+		level := "warning"
+		if status == types.EventStatusCritical {
+			threshold = ins.SwapUsage.CriticalGe
+			level = "critical"
+		}
+		q.PushFront(event.SetEventStatus(status).
+			SetDescription(fmt.Sprintf("swap usage %.1f%% >= %s threshold %.1f%%, total: %s, free: %s",
+				swap.UsedPercent, level, threshold, conv.HumanBytes(swap.Total), conv.HumanBytes(swap.Free))))
 		return
 	}
 

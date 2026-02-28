@@ -49,7 +49,7 @@
 
 ## 7. 自身故障可感知：Fail-open 而非 Fail-silent
 
-- 插件 Gather 失败时应产出 `plugin::error` 事件，让用户在 FlashDuty 端能感知采集异常
+- 插件 Gather 失败时应产出告警事件，让用户在 FlashDuty 端能感知采集异常
 - Init 阶段的配置错误要清晰报错，说明如何修正
 - panic recovery 后应产出事件，而非仅打日志
 - 监控工具的沉默比被监控系统的故障更危险

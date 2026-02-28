@@ -70,6 +70,33 @@ func TestInitValidation(t *testing.T) {
 			},
 			wantErr: true,
 		},
+		{
+			name: "memory_usage warn_ge exceeds 100",
+			ins: Instance{
+				MemoryUsage: MemoryUsageCheck{WarnGe: 850, CriticalGe: 900},
+			},
+			wantErr: true,
+		},
+		{
+			name: "memory_usage critical_ge exceeds 100",
+			ins: Instance{
+				MemoryUsage: MemoryUsageCheck{CriticalGe: 110},
+			},
+			wantErr: true,
+		},
+		{
+			name: "swap_usage warn_ge exceeds 100",
+			ins: Instance{
+				SwapUsage: SwapUsageCheck{WarnGe: 200},
+			},
+			wantErr: true,
+		},
+		{
+			name: "memory_usage boundary 100 is valid",
+			ins: Instance{
+				MemoryUsage: MemoryUsageCheck{WarnGe: 95, CriticalGe: 100},
+			},
+		},
 	}
 
 	for _, tt := range tests {

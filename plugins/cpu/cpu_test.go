@@ -95,6 +95,26 @@ func TestInitValidation(t *testing.T) {
 				LoadAverage: LoadAverageCheck{WarnGe: 3, CriticalGe: 5, Period: ""},
 			},
 		},
+		{
+			name: "cpu_usage warn_ge exceeds 100",
+			ins: Instance{
+				CpuUsage: CpuUsageCheck{WarnGe: 800, CriticalGe: 900},
+			},
+			wantErr: true,
+		},
+		{
+			name: "cpu_usage critical_ge exceeds 100",
+			ins: Instance{
+				CpuUsage: CpuUsageCheck{CriticalGe: 150},
+			},
+			wantErr: true,
+		},
+		{
+			name: "cpu_usage boundary 100 is valid",
+			ins: Instance{
+				CpuUsage: CpuUsageCheck{WarnGe: 95, CriticalGe: 100},
+			},
+		},
 	}
 
 	for _, tt := range tests {
@@ -160,15 +180,18 @@ func TestGatherCpuUsage(t *testing.T) {
 	if event.Labels["target"] != "cpu" {
 		t.Errorf("expected target=cpu, got %s", event.Labels["target"])
 	}
-	// cpu.Percent(0, false) may fail on first call in test environment;
-	// only verify attr labels when the normal path was taken
-	if event.EventStatus != types.EventStatusCritical || event.Labels[types.AttrPrefix+"cpu_usage"] != "" {
-		if event.Labels[types.AttrPrefix+"cpu_usage"] == "" {
-			t.Error("expected _attr_cpu_usage to be set")
-		}
-		if event.Labels[types.AttrPrefix+"cpu_cores"] == "" {
-			t.Error("expected _attr_cpu_cores to be set")
-		}
+
+	// Init() warms up gopsutil's snapshot, so the normal path should be taken.
+	// If the API returned an error (Critical without attr), skip attr checks.
+	if event.EventStatus == types.EventStatusCritical && event.Labels[types.AttrPrefix+"cpu_usage"] == "" {
+		t.Log("cpu.Percent returned an error, skipping attr checks")
+		return
+	}
+	if event.Labels[types.AttrPrefix+"cpu_usage"] == "" {
+		t.Error("expected _attr_cpu_usage to be set")
+	}
+	if event.Labels[types.AttrPrefix+"cpu_cores"] == "" {
+		t.Error("expected _attr_cpu_cores to be set")
 	}
 }
 
