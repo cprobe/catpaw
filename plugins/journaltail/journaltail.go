@@ -178,8 +178,15 @@ func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
 		return
 	}
 	if runErr != nil {
-		q.PushFront(ins.buildErrorEvent(target, fmt.Sprintf("journalctl exec failed: %v (stderr: %s)", runErr, strings.TrimSpace(stderr.String()))))
-		return
+		// journalctl returns exit code 1 when no entries match the filter.
+		// Treat this as normal "no results" rather than an error.
+		if exitErr, ok := runErr.(*exec.ExitError); ok &&
+			exitErr.ExitCode() == 1 && strings.TrimSpace(stderr.String()) == "" {
+			// fall through: parse stdout normally (may contain "-- No entries --")
+		} else {
+			q.PushFront(ins.buildErrorEvent(target, fmt.Sprintf("journalctl exec failed: %v (stderr: %s)", runErr, strings.TrimSpace(stderr.String()))))
+			return
+		}
 	}
 
 	// Parse output and extract cursor from the last line
