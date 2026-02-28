@@ -1,0 +1,21 @@
+[[instances]]
+## ===== 最小可用示例（30 秒跑起来）=====
+## 监控 Linux 系统级文件描述符（file descriptor）使用率
+## fd 耗尽时所有进程都无法打开文件/建连/写日志
+## 报错信息千差万别，是典型的"症状与根因脱节"问题
+
+## 文件描述符使用率阈值（allocated / max 百分比）
+[instances.filefd_usage]
+warn_ge = 80.0
+critical_ge = 90.0
+# title_rule = "[check]"
+
+## 采集间隔
+interval = "30s"
+
+[instances.alerting]
+for_duration = 0
+repeat_interval = "5m"
+repeat_number = 0
+# disabled = false
+# disable_recovery_notification = false

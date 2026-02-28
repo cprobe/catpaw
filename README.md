@@ -22,6 +22,7 @@ catpaw 是一个轻量的事件监控工具：负责探测异常并产出标准�
 | `docker` | Docker 容器监控（运行状态、频繁重启检测、健康检查、CPU/内存使用率） |
 | `exec` | 执行脚本/命令并按约定输出产生事件（支持 JSON 和 Nagios 模式） |
 | `filecheck` | 文件存在性、mtime、checksum 检查 |
+| `filefd` | Linux 系统级文件描述符使用率监控，预防 fd 耗尽导致服务异常 |
 | `http` | HTTP 可用性、状态码、响应体、证书过期检查 |
 | `journaltail` | 通过 journalctl 增量读取日志并匹配关键行（仅 Linux） |
 | `logfile` | 纯文本日志文件监控（偏移量追踪 + 日志轮转检测 + glob + 多编码） |

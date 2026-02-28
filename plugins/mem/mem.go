@@ -52,12 +52,14 @@ func init() {
 }
 
 func (ins *Instance) Init() error {
-	if ins.MemoryUsage.WarnGe > 100 || ins.MemoryUsage.CriticalGe > 100 {
+	if ins.MemoryUsage.WarnGe < 0 || ins.MemoryUsage.WarnGe > 100 ||
+		ins.MemoryUsage.CriticalGe < 0 || ins.MemoryUsage.CriticalGe > 100 {
 		return fmt.Errorf("memory_usage thresholds must be between 0 and 100 (got warn_ge=%.1f, critical_ge=%.1f)",
 			ins.MemoryUsage.WarnGe, ins.MemoryUsage.CriticalGe)
 	}
 
-	if ins.SwapUsage.WarnGe > 100 || ins.SwapUsage.CriticalGe > 100 {
+	if ins.SwapUsage.WarnGe < 0 || ins.SwapUsage.WarnGe > 100 ||
+		ins.SwapUsage.CriticalGe < 0 || ins.SwapUsage.CriticalGe > 100 {
 		return fmt.Errorf("swap_usage thresholds must be between 0 and 100 (got warn_ge=%.1f, critical_ge=%.1f)",
 			ins.SwapUsage.WarnGe, ins.SwapUsage.CriticalGe)
 	}

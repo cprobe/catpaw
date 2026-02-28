@@ -56,7 +56,8 @@ func init() {
 }
 
 func (ins *Instance) Init() error {
-	if ins.CpuUsage.WarnGe > 100 || ins.CpuUsage.CriticalGe > 100 {
+	if ins.CpuUsage.WarnGe < 0 || ins.CpuUsage.WarnGe > 100 ||
+		ins.CpuUsage.CriticalGe < 0 || ins.CpuUsage.CriticalGe > 100 {
 		return fmt.Errorf("cpu_usage thresholds must be between 0 and 100 (got warn_ge=%.1f, critical_ge=%.1f)",
 			ins.CpuUsage.WarnGe, ins.CpuUsage.CriticalGe)
 	}
@@ -65,6 +66,11 @@ func (ins *Instance) Init() error {
 		ins.CpuUsage.WarnGe >= ins.CpuUsage.CriticalGe {
 		return fmt.Errorf("cpu_usage.warn_ge(%.1f) must be less than cpu_usage.critical_ge(%.1f)",
 			ins.CpuUsage.WarnGe, ins.CpuUsage.CriticalGe)
+	}
+
+	if ins.LoadAverage.WarnGe < 0 || ins.LoadAverage.CriticalGe < 0 {
+		return fmt.Errorf("load_average thresholds must be >= 0 (got warn_ge=%.2f, critical_ge=%.2f)",
+			ins.LoadAverage.WarnGe, ins.LoadAverage.CriticalGe)
 	}
 
 	if ins.LoadAverage.WarnGe > 0 && ins.LoadAverage.CriticalGe > 0 &&
