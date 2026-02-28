@@ -29,6 +29,7 @@ import (
 	_ "github.com/cprobe/catpaw/plugins/procnum"
 	_ "github.com/cprobe/catpaw/plugins/scriptfilter"
 	_ "github.com/cprobe/catpaw/plugins/systemd"
+	_ "github.com/cprobe/catpaw/plugins/uptime"
 )
 
 type PluginConfig struct {

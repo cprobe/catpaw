@@ -1,0 +1,22 @@
+[[instances]]
+## ===== 最小可用示例（30 秒跑起来）=====
+## 默认检测系统重启：uptime < 10 分钟时产出 Critical 告警
+## uptime 自然增长超过阈值后自动恢复，无需人工介入
+
+## 重启检测阈值
+## critical_lt: uptime 低于此值时 Critical（默认 10 分钟）
+## warn_lt: uptime 低于此值时 Warning（默认不启用）
+[instances.reboot_detected]
+critical_lt = "10m"
+# warn_lt = "1h"
+# title_rule = "[check]"
+
+## 采集间隔（重启检测需及时，建议 1 分钟）
+interval = "1m"
+
+[instances.alerting]
+for_duration = 0
+repeat_interval = "1h"
+repeat_number = 0
+# disabled = false
+# disable_recovery_notification = false
