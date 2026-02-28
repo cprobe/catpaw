@@ -19,10 +19,13 @@ catpaw 是一个轻量的事件监控工具：负责探测异常并产出标准�
 | `filecheck` | 文件存在性、mtime、checksum 检查 |
 | `http` | HTTP 可用性、状态码、响应体、证书过期检查 |
 | `journaltail` | 通过 journalctl 增量读取日志并匹配关键行（仅 Linux） |
+| `mem` | 内存使用率、Swap 使用率检查 |
 | `net` | TCP/UDP 连通性与响应时间检查 |
+| `ntp` | NTP 同步状态、时钟偏移、时间源层级检查（仅 Linux） |
 | `ping` | ICMP 可达性、丢包率、时延检查 |
 | `procnum` | 进程数量检查（支持多种查找方式） |
 | `scriptfilter` | 执行脚本并按输出行过滤匹配告警 |
+| `systemd` | systemd 服务状态检查（仅 Linux） |
 
 ## 典型场景
 

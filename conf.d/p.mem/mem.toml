@@ -1,0 +1,37 @@
+[[instances]]
+## ===== 最小可用示例（30 秒跑起来）=====
+## 1) 默认监控内存使用率和 Swap 使用率
+## 2) 阈值已开启（内存 85/90，Swap 80/95）
+## 3) 如果机器未启用 Swap，swap_usage 维度会自动跳过
+## 注意：
+## - 内存使用率计算方式为 (Total - Available) / Total
+## - Linux 下 Available ≠ Free，包含了可回收的 Buffers/Cached
+## - 短暂的内存峰值建议通过 for_duration 持续确认再告警（默认已配 60s）
+
+## 物理内存使用率阈值（禁用：不写或两个都设0）
+## check label 自动设为 "mem::memory_usage"
+[instances.memory_usage]
+warn_ge     = 85.0
+critical_ge = 90.0
+# title_rule = "[check]"
+
+## Swap 使用率阈值（禁用：不写或两个都设0）
+## Swap 总量为 0（未启用 Swap）时自动跳过，不会报错
+## check label 自动设为 "mem::swap_usage"
+[instances.swap_usage]
+warn_ge     = 10.0
+critical_ge = 30.0
+# title_rule = "[check]"
+
+## 采集间隔，不配则继承全局 interval
+# interval = "30s"
+
+## 追加自定义标签
+# labels = { env = "production", team = "devops" }
+
+[instances.alerting]
+for_duration = "60s"
+repeat_interval = "5m"
+repeat_number = 3
+# disabled = false
+# disable_recovery_notification = false

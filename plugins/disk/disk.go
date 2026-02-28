@@ -10,6 +10,7 @@ import (
 
 	"github.com/cprobe/catpaw/config"
 	"github.com/cprobe/catpaw/logger"
+	"github.com/cprobe/catpaw/pkg/conv"
 	"github.com/cprobe/catpaw/pkg/filter"
 	"github.com/cprobe/catpaw/pkg/safe"
 	"github.com/cprobe/catpaw/plugins"
@@ -231,9 +232,9 @@ func (ins *Instance) checkUsage(q *safe.Queue[*types.Event], mountPoint, device,
 		"target":                             mountPoint,
 		types.AttrPrefix + "device":          device,
 		types.AttrPrefix + "fs_type":         fsType,
-		types.AttrPrefix + "total":           humanBytes(usage.Total),
-		types.AttrPrefix + "used":            humanBytes(usage.Used),
-		types.AttrPrefix + "available":       humanBytes(usage.Free),
+		types.AttrPrefix + "total":           conv.HumanBytes(usage.Total),
+		types.AttrPrefix + "used":            conv.HumanBytes(usage.Used),
+		types.AttrPrefix + "available":       conv.HumanBytes(usage.Free),
 		types.AttrPrefix + "used_percent":    fmt.Sprintf("%.1f%%", usage.UsedPercent),
 	}).SetTitleRule(tr).SetDescription("everything is ok")
 
@@ -375,16 +376,4 @@ func (ins *Instance) buildHungRecoveryEvent(mountPoint string) *types.Event {
 		SetDescription("disk check recovered from hung state")
 }
 
-func humanBytes(b uint64) string {
-	const unit = 1024
-	if b < unit {
-		return fmt.Sprintf("%d B", b)
-	}
-	div, exp := uint64(unit), 0
-	for n := b / unit; n >= unit; n /= unit {
-		div *= unit
-		exp++
-	}
-	return fmt.Sprintf("%.1f %ciB", float64(b)/float64(div), "KMGTPE"[exp])
-}
 
