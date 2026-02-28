@@ -265,10 +265,11 @@ type Instance struct {
 
     RemoteTargets []string        `toml:"remote_targets"`
     FileTargets   []string        `toml:"file_targets"`
-    Timeout       config.Duration `toml:"timeout"`
-    Concurrency   int             `toml:"concurrency"`
-    StartTLS      string          `toml:"starttls"`
-    ServerName    string          `toml:"server_name"`
+    Timeout        config.Duration `toml:"timeout"`
+    Concurrency    int             `toml:"concurrency"`
+    MaxFileTargets int             `toml:"max_file_targets"`
+    StartTLS       string          `toml:"starttls"`
+    ServerName     string          `toml:"server_name"`
 
     RemoteExpiry ExpiryCheck `toml:"remote_expiry"`
     FileExpiry   ExpiryCheck `toml:"file_expiry"`
@@ -297,7 +298,7 @@ type Instance struct {
 | `_attr_cert_sha256` | `2F:3C:8A:...` | 证书 SHA-256 指纹 |
 | `_attr_cert_not_before` | `2026-01-01 00:00:00` | 证书生效时间 |
 | `_attr_cert_expires_at` | `2026-06-15 23:59:59` | 过期时间 |
-| `_attr_time_until_expiry` | `106d 12h` | 距过期剩余时间 |
+| `_attr_time_until_expiry` | `106d 12h` / `-2d 6h` | 距过期剩余时间（已过期为负值绝对值加 `-` 前缀） |
 | `_attr_cert_dns_names` | `*.example.com, example.com` | 证书 SAN DNS 名称 |
 | `_attr_cert_chain_count` | `3` | 链中证书总数（仅 bundle 文件和远程链有意义） |
 | `_attr_cert_sni` | `api.example.com` | 实际使用的 SNI（仅远程模式） |
@@ -326,8 +327,9 @@ type Instance struct {
 6. 默认阈值填充：如果对应 targets 非空且两个阈值都为 0，填充 720h / 168h
 7. `timeout` 默认 `10s`
 8. `concurrency` 默认 `10`
-9. 构建 `tlsConfig`：`InsecureSkipVerify = true`，如有 `server_name` 则设置 `ServerName`
-10. 区分 `file_targets` 中的精确路径和 glob 模式（复用 `filter.HasMeta`）
+9. `max_file_targets` 默认 `100`（防止宽泛 glob 匹配大量无关文件）
+10. 构建 `tlsConfig`：`InsecureSkipVerify = true`，如有 `server_name` 则设置 `ServerName`
+11. 区分 `file_targets` 中的精确路径和 glob 模式（复用 `filter.HasMeta`）
 
 ## Gather() 逻辑
 
@@ -345,6 +347,9 @@ Gather(q):
 
     // 文件目标：精确路径 + glob 动态解析
     resolvedFiles = resolveFileTargets()
+    if len(resolvedFiles) > max_file_targets:
+        产出 Warning 事件: "file_targets resolved to N files, exceeding max_file_targets(M)"
+        resolvedFiles = resolvedFiles[:max_file_targets]
     for each filePath in resolvedFiles:
         wg.Add(1)
         go:
@@ -430,9 +435,21 @@ checkRemote(q, target):
 checkFile(q, target):
     event = buildEvent("cert::file_expiry", target)
 
-    certs, err = parseCertFile(target)
-    if error:
-        event → Critical: "failed to parse <target>: <error>"
+    data, err = os.ReadFile(target)
+    if err:
+        if os.IsNotExist(err):
+            event → Critical: "certificate file not found: <target>"
+        else:
+            event → Critical: "failed to read <target>: <error>"
+        return
+
+    if len(data) > maxCertFileSize:
+        event → Critical: "file too large (<size>), likely not a certificate: <target>"
+        return
+
+    certs, err = parseCerts(data)
+    if err || len(certs) == 0:
+        event → Critical: "no valid certificates found in <target>: <error>"
         return
 
     cert, certIdx = earliestExpiry(certs)
@@ -454,7 +471,10 @@ evaluateExpiry(event, cert, certIdx, chainLen, check):
     event._attr_cert_sha256 = sha256Fingerprint(cert.Raw)
     event._attr_cert_not_before = cert.NotBefore.Format("2006-01-02 15:04:05")
     event._attr_cert_expires_at = expiry.Format("2006-01-02 15:04:05")
-    event._attr_time_until_expiry = humanDuration(timeUntil)
+    if timeUntil >= 0:
+        event._attr_time_until_expiry = humanDuration(timeUntil)       // "106d 12h"
+    else:
+        event._attr_time_until_expiry = "-" + humanDuration(-timeUntil) // "-2d 6h"
     event._attr_cert_dns_names = join(cert.DNSNames, ", ")
     event._attr_cert_chain_count = strconv.Itoa(chainLen)
     event._attr_warn_within = check.WarnWithin.HumanString()
@@ -507,7 +527,8 @@ evaluateExpiry(event, cert, certIdx, chainLen, check):
 - 中间证书即将过期：`intermediate cert CN=Let's Encrypt Authority X3 expires in 25 days 4 hours`
 - 连接失败：`TLS connection to db.example.com:3306 failed: connection refused`
 - STARTTLS 失败：`SMTP STARTTLS negotiation with mail.example.com:25 failed: unexpected response "454 TLS not available"`
-- 文件解析失败：`failed to parse /etc/ssl/certs/app.pem: no valid certificates found`
+- 文件不存在：`certificate file not found: /etc/ssl/certs/app.pem`
+- 文件解析失败：`no valid certificates found in /etc/ssl/certs/app.pem: x509: malformed certificate`
 - 无对端证书：`no peer certificates from example.com:443`
 
 ## 默认配置关键决策
@@ -518,6 +539,7 @@ evaluateExpiry(event, cert, certIdx, chainLen, check):
 | critical_within | `168h`（7 天） | 一周内过期属紧急 |
 | timeout | `10s` | 覆盖慢 DNS + 跨洋 TLS 握手；本地连接毫秒级 |
 | concurrency | `10` | 10 个并发连接足以快速检查大量 target；防止 fd 暴涨 |
+| max_file_targets | `100` | 防止宽泛 glob 意外匹配大量非证书文件；正常场景远低于此值 |
 | starttls | `""`（直接 TLS） | 绝大多数场景是直接 TLS |
 | InsecureSkipVerify | `true`（硬编码） | 确保自签/过期/链缺失也能获取证书信息 |
 | 端口默认值 | `443` | TLS 最常见端口 |
@@ -621,6 +643,10 @@ file_targets = [
 
 ## 并发连接数（默认 10）
 # concurrency = 10
+
+## glob 模式解析的最大文件数（默认 100）
+## 超过此限制会产出 Warning 事件并截断
+# max_file_targets = 100
 
 ## 采集间隔（证书过期变化慢，可设较长间隔）
 interval = "1h"
