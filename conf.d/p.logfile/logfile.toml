@@ -1,0 +1,87 @@
+[[instances]]
+## ===== 最小可用示例（30 秒跑起来）=====
+## 1) targets 填你的日志文件路径（支持精确路径 + glob 模式）
+## 2) filter_include 填你关心的关键字（glob + /regex/ 混用）
+## 3) 启动后只处理新增日志，不会扫描历史内容
+## 例子：
+## targets = ["/var/log/myapp/error.log"]
+## targets = ["/var/log/myapp/*.log"]
+## targets = ["/var/log/*/error.log"]
+## filter_include = ["*ERROR*", "/(?i)panic|fatal/"]
+## 常见误区：
+## - targets 填目录无效，必须精确到文件（或匹配文件的 glob）
+## - filter_include 必填，不能为空
+## - 默认从文件末尾开始监控，想扫描历史内容需设 initial_position = "beginning"
+## - glob 模式新发现的文件也是从末尾开始，不会扫描历史内容
+
+## 要监控的日志文件路径（必填，可多个）
+## 支持两种写法：
+##   1) 精确路径："/var/log/myapp/error.log"
+##   2) glob 模式："/var/log/myapp/*.log"、"/var/log/*/error.log"
+## 精确路径的文件消失会告警；glob 匹配的文件消失会静默清理（自然轮转）
+## 每个文件独立追踪偏移量、独立告警/恢复
+targets = ["/var/log/myapp/error.log"]
+
+## 首次遇到文件时的起始位置
+## "end"（默认）：从文件末尾开始，只监控新增内容
+## "beginning"：从文件开头读取（测试/调试用，慎用于大文件）
+# initial_position = "end"
+
+## 行过滤规则（核心配置，必填）
+## 规则之间是 OR：任意一条命中就算匹配
+## 支持两种写法混用：
+##   1) glob：如 "*ERROR*"
+##   2) 正则：用 /.../ 包裹，如 "/(?i)panic|fatal/"
+filter_include = ["*ERROR*", "*FATAL*", "/(?i)exception|panic/"]
+
+## 排除规则（可选），优先级高于 include
+# filter_exclude = ["*expected*", "*DeprecationWarning*"]
+
+## 告警描述中最多展示多少条匹配行（默认 10）
+# max_lines = 10
+
+## 每次采集每个文件最多读取的字节数（默认 1MB）
+## 超出部分下次采集继续处理，不会丢失
+# max_read_bytes = "1MB"
+
+## 单行最大长度（默认 8192 字节），超长行会被截断
+# max_line_length = 8192
+
+## glob 展开后允许的最大文件数量（默认 100）
+## 超出上限会截断并产出 Warning 提示
+# max_targets = 100
+
+## 匹配行的上下文行数（默认 0，不展示上下文）
+## 设置后，告警描述中会在匹配行前后展示指定行数的上下文
+## 匹配行以 "> " 前缀标记，上下文行以 "  " 前缀标记
+# context_before = 0
+# context_after = 0
+
+## 日志文件编码（默认 UTF-8）
+## 支持：gbk, gb18030, big5, shift_jis, euc-jp, euc-kr, latin1, windows-1252
+## 仅在日志文件不是 UTF-8 编码时需要配置
+# encoding = ""
+
+## 偏移量持久化文件路径（默认自动生成于 state.d/p.logfile/ 下）
+## state 文件与配置文件分离存放，配置目录可保持只读
+## 多个 [[instances]] 自动使用不同的 state 文件（基于 targets hash），互不冲突
+## 持久化后 catpaw 重启不会丢失读取进度
+# state_file = ""
+
+## 文件操作超时（默认 10s，主要防范 NFS 挂载的日志文件）
+# gather_timeout = "10s"
+
+## 采集间隔
+interval = "30s"
+
+## 匹配到内容后的事件级别
+[instances.match]
+severity = "Warning"
+# title_rule = "[check] [target]"
+
+[instances.alerting]
+for_duration = 0
+repeat_interval = "5m"
+repeat_number = 3
+# disabled = false
+# disable_recovery_notification = false

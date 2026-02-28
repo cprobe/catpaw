@@ -1,6 +1,6 @@
 module github.com/cprobe/catpaw
 
-go 1.20
+go 1.24.0
 
 require (
 	github.com/BurntSushi/toml v1.3.0
@@ -30,6 +30,7 @@ require (
 	go.uber.org/automaxprocs v1.4.0 // indirect
 	go.uber.org/multierr v1.6.0 // indirect
 	golang.org/x/net v0.10.0 // indirect
-	golang.org/x/sync v0.2.0 // indirect
+	golang.org/x/sync v0.19.0 // indirect
+	golang.org/x/text v0.34.0 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 )

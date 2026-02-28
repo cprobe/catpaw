@@ -20,6 +20,7 @@ import (
 	_ "github.com/cprobe/catpaw/plugins/filecheck"
 	_ "github.com/cprobe/catpaw/plugins/http"
 	_ "github.com/cprobe/catpaw/plugins/journaltail"
+	_ "github.com/cprobe/catpaw/plugins/logfile"
 	_ "github.com/cprobe/catpaw/plugins/mem"
 	_ "github.com/cprobe/catpaw/plugins/net"
 	_ "github.com/cprobe/catpaw/plugins/ntp"

@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"path"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -36,6 +37,7 @@ type Flashduty struct {
 
 type ConfigType struct {
 	ConfigDir string `toml:"-"`
+	StateDir  string `toml:"-"`
 	TestMode  bool   `toml:"-"`
 	Plugins   string `toml:"-"`
 	Url       string `toml:"-"`
@@ -56,6 +58,7 @@ func InitConfig(configDir string, testMode bool, interval int64, plugins, url, l
 
 	Config = &ConfigType{
 		ConfigDir: configDir,
+		StateDir:  filepath.Join(filepath.Dir(configDir), "state.d"),
 		TestMode:  testMode,
 		Plugins:   plugins,
 		Url:       url,

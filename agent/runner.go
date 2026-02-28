@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"sync"
 	"time"
 
 	"github.com/cprobe/catpaw/config"
@@ -16,6 +17,7 @@ type PluginRunner struct {
 	pluginName   string
 	pluginObject plugins.Plugin
 	quitChan     []chan struct{}
+	wg           sync.WaitGroup
 	Instances    []plugins.Instance
 }
 
@@ -29,6 +31,9 @@ func newPluginRunner(pluginName string, p plugins.Plugin) *PluginRunner {
 func (r *PluginRunner) stop() {
 	for i := 0; i < len(r.Instances); i++ {
 		close(r.quitChan[i])
+	}
+	r.wg.Wait()
+	for i := 0; i < len(r.Instances); i++ {
 		plugins.MayDrop(r.Instances[i])
 	}
 }
@@ -40,12 +45,15 @@ func (r *PluginRunner) start() {
 		r.quitChan[i] = make(chan struct{})
 		ins := r.Instances[i]
 		ch := r.quitChan[i]
+		r.wg.Add(1)
 		go r.startInstancePlugin(ins, ch)
 		time.Sleep(50 * time.Millisecond)
 	}
 }
 
 func (r *PluginRunner) startInstancePlugin(instance plugins.Instance, ch chan struct{}) {
+	defer r.wg.Done()
+
 	interval := instance.GetInterval()
 	if interval == 0 {
 		interval = r.pluginObject.GetInterval()
