@@ -1,0 +1,72 @@
+[[instances]]
+## ===== 最小可用示例（30 秒跑起来）=====
+## 取消 targets 的注释即可启用监控，检测：
+## - 容器是否在运行
+## - 容器是否在 crashloop（滑动窗口内频繁重启）
+## - Docker HEALTHCHECK 是否通过
+## - CPU / 内存使用率是否过高
+
+## Docker Engine 连接
+## Linux/macOS 默认 /var/run/docker.sock（Unix socket）
+## Windows 默认 http://localhost:2375（TCP 模式）
+# socket = "/var/run/docker.sock"
+## API 版本（留空自动协商，支持 Docker 1.13+）
+# api_version = ""
+# timeout = "10s"
+
+## 监控目标（容器名称，支持 glob 模式）
+## 显式名称：容器必须存在且运行，否则 Critical
+## Glob 模式：发现匹配的容器并监控，无匹配不报错
+## 取消注释以下行以启用（targets 为空时插件静默跳过，不产出任何事件）
+targets = [
+    # "*",
+    # "nginx",
+    # "redis",
+    # "app-*",
+]
+
+## 并发控制
+# concurrency = 5
+# max_containers = 100
+
+## 容器运行状态检查（始终启用）
+# [instances.container_running]
+# title_rule = "[check] [target]"
+
+## 频繁重启检测（滑动窗口内重启次数超阈值 → crashloop）
+## 单次重启不告警，短时间多次重启才是异常信号
+## window 建议 >= 3 * interval，确保窗口内有足够采样点
+# [instances.restart_detected]
+# window = "10m"
+# warn_ge = 3
+# critical_ge = 5
+# title_rule = "[check] [target]"
+
+## Docker HEALTHCHECK 状态（始终启用，仅对有 HEALTHCHECK 的容器生效）
+# [instances.health_status]
+# title_rule = "[check] [target]"
+
+## 内存使用率
+# [instances.memory_usage]
+# warn_ge = 80.0
+# critical_ge = 95.0
+# title_rule = "[check] [target]"
+
+## CPU 使用率
+## 当 cpu_usage 或 memory_usage 任一启用时，会调用 Stats API（~50-100ms/容器）
+## cpu_usage 的 _attr_ 中包含 CFS throttling 数据——CPU 平均使用率不高但 throttling
+## 严重时，说明 burst 期间被限流导致延迟飙升
+# [instances.cpu_usage]
+# warn_ge = 80.0
+# critical_ge = 95.0
+# title_rule = "[check] [target]"
+
+## 采集间隔
+# interval = "30s"
+
+# [instances.alerting]
+# for_duration = 0
+# repeat_interval = "5m"
+# repeat_number = 0
+# disabled = false
+# disable_recovery_notification = false

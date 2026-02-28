@@ -17,6 +17,7 @@ import (
 	_ "github.com/cprobe/catpaw/plugins/cpu"
 	_ "github.com/cprobe/catpaw/plugins/disk"
 	_ "github.com/cprobe/catpaw/plugins/dns"
+	_ "github.com/cprobe/catpaw/plugins/docker"
 	_ "github.com/cprobe/catpaw/plugins/exec"
 	_ "github.com/cprobe/catpaw/plugins/filecheck"
 	_ "github.com/cprobe/catpaw/plugins/http"

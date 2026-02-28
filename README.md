@@ -18,6 +18,7 @@ catpaw 是一个轻量的事件监控工具：负责探测异常并产出标准�
 | `cpu` | CPU 使用率、Load Average（归一化每核负载）检查 |
 | `disk` | 磁盘空间、inode、可写性检查 |
 | `dns` | DNS 解析检查 |
+| `docker` | Docker 容器监控（运行状态、频繁重启检测、健康检查、CPU/内存使用率） |
 | `exec` | 执行脚本/命令并按约定输出产生事件（支持 JSON 和 Nagios 模式） |
 | `filecheck` | 文件存在性、mtime、checksum 检查 |
 | `http` | HTTP 可用性、状态码、响应体、证书过期检查 |
