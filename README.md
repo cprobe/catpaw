@@ -40,6 +40,7 @@ catpaw 是一个轻量的事件监控工具：负责探测异常并产出标准�
 | `sockstat` | TCP listen 队列溢出检测（ListenOverflows 增量监控，仅 Linux） |
 | `sysctl` | 内核参数基线检查，防止重启/升级后调优参数被静默重置（仅 Linux） |
 | `systemd` | systemd 服务状态检查（仅 Linux） |
+| `tcpstate` | TCP 连接状态监控（CLOSE_WAIT/TIME_WAIT 异常堆积检测，Netlink 高性能采集，仅 Linux） |
 | `uptime` | 系统异常重启检测（uptime 低于阈值时告警，自愈型事件） |
 | `zombie` | 僵尸进程检测（系统全局统计状态为 Z 的进程数量） |
 

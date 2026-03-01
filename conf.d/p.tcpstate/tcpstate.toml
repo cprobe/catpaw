@@ -1,0 +1,31 @@
+[[instances]]
+## ===== TCP 连接状态监控（60 秒跑起来）=====
+## CLOSE_WAIT：应用未关闭 socket，连接泄漏。正常应接近 0
+##   排查：ss -tnp state close-wait，找到泄漏进程，检查代码中未 Close() 的连接
+## TIME_WAIT：TCP 正常关闭后的等待态（60s），高并发短连接场景会大量积累
+##   排查：ss -s 查看 timewait 计数，考虑启用连接池/Keep-Alive 或调整
+##         net.ipv4.tcp_tw_reuse / net.ipv4.ip_local_port_range
+
+interval = "60s"
+
+## CLOSE_WAIT 连接数阈值
+## 正常应用几乎不应有 CLOSE_WAIT，100 就值得调查
+[instances.close_wait]
+warn_ge = 100
+critical_ge = 1000
+# title_rule = "[check]"
+
+## TIME_WAIT 连接数阈值
+## 与 QPS 和连接模式相关，高并发短连接场景常见
+## 默认端口范围 28232 个，20000 时可用端口已不多
+[instances.time_wait]
+warn_ge = 5000
+critical_ge = 20000
+# title_rule = "[check]"
+
+[instances.alerting]
+for_duration = "2m"
+repeat_interval = "30m"
+repeat_number = 3
+# disabled = false
+# disable_recovery_notification = false

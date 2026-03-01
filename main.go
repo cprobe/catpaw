@@ -6,11 +6,11 @@ import (
 	"os"
 	"runtime"
 
+	"github.com/chai2010/winsvc"
 	"github.com/cprobe/catpaw/agent"
 	"github.com/cprobe/catpaw/config"
 	"github.com/cprobe/catpaw/logger"
 	"github.com/cprobe/catpaw/winx"
-	"github.com/chai2010/winsvc"
 	"github.com/toolkits/pkg/runner"
 )
 
@@ -21,8 +21,8 @@ var (
 	interval    = flag.Int64("interval", 0, "Global interval(unit:Second).")
 	showVersion = flag.Bool("version", false, "Show version.")
 	plugins     = flag.String("plugins", "", "e.g. plugin1:plugin2")
-	url      = flag.String("url", "", "e.g. https://api.flashcat.cloud/event/push/alert/standard?integration_key=x")
-	loglevel = flag.String("loglevel", "", "e.g. debug, info, warn, error, fatal")
+	url         = flag.String("url", "", "e.g. https://api.flashcat.cloud/event/push/alert/standard?integration_key=x")
+	loglevel    = flag.String("loglevel", "", "e.g. debug, info, warn, error, fatal")
 )
 
 func init() {
@@ -55,7 +55,6 @@ func main() {
 		"configdir", *configDir,
 		"hostname", runner.Hostname,
 		"fd_limits", runner.FdLimits(),
-		"vm_limits", runner.VMLimits(),
 	)
 
 	ag := agent.New()
