@@ -4,8 +4,8 @@ package tcpstate
 
 import (
 	"encoding/binary"
+	"errors"
 	"fmt"
-	"os"
 	"syscall"
 )
 
@@ -28,7 +28,6 @@ const (
 
 func init() {
 	queryStatesFn = queryNetlinkTcpStates
-	readTimeWaitFn = readSockstatTimeWait
 }
 
 func queryNetlinkTcpStates() (*stateCounts, error) {
@@ -118,13 +117,11 @@ func buildDiagRequest(family uint8) []byte {
 	ne.PutUint32(msg[0:4], totalSize)
 	ne.PutUint16(msg[4:6], sockDiagByFamily)
 	ne.PutUint16(msg[6:8], syscall.NLM_F_REQUEST|syscall.NLM_F_DUMP)
-	// seq and pid remain 0
 
 	// inet_diag_req_v2
 	msg[16] = family
 	msg[17] = syscall.IPPROTO_TCP
 	ne.PutUint32(msg[20:24], statesFilter)
-	// remaining 48 bytes (inet_diag_sockid) stay zero
 
 	return msg
 }
@@ -144,38 +141,7 @@ func parseNlError(data []byte) error {
 }
 
 func isIPv6Unavailable(err error) bool {
-	for _, target := range []syscall.Errno{
-		syscall.ENOENT,
-		syscall.EAFNOSUPPORT,
-		syscall.EPROTONOSUPPORT,
-	} {
-		if isErrno(err, target) {
-			return true
-		}
-	}
-	return false
-}
-
-func isErrno(err error, target syscall.Errno) bool {
-	for err != nil {
-		if e, ok := err.(syscall.Errno); ok {
-			return e == target
-		}
-		if u, ok := err.(interface{ Unwrap() error }); ok {
-			err = u.Unwrap()
-		} else {
-			break
-		}
-	}
-	return false
-}
-
-// --- sockstat fast path ---
-
-func readSockstatTimeWait() (uint64, error) {
-	data, err := os.ReadFile(sockstatPath)
-	if err != nil {
-		return 0, fmt.Errorf("read %s: %w", sockstatPath, err)
-	}
-	return parseSockstatTimeWait(data)
+	return errors.Is(err, syscall.ENOENT) ||
+		errors.Is(err, syscall.EAFNOSUPPORT) ||
+		errors.Is(err, syscall.EPROTONOSUPPORT)
 }

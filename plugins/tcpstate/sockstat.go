@@ -2,11 +2,24 @@ package tcpstate
 
 import (
 	"fmt"
+	"os"
 	"strconv"
 	"strings"
 )
 
 const sockstatPath = "/proc/net/sockstat"
+
+func init() {
+	readTimeWaitFn = readSockstatTimeWait
+}
+
+func readSockstatTimeWait() (uint64, error) {
+	data, err := os.ReadFile(sockstatPath)
+	if err != nil {
+		return 0, fmt.Errorf("read %s: %w", sockstatPath, err)
+	}
+	return parseSockstatTimeWait(data)
+}
 
 func parseSockstatTimeWait(data []byte) (uint64, error) {
 	for _, line := range strings.Split(string(data), "\n") {
