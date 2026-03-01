@@ -5,10 +5,12 @@ import (
 	"testing"
 )
 
+func intPtr(v int) *int { return &v }
+
 func TestInitTrimSpaceAndSetLabel(t *testing.T) {
 	ins := &Instance{
 		SearchCmdline: "  nginx -g daemon off;  ",
-		ProcessCount:  ProcessCountCheck{CriticalLt: 1},
+		ProcessCount:  ProcessCountCheck{CriticalLt: intPtr(1)},
 	}
 	if err := ins.Init(); err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -18,22 +20,28 @@ func TestInitTrimSpaceAndSetLabel(t *testing.T) {
 	}
 }
 
-func TestInitRejectsEmptySearch(t *testing.T) {
+func TestInitEmptySearchCountsAll(t *testing.T) {
 	ins := &Instance{
-		ProcessCount: ProcessCountCheck{CriticalLt: 1},
+		ProcessCount: ProcessCountCheck{CriticalLt: intPtr(1)},
 	}
-	if err := ins.Init(); err == nil {
-		t.Fatal("should reject empty search config")
+	if err := ins.Init(); err != nil {
+		t.Fatalf("empty search should be accepted (counts all processes): %v", err)
+	}
+	if ins.searchLabel != "all" {
+		t.Fatalf("expected label %q, got %q", "all", ins.searchLabel)
 	}
 }
 
-func TestInitRejectsWhitespaceOnlySearch(t *testing.T) {
+func TestInitWhitespaceOnlySearchCountsAll(t *testing.T) {
 	ins := &Instance{
 		SearchExecName: "   ",
-		ProcessCount:   ProcessCountCheck{CriticalLt: 1},
+		ProcessCount:   ProcessCountCheck{CriticalLt: intPtr(1)},
 	}
-	if err := ins.Init(); err == nil {
-		t.Fatal("should reject whitespace-only search config")
+	if err := ins.Init(); err != nil {
+		t.Fatalf("whitespace-only search should be accepted (counts all processes): %v", err)
+	}
+	if ins.searchLabel != "all" {
+		t.Fatalf("expected label %q, got %q", "all", ins.searchLabel)
 	}
 }
 
@@ -73,7 +81,7 @@ func TestInitAllowsAndCombination(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			ins := tc.ins
-			ins.ProcessCount = ProcessCountCheck{CriticalLt: 1}
+			ins.ProcessCount = ProcessCountCheck{CriticalLt: intPtr(1)}
 			if err := ins.Init(); err != nil {
 				t.Fatalf("AND combination should be allowed: %v", err)
 			}
@@ -106,7 +114,7 @@ func TestInitRejectsMixedModes(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			ins := tc.ins
-			ins.ProcessCount = ProcessCountCheck{CriticalLt: 1}
+			ins.ProcessCount = ProcessCountCheck{CriticalLt: intPtr(1)}
 			if err := ins.Init(); err == nil {
 				t.Fatal("should reject mixed modes")
 			}
@@ -121,19 +129,19 @@ func TestInitRejectsInvalidThresholds(t *testing.T) {
 	}{
 		{
 			name: "negative threshold",
-			pc:   ProcessCountCheck{CriticalLt: -1},
+			pc:   ProcessCountCheck{CriticalLt: intPtr(-1)},
 		},
 		{
-			name: "all zero",
+			name: "all nil",
 			pc:   ProcessCountCheck{},
 		},
 		{
 			name: "warn_lt < critical_lt",
-			pc:   ProcessCountCheck{WarnLt: 1, CriticalLt: 3},
+			pc:   ProcessCountCheck{WarnLt: intPtr(1), CriticalLt: intPtr(3)},
 		},
 		{
 			name: "warn_gt > critical_gt",
-			pc:   ProcessCountCheck{WarnGt: 100, CriticalGt: 50},
+			pc:   ProcessCountCheck{WarnGt: intPtr(100), CriticalGt: intPtr(50)},
 		},
 	}
 
@@ -153,7 +161,7 @@ func TestInitRejectsInvalidThresholds(t *testing.T) {
 func TestInitWinServicePlatformGuard(t *testing.T) {
 	ins := &Instance{
 		SearchWinService: "W32Time",
-		ProcessCount:     ProcessCountCheck{CriticalLt: 1},
+		ProcessCount:     ProcessCountCheck{CriticalLt: intPtr(1)},
 	}
 	err := ins.Init()
 	if runtime.GOOS == "windows" && err != nil {
@@ -185,7 +193,7 @@ func TestInitSearchModeDetection(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			ins := tc.ins
-			ins.ProcessCount = ProcessCountCheck{CriticalLt: 1}
+			ins.ProcessCount = ProcessCountCheck{CriticalLt: intPtr(1)}
 			if err := ins.Init(); err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}

@@ -1,13 +1,5 @@
 # 插件规划
 
-## ulimit — 进程资源限制检查
-
-- **检查维度**：`fd_usage`（系统级文件描述符使用率 `fs.file-nr`）、`process_fd`（指定进程的 fd 使用率 = 实际打开 / nofile 上限）、`process_nproc`（指定进程的线程数使用率）
-- **价值**：fd 耗尽是最常见的生产事故原因之一，表现为 "too many open files" 导致服务拒绝新连接。通常到出错才发现 ulimit 配置太低
-- **实现**：系统级读 `/proc/sys/fs/file-nr`；进程级读 `/proc/{pid}/limits` 获取上限，`/proc/{pid}/fd` 计数获取实际使用
-- **配置**：支持按进程名/PID/用户指定检查目标，类似 procnum 的匹配方式
-- **参考**：Nagios `check_open_files`、Sensu `check-fd`
-
 ## sysctl — 内核参数基线检查
 
 - **检查维度**：`param_mismatch`（实际值与期望值不匹配告警）

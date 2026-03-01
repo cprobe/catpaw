@@ -7,6 +7,7 @@ import (
 
 	"github.com/cprobe/catpaw/config"
 	"github.com/cprobe/catpaw/logger"
+	"github.com/cprobe/catpaw/pkg/procutil"
 	"github.com/cprobe/catpaw/pkg/safe"
 	"github.com/cprobe/catpaw/plugins"
 	"github.com/cprobe/catpaw/types"
@@ -174,7 +175,7 @@ func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
 		count, err = len(pids), e
 	case searchModeProcess:
 		if ins.searchLabel == "all" {
-			count, err = countAllProcesses()
+			count, err = procutil.CountAllProcesses()
 		} else {
 			pids, e := ins.findProcesses()
 			count, err = len(pids), e
@@ -235,16 +236,16 @@ func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
 
 // findProcesses enumerates all system processes and returns those matching
 // ALL configured conditions (exec_name, cmdline, user) via AND logic.
-func (ins *Instance) findProcesses() ([]PID, error) {
-	procs, err := FastProcessList()
+func (ins *Instance) findProcesses() ([]procutil.PID, error) {
+	procs, err := procutil.FastProcessList()
 	if err != nil {
 		return nil, err
 	}
 
-	var pids []PID
+	var pids []procutil.PID
 	for _, p := range procs {
 		if ins.matchProcess(p) {
-			pids = append(pids, PID(p.Pid))
+			pids = append(pids, procutil.PID(p.Pid))
 		}
 	}
 	return pids, nil
@@ -253,7 +254,7 @@ func (ins *Instance) findProcesses() ([]PID, error) {
 // matchProcess returns true only if the process satisfies ALL configured conditions.
 func (ins *Instance) matchProcess(p *process.Process) bool {
 	if ins.SearchExecName != "" {
-		name, err := processExecName(p)
+		name, err := procutil.ProcessExecName(p)
 		if err != nil {
 			return false
 		}
@@ -286,13 +287,13 @@ func (ins *Instance) matchProcess(p *process.Process) bool {
 }
 
 // findByPidFile reads a PID from a file and verifies the process is still alive.
-func (ins *Instance) findByPidFile() ([]PID, error) {
-	pids, err := ReadPidFile(ins.SearchPidFile)
+func (ins *Instance) findByPidFile() ([]procutil.PID, error) {
+	pids, err := procutil.ReadPidFile(ins.SearchPidFile)
 	if err != nil {
 		return nil, err
 	}
 
-	var alive []PID
+	var alive []procutil.PID
 	for _, pid := range pids {
 		exists, err := process.PidExists(int32(pid))
 		if err != nil {
@@ -305,7 +306,7 @@ func (ins *Instance) findByPidFile() ([]PID, error) {
 	return alive, nil
 }
 
-func (ins *Instance) winServicePIDs() ([]PID, error) {
+func (ins *Instance) winServicePIDs() ([]procutil.PID, error) {
 	pid, err := queryPidWithWinServiceName(ins.SearchWinService)
 	if err != nil {
 		return nil, err
@@ -313,7 +314,7 @@ func (ins *Instance) winServicePIDs() ([]PID, error) {
 	if pid == 0 {
 		return nil, nil
 	}
-	return []PID{PID(pid)}, nil
+	return []procutil.PID{procutil.PID(pid)}, nil
 }
 
 func (ins *Instance) newEvent() *types.Event {

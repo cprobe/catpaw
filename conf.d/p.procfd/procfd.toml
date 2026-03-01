@@ -1,0 +1,31 @@
+[[instances]]
+## ===== 最小可用示例（30 秒跑起来）=====
+## 监控指定进程的文件描述符（fd）使用率
+## 进程级 nofile 限制（默认 1024）被触及的频率远高于系统级 file-max
+## 表现为 "too many open files"、新连接被拒、日志写不了
+## 与 filefd（系统级）互补，本插件关注单个进程的 fd 健康
+
+## 进程匹配条件（AND 组合，至少配一项）
+search_exec_name = "nginx"
+# search_cmdline = ""
+# search_user = ""
+# search_pid_file = ""
+
+## 匹配到多个进程时的并发数，默认 10
+# concurrency = 10
+
+interval = "30s"
+
+## fd 使用率阈值（已打开 fd 数 / nofile soft limit 百分比）
+## 匹配到多个进程时，取 fd 使用率最高的进程进行评估
+[instances.fd_usage]
+warn_ge = 80.0
+critical_ge = 90.0
+# title_rule = "[check] [target]"
+
+[instances.alerting]
+for_duration = 0
+repeat_interval = "5m"
+repeat_number = 0
+# disabled = false
+# disable_recovery_notification = false

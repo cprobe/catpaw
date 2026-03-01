@@ -30,6 +30,7 @@ import (
 	_ "github.com/cprobe/catpaw/plugins/net"
 	_ "github.com/cprobe/catpaw/plugins/ntp"
 	_ "github.com/cprobe/catpaw/plugins/ping"
+	_ "github.com/cprobe/catpaw/plugins/procfd"
 	_ "github.com/cprobe/catpaw/plugins/procnum"
 	_ "github.com/cprobe/catpaw/plugins/scriptfilter"
 	_ "github.com/cprobe/catpaw/plugins/sockstat"

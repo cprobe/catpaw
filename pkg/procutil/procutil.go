@@ -1,13 +1,17 @@
-package procnum
+package procutil
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"strconv"
 	"strings"
+	"syscall"
 
 	"github.com/shirou/gopsutil/v3/process"
 )
+
+type PID int32
 
 // FastProcessList returns lightweight process handles for all running PIDs.
 // Each handle only has the PID populated; attributes are fetched lazily on demand.
@@ -24,9 +28,8 @@ func FastProcessList() ([]*process.Process, error) {
 	return result, nil
 }
 
-// countAllProcesses returns the total number of running processes.
-// Uses gopsutil's Pids() for cross-platform compatibility (Linux/macOS/Windows).
-func countAllProcesses() (int, error) {
+// CountAllProcesses returns the total number of running processes.
+func CountAllProcesses() (int, error) {
 	pids, err := process.Pids()
 	if err != nil {
 		return 0, err
@@ -48,4 +51,15 @@ func ReadPidFile(path string) ([]PID, error) {
 		return nil, fmt.Errorf("invalid pid %d in '%s': must be positive", pid, path)
 	}
 	return []PID{PID(pid)}, nil
+}
+
+// IsProcessGone returns true if the error indicates the process no longer exists.
+func IsProcessGone(err error) bool {
+	if errors.Is(err, os.ErrNotExist) {
+		return true
+	}
+	if errors.Is(err, syscall.ESRCH) {
+		return true
+	}
+	return false
 }
