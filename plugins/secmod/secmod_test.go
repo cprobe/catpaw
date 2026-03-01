@@ -58,11 +58,11 @@ func TestInitPlatformGuard(t *testing.T) {
 	}
 }
 
-func TestInitRejectsNothingConfigured(t *testing.T) {
+func TestInitAcceptsNothingConfigured(t *testing.T) {
 	skipIfNotLinux(t)
 	ins := &Instance{}
-	if err := ins.Init(); err == nil {
-		t.Fatal("should reject when no checks configured")
+	if err := ins.Init(); err != nil {
+		t.Fatalf("should accept when no checks configured: %v", err)
 	}
 }
 

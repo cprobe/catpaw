@@ -72,10 +72,6 @@ func (ins *Instance) Init() error {
 	ins.EnforceMode.Expect = strings.TrimSpace(strings.ToLower(ins.EnforceMode.Expect))
 	ins.AppArmor.Expect = strings.TrimSpace(strings.ToLower(ins.AppArmor.Expect))
 
-	if ins.EnforceMode.Expect == "" && ins.AppArmor.Expect == "" {
-		return fmt.Errorf("at least one check must be configured (enforce_mode.expect or apparmor_enabled.expect)")
-	}
-
 	if ins.EnforceMode.Expect != "" {
 		if !validSELinuxModes[ins.EnforceMode.Expect] {
 			return fmt.Errorf("enforce_mode.expect must be one of: enforcing, permissive, disabled (got %q)", ins.EnforceMode.Expect)

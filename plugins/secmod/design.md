@@ -118,17 +118,14 @@ Init():
     2. enforceModeEnabled = enforce_mode.expect != ""
        apparmorEnabled = apparmor_enabled.expect != ""
 
-    3. if !enforceModeEnabled && !apparmorEnabled:
-           return error: "at least one check must be configured (enforce_mode.expect or apparmor_enabled.expect)"
-
-    4. if enforceModeEnabled:
+    3. if enforceModeEnabled:
        a. normalize expect to lowercase
        b. if expect not in ["enforcing", "permissive", "disabled"]:
               return error
        c. normalize severity: default "Warning"
        d. validate severity: must be Info/Warning/Critical
 
-    5. if apparmorEnabled:
+    4. if apparmorEnabled:
        a. normalize expect to lowercase
        b. if expect not in ["yes", "no"]:
               return error
