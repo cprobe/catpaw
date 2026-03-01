@@ -31,7 +31,8 @@ catpaw 是一个轻量的事件监控工具：负责探测异常并产出标准�
 | `net` | TCP/UDP 连通性与响应时间检查 |
 | `ntp` | NTP 同步状态、时钟偏移、时间源层级检查（仅 Linux） |
 | `ping` | ICMP 可达性、丢包率、时延检查 |
-| `procnum` | 进程数量检查（支持多种查找方式） |
+| `procfd` | 进程级文件描述符（fd）使用率监控，预防单进程 nofile 耗尽导致 too many open files |
+| `procnum` | 进程数量检查（支持多种查找方式，也可监控系统总进程数） |
 | `scriptfilter` | 执行脚本并按输出行过滤匹配告警 |
 | `sockstat` | TCP listen 队列溢出检测（ListenOverflows 增量监控，仅 Linux） |
 | `systemd` | systemd 服务状态检查（仅 Linux） |
