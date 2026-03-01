@@ -1,4 +1,4 @@
-FROM --platform=$TARGETPLATFORM ubuntu:24.04
+FROM ubuntu:24.04
 
 WORKDIR /app
 ADD catpaw /app

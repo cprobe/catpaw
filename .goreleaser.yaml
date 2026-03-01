@@ -59,6 +59,7 @@ dockers:
     dockerfile: docker/Dockerfile.goreleaser
     extra_files:
       - LICENSE
+      - conf.d
     use: buildx
     build_flag_templates:
       - "--platform=linux/amd64"
@@ -72,6 +73,7 @@ dockers:
     dockerfile: docker/Dockerfile.goreleaser
     extra_files:
       - LICENSE
+      - conf.d
     use: buildx
     build_flag_templates:
       - "--platform=linux/arm64/v8"
