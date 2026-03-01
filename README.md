@@ -30,6 +30,7 @@ catpaw 是一个轻量的事件监控工具：负责探测异常并产出标准�
 | `mount` | 挂载点基线检查（存在性、文件系统类型、挂载选项合规，仅 Linux） |
 | `neigh` | Linux ARP/邻居表使用率监控，预防表满导致新 IP 通信静默失败（K8s 重灾区） |
 | `net` | TCP/UDP 连通性与响应时间检查 |
+| `netif` | 网络接口健康检查（链路状态、错误/丢包增量监控，仅 Linux） |
 | `ntp` | NTP 同步状态、时钟偏移、时间源层级检查（仅 Linux） |
 | `ping` | ICMP 可达性、丢包率、时延检查 |
 | `procfd` | 进程级文件描述符（fd）使用率监控，预防单进程 nofile 耗尽导致 too many open files |

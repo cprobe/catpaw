@@ -28,6 +28,7 @@ import (
 	_ "github.com/cprobe/catpaw/plugins/mem"
 	_ "github.com/cprobe/catpaw/plugins/mount"
 	_ "github.com/cprobe/catpaw/plugins/neigh"
+	_ "github.com/cprobe/catpaw/plugins/netif"
 	_ "github.com/cprobe/catpaw/plugins/net"
 	_ "github.com/cprobe/catpaw/plugins/ntp"
 	_ "github.com/cprobe/catpaw/plugins/ping"

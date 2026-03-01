@@ -1,0 +1,48 @@
+[[instances]]
+## ===== 网络接口健康检查（60 秒跑起来）=====
+## 自动发现网络接口，监控错误和丢包增量
+## errors = 网卡/驱动/线缆故障（rx_errors + tx_errors）
+## drops  = 拥塞/ring buffer 满/iptables 丢弃（rx_dropped + tx_dropped）
+## 任何非零增量都值得关注，生产环境建议 warn_ge = 1
+
+interval = "60s"
+
+## 接口过滤（应用于 errors / drops 自动发现）
+## include：如果非空，只监控匹配的接口（glob 模式）
+## exclude：排除匹配的接口（glob 模式）
+## 处理顺序：先 include 筛选 → 再 exclude 排除
+# include = []
+exclude = ["lo", "docker*", "veth*", "br-*", "virbr*", "cali*", "flannel*", "cni*", "tunl*", "kube-*", "lxc*", "tap*", "dummy*"]
+
+## 错误增量检查（rx_errors + tx_errors 合计增量）
+## warn_ge / critical_ge 为 0 表示不检查
+[instances.errors]
+warn_ge = 1
+critical_ge = 100
+# title_rule = "[check] [target]"
+
+## 丢包增量检查（rx_dropped + tx_dropped 合计增量）
+[instances.drops]
+warn_ge = 1
+critical_ge = 100
+# title_rule = "[check] [target]"
+
+## 链路状态检查（手动指定期望 up 的接口）
+## 不是所有接口都需要 up（备用网卡、管理口可能正常 down），所以需要手动列出
+## severity 默认 Critical（链路断开通常是紧急故障）
+
+# [[instances.link_up]]
+# interface = "eth0"
+# severity = "Critical"
+# # title_rule = "[check] [target]"
+
+# [[instances.link_up]]
+# interface = "bond0"
+# severity = "Critical"
+
+[instances.alerting]
+for_duration = 0
+repeat_interval = "30m"
+repeat_number = 3
+# disabled = false
+# disable_recovery_notification = false
