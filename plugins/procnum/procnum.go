@@ -24,22 +24,20 @@ const (
 )
 
 type ProcessCountCheck struct {
-	WarnLt     int    `toml:"warn_lt"`
-	CriticalLt int    `toml:"critical_lt"`
-	WarnGt     int    `toml:"warn_gt"`
-	CriticalGt int    `toml:"critical_gt"`
+	WarnLt     *int   `toml:"warn_lt"`
+	CriticalLt *int   `toml:"critical_lt"`
+	WarnGt     *int   `toml:"warn_gt"`
+	CriticalGt *int   `toml:"critical_gt"`
 	TitleRule  string `toml:"title_rule"`
 }
 
 type Instance struct {
 	config.InternalConfig
 
-	// Process filter conditions (AND-combined, at least one required)
 	SearchExecName string `toml:"search_exec_name"`
 	SearchCmdline  string `toml:"search_cmdline"`
 	SearchUser     string `toml:"search_user"`
 
-	// Standalone modes (mutually exclusive with process filters)
 	SearchPidFile    string `toml:"search_pid_file"`
 	SearchWinService string `toml:"search_win_service"`
 
@@ -90,9 +88,6 @@ func (ins *Instance) Init() error {
 		modeCount++
 	}
 
-	if modeCount == 0 {
-		return fmt.Errorf("at least one search condition must be configured (search_exec_name, search_cmdline, search_user, search_pid_file, or search_win_service)")
-	}
 	if modeCount > 1 {
 		return fmt.Errorf("search_pid_file and search_win_service are mutually exclusive with process filters (search_exec_name/search_cmdline/search_user)")
 	}
@@ -113,17 +108,28 @@ func (ins *Instance) Init() error {
 	ins.searchLabel = ins.buildSearchLabel()
 
 	pc := ins.ProcessCount
-	if pc.WarnLt < 0 || pc.CriticalLt < 0 || pc.WarnGt < 0 || pc.CriticalGt < 0 {
-		return fmt.Errorf("process_count thresholds must be non-negative")
-	}
-	if pc.WarnLt == 0 && pc.CriticalLt == 0 && pc.WarnGt == 0 && pc.CriticalGt == 0 {
+	if pc.WarnLt == nil && pc.CriticalLt == nil && pc.WarnGt == nil && pc.CriticalGt == nil {
 		return fmt.Errorf("at least one process_count threshold must be configured")
 	}
-	if pc.WarnLt > 0 && pc.CriticalLt > 0 && pc.WarnLt < pc.CriticalLt {
-		return fmt.Errorf("process_count.warn_lt(%d) must be >= process_count.critical_lt(%d)", pc.WarnLt, pc.CriticalLt)
+
+	if pc.WarnLt != nil && *pc.WarnLt < 0 {
+		return fmt.Errorf("process_count.warn_lt must be non-negative (got %d)", *pc.WarnLt)
 	}
-	if pc.WarnGt > 0 && pc.CriticalGt > 0 && pc.WarnGt > pc.CriticalGt {
-		return fmt.Errorf("process_count.warn_gt(%d) must be <= process_count.critical_gt(%d)", pc.WarnGt, pc.CriticalGt)
+	if pc.CriticalLt != nil && *pc.CriticalLt < 0 {
+		return fmt.Errorf("process_count.critical_lt must be non-negative (got %d)", *pc.CriticalLt)
+	}
+	if pc.WarnGt != nil && *pc.WarnGt < 0 {
+		return fmt.Errorf("process_count.warn_gt must be non-negative (got %d)", *pc.WarnGt)
+	}
+	if pc.CriticalGt != nil && *pc.CriticalGt < 0 {
+		return fmt.Errorf("process_count.critical_gt must be non-negative (got %d)", *pc.CriticalGt)
+	}
+
+	if pc.WarnLt != nil && pc.CriticalLt != nil && *pc.WarnLt < *pc.CriticalLt {
+		return fmt.Errorf("process_count.warn_lt(%d) must be >= process_count.critical_lt(%d)", *pc.WarnLt, *pc.CriticalLt)
+	}
+	if pc.WarnGt != nil && pc.CriticalGt != nil && *pc.WarnGt > *pc.CriticalGt {
+		return fmt.Errorf("process_count.warn_gt(%d) must be <= process_count.critical_gt(%d)", *pc.WarnGt, *pc.CriticalGt)
 	}
 
 	return nil
@@ -147,22 +153,32 @@ func (ins *Instance) buildSearchLabel() string {
 	if ins.SearchUser != "" {
 		parts = append(parts, "user:"+ins.SearchUser)
 	}
+	if len(parts) == 0 {
+		return "all"
+	}
 	return strings.Join(parts, " && ")
 }
 
 func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
 	var (
-		pids []PID
-		err  error
+		count int
+		err   error
 	)
 
 	switch ins.mode {
 	case searchModePidFile:
-		pids, err = ins.findByPidFile()
+		pids, e := ins.findByPidFile()
+		count, err = len(pids), e
 	case searchModeWinService:
-		pids, err = ins.winServicePIDs()
+		pids, e := ins.winServicePIDs()
+		count, err = len(pids), e
 	case searchModeProcess:
-		pids, err = ins.findProcesses()
+		if ins.searchLabel == "all" {
+			count, err = countAllProcesses()
+		} else {
+			pids, e := ins.findProcesses()
+			count, err = len(pids), e
+		}
 	default:
 		logger.Logger.Error("procnum: unreachable - unknown search mode")
 		return
@@ -174,43 +190,42 @@ func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
 		return
 	}
 
-	count := len(pids)
-	logger.Logger.Debugw("search result", "target", ins.searchLabel, "pids", pids, "count", count)
+	logger.Logger.Debugw("search result", "target", ins.searchLabel, "count", count)
 
 	pc := ins.ProcessCount
 	event := ins.newEvent()
 	event.Labels[types.AttrPrefix+"process_count"] = fmt.Sprintf("%d", count)
-	if pc.WarnLt > 0 {
-		event.Labels[types.AttrPrefix+"warn_lt"] = fmt.Sprintf("%d", pc.WarnLt)
+	if pc.WarnLt != nil {
+		event.Labels[types.AttrPrefix+"warn_lt"] = fmt.Sprintf("%d", *pc.WarnLt)
 	}
-	if pc.CriticalLt > 0 {
-		event.Labels[types.AttrPrefix+"critical_lt"] = fmt.Sprintf("%d", pc.CriticalLt)
+	if pc.CriticalLt != nil {
+		event.Labels[types.AttrPrefix+"critical_lt"] = fmt.Sprintf("%d", *pc.CriticalLt)
 	}
-	if pc.WarnGt > 0 {
-		event.Labels[types.AttrPrefix+"warn_gt"] = fmt.Sprintf("%d", pc.WarnGt)
+	if pc.WarnGt != nil {
+		event.Labels[types.AttrPrefix+"warn_gt"] = fmt.Sprintf("%d", *pc.WarnGt)
 	}
-	if pc.CriticalGt > 0 {
-		event.Labels[types.AttrPrefix+"critical_gt"] = fmt.Sprintf("%d", pc.CriticalGt)
+	if pc.CriticalGt != nil {
+		event.Labels[types.AttrPrefix+"critical_gt"] = fmt.Sprintf("%d", *pc.CriticalGt)
 	}
 
-	if pc.CriticalLt > 0 && count < pc.CriticalLt {
+	if pc.CriticalLt != nil && count < *pc.CriticalLt {
 		q.PushFront(event.SetEventStatus(types.EventStatusCritical).
-			SetDescription(fmt.Sprintf("process count %d < critical threshold %d", count, pc.CriticalLt)))
+			SetDescription(fmt.Sprintf("process count %d < critical threshold %d", count, *pc.CriticalLt)))
 		return
 	}
-	if pc.WarnLt > 0 && count < pc.WarnLt {
+	if pc.WarnLt != nil && count < *pc.WarnLt {
 		q.PushFront(event.SetEventStatus(types.EventStatusWarning).
-			SetDescription(fmt.Sprintf("process count %d < warning threshold %d", count, pc.WarnLt)))
+			SetDescription(fmt.Sprintf("process count %d < warning threshold %d", count, *pc.WarnLt)))
 		return
 	}
-	if pc.CriticalGt > 0 && count > pc.CriticalGt {
+	if pc.CriticalGt != nil && count > *pc.CriticalGt {
 		q.PushFront(event.SetEventStatus(types.EventStatusCritical).
-			SetDescription(fmt.Sprintf("process count %d > critical threshold %d", count, pc.CriticalGt)))
+			SetDescription(fmt.Sprintf("process count %d > critical threshold %d", count, *pc.CriticalGt)))
 		return
 	}
-	if pc.WarnGt > 0 && count > pc.WarnGt {
+	if pc.WarnGt != nil && count > *pc.WarnGt {
 		q.PushFront(event.SetEventStatus(types.EventStatusWarning).
-			SetDescription(fmt.Sprintf("process count %d > warning threshold %d", count, pc.WarnGt)))
+			SetDescription(fmt.Sprintf("process count %d > warning threshold %d", count, *pc.WarnGt)))
 		return
 	}
 

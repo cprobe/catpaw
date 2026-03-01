@@ -24,6 +24,16 @@ func FastProcessList() ([]*process.Process, error) {
 	return result, nil
 }
 
+// countAllProcesses returns the total number of running processes.
+// Uses gopsutil's Pids() for cross-platform compatibility (Linux/macOS/Windows).
+func countAllProcesses() (int, error) {
+	pids, err := process.Pids()
+	if err != nil {
+		return 0, err
+	}
+	return len(pids), nil
+}
+
 // ReadPidFile reads a PID from the given file and returns it as a single-element slice.
 func ReadPidFile(path string) ([]PID, error) {
 	data, err := os.ReadFile(path)
