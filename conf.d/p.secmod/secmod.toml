@@ -1,0 +1,30 @@
+[[instances]]
+## ===== 安全模块基线检查 =====
+## 检查 SELinux / AppArmor 的运行状态是否符合期望
+## expect 留空表示不检查该维度（插件不带立场，由用户决定期望状态）
+## severity 支持 Info / Warning / Critical，默认 Warning
+
+interval = "60s"
+
+## SELinux 模式检查
+## expect 可选值：enforcing / permissive / disabled
+## 留空则不检查 SELinux
+[instances.enforce_mode]
+# expect = "enforcing"
+# severity = "Warning"
+# title_rule = "[check] [target]"
+
+## AppArmor 状态检查
+## expect 可选值：yes / no
+## 留空则不检查 AppArmor
+[instances.apparmor_enabled]
+# expect = "yes"
+# severity = "Warning"
+# title_rule = "[check] [target]"
+
+[instances.alerting]
+for_duration = 0
+repeat_interval = "30m"
+repeat_number = 3
+# disabled = false
+# disable_recovery_notification = false

@@ -1,28 +1,10 @@
 # 插件规划
 
-## sysctl — 内核参数基线检查
+## secmod — 安全模块基线检查（已实现）
 
-- **检查维度**：`param_mismatch`（实际值与期望值不匹配告警）
-- **价值**：防止内核参数在重启、升级后丢失调优配置（如 `net.core.somaxconn` 被重置为 128 导致连接队列溢出）
-- **配置示例**：用户定义期望基线，插件逐项比对
-  ```toml
-  [instances.param_mismatch]
-  params = [
-    { key = "net.core.somaxconn", expect = "65535", op = "ge" },
-    { key = "vm.swappiness", expect = "10", op = "eq" },
-    { key = "net.ipv4.ip_forward", expect = "1", op = "eq" },
-  ]
-  ```
-- **实现**：读 `/proc/sys/` 对应路径（如 `net.core.somaxconn` → `/proc/sys/net/core/somaxconn`）
-- **比较操作**：支持 `eq`（等于）、`ge`（大于等于）、`le`（小于等于）、`ne`（不等于）
-- **参考**：Nagios `check_sysctl`
-
-## selinux — 安全模块状态检查
-
-- **检查维度**：`enforce_mode`（SELinux 实际模式是否与期望一致）
+- **检查维度**：`selinux_mode`（SELinux 实际模式是否与期望一致）、`apparmor_enabled`（AppArmor 是否与期望状态一致）
 - **价值**：运维人员常临时 `setenforce 0` 排障后忘记恢复，导致安全策略长期失效
-- **实现**：读 `/sys/fs/selinux/enforce`（0=permissive, 1=enforcing），或 `getenforce` 命令
-- **扩展**：可选检查 AppArmor 状态（`/sys/module/apparmor/parameters/enabled`）
+- **实现**：读 `/sys/fs/selinux/enforce`（0=permissive, 1=enforcing）、`/sys/module/apparmor/parameters/enabled`
 - **参考**：Nagios `check_selinux`
 
 ## mount — 挂载点一致性检查

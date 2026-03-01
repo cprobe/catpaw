@@ -33,6 +33,7 @@ import (
 	_ "github.com/cprobe/catpaw/plugins/procfd"
 	_ "github.com/cprobe/catpaw/plugins/procnum"
 	_ "github.com/cprobe/catpaw/plugins/scriptfilter"
+	_ "github.com/cprobe/catpaw/plugins/secmod"
 	_ "github.com/cprobe/catpaw/plugins/sockstat"
 	_ "github.com/cprobe/catpaw/plugins/sysctl"
 	_ "github.com/cprobe/catpaw/plugins/systemd"
