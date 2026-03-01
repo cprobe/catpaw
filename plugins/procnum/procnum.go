@@ -345,3 +345,4 @@ func (ins *Instance) newEvent() *types.Event {
 
 	return types.BuildEvent(labels).SetTitleRule(tr)
 }
+

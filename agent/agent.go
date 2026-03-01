@@ -39,6 +39,7 @@ import (
 	_ "github.com/cprobe/catpaw/plugins/sysctl"
 	_ "github.com/cprobe/catpaw/plugins/systemd"
 	_ "github.com/cprobe/catpaw/plugins/uptime"
+	_ "github.com/cprobe/catpaw/plugins/zombie"
 )
 
 type PluginConfig struct {

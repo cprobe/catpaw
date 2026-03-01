@@ -18,6 +18,21 @@ params = [
   # { key = "net.ipv4.tcp_tw_reuse", value = "1" },
   # { key = "net.ipv4.tcp_max_syn_backlog", op = "ge", value = "65535" },
   # { key = "fs.file-max", op = "ge", value = "1000000" },
+
+  ## ── Kernel Taint 检测 ──
+  ## kernel.tainted 非零表示内核处于"污染"状态，可能原因：
+  ##   1 = 加载了闭源内核模块（如 NVIDIA 驱动）
+  ##   2 = 模块被强制加载
+  ##   4 = SMP 内核运行在非 SMP 硬件上
+  ##  16 = 存在未修复的 machine check 硬件错误
+  ##  32 = 检测到严重 kernel bug
+  ##  64 = 用户手动设置（echo 1 > /proc/sys/kernel/tainted）
+  ## 128 = ACPI 表被覆盖
+  ## 256 = 内核在测试阶段收到告警
+  ## 512 = 固件 Bug 被 kernel 绕过
+  ## 排查：cat /proc/sys/kernel/tainted，对照上表按位分析
+  ## 0 = 干净内核，生产环境建议保持为 0（或排除已知安全的闭源驱动）
+  # { key = "kernel.tainted", op = "eq", value = "0", severity = "Warning" },
 ]
 
 [instances.alerting]

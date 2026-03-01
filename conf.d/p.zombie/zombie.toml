@@ -1,0 +1,25 @@
+[[instances]]
+## ===== 僵尸进程检测（60 秒跑起来）=====
+## 统计系统中状态为 Z（zombie）的进程数量
+## 僵尸进程 = 子进程已退出但父进程未调用 wait() 回收
+## 少量僵尸通常无害，大量积累会耗尽 PID 资源（默认上限 32768）
+##
+## 排查步骤：
+##   1) ps aux | awk '$8=="Z"' 列出所有僵尸进程
+##   2) 找到其 PPID（父进程），检查父进程是否正常运行
+##   3) 修复父进程的 wait() 逻辑，或重启父进程清理僵尸
+##
+## warn_gt = 0 表示"只要有僵尸进程就告警"
+## 生产环境建议 warn_gt = 0, critical_gt = 20
+
+interval = "60s"
+warn_gt = 0
+critical_gt = 20
+# title_rule = "[check] [target]"
+
+[instances.alerting]
+for_duration = 0
+repeat_interval = "30m"
+repeat_number = 3
+# disabled = false
+# disable_recovery_notification = false
