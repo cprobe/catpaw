@@ -26,6 +26,7 @@ import (
 	_ "github.com/cprobe/catpaw/plugins/journaltail"
 	_ "github.com/cprobe/catpaw/plugins/logfile"
 	_ "github.com/cprobe/catpaw/plugins/mem"
+	_ "github.com/cprobe/catpaw/plugins/mount"
 	_ "github.com/cprobe/catpaw/plugins/neigh"
 	_ "github.com/cprobe/catpaw/plugins/net"
 	_ "github.com/cprobe/catpaw/plugins/ntp"

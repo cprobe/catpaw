@@ -27,6 +27,7 @@ catpaw 是一个轻量的事件监控工具：负责探测异常并产出标准�
 | `journaltail` | 通过 journalctl 增量读取日志并匹配关键行（仅 Linux） |
 | `logfile` | 纯文本日志文件监控（偏移量追踪 + 日志轮转检测 + glob + 多编码） |
 | `mem` | 内存使用率、Swap 使用率检查 |
+| `mount` | 挂载点基线检查（存在性、文件系统类型、挂载选项合规，仅 Linux） |
 | `neigh` | Linux ARP/邻居表使用率监控，预防表满导致新 IP 通信静默失败（K8s 重灾区） |
 | `net` | TCP/UDP 连通性与响应时间检查 |
 | `ntp` | NTP 同步状态、时钟偏移、时间源层级检查（仅 Linux） |

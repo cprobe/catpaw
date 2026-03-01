@@ -1,0 +1,61 @@
+[[instances]]
+## ===== 挂载点基线检查 =====
+## 检查期望的挂载点是否存在、文件系统类型是否正确、挂载选项是否到位
+## 典型场景：NFS 掉线检测、CIS 合规（noexec/nosuid/nodev）、重启后数据盘未挂载
+##
+## path：必填，期望的挂载路径（绝对路径）
+## fstype：可选，期望的文件系统类型（ext4/xfs/nfs/tmpfs/...）
+## options：可选，必须存在的挂载选项列表
+## severity：可选，默认 Warning（支持 Info / Warning / Critical）
+## title_rule：可选，默认 "[check] [target]"
+
+interval = "60s"
+
+## 数据盘 — 检查是否挂载且是 ext4
+# [[instances.mounts]]
+# path = "/data"
+# fstype = "ext4"
+# severity = "Critical"
+
+## NFS 备份盘 — 检查是否挂载
+# [[instances.mounts]]
+# path = "/backup"
+# fstype = "nfs"
+# severity = "Critical"
+
+## CIS 1.1.2-1.1.5: /tmp 独立分区 + 安全选项
+# [[instances.mounts]]
+# path = "/tmp"
+# options = ["noexec", "nosuid", "nodev"]
+# severity = "Warning"
+
+## CIS 1.1.8-1.1.9: /var/tmp 安全选项
+# [[instances.mounts]]
+# path = "/var/tmp"
+# options = ["noexec", "nosuid", "nodev"]
+# severity = "Warning"
+
+## CIS 1.1.15-1.1.17: /dev/shm 安全选项
+# [[instances.mounts]]
+# path = "/dev/shm"
+# options = ["noexec", "nosuid", "nodev"]
+# severity = "Warning"
+
+## 自动检查 /etc/fstab 中的挂载条目
+## 启用后自动读取 fstab，检查其中的挂载点是否都已挂载且 fstype 匹配
+## 注意：swap 和 mountpoint=none 始终跳过（硬编码），noauto 条目也会跳过
+## manual mounts 优先级高于 fstab（同一路径不会重复检查）
+[instances.fstab]
+# enabled = true
+# severity = "Critical"
+## 排除的文件系统类型，默认 ["tmpfs", "devtmpfs", "squashfs", "overlay"]
+## swap 无需在此配置，始终自动跳过
+# exclude_fstype = ["tmpfs", "devtmpfs", "squashfs", "overlay"]
+# exclude_paths = []
+
+[instances.alerting]
+for_duration = 0
+repeat_interval = "30m"
+repeat_number = 3
+# disabled = false
+# disable_recovery_notification = false
