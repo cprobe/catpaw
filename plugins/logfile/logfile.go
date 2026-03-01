@@ -71,6 +71,8 @@ type Instance struct {
 	explicitTargets map[string]bool
 	enc             encoding.Encoding
 	stateDirty      bool
+	globExceeded    bool
+	gatherTimedOut  bool
 }
 
 type LogfilePlugin struct {
@@ -199,9 +201,15 @@ func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
 
 	deadline := time.Now().Add(time.Duration(ins.GatherTimeout))
 
+	prevGlobExceeded := ins.globExceeded
+	ins.globExceeded = false
+	prevTimedOut := ins.gatherTimedOut
+	ins.gatherTimedOut = false
+
 	resolvedFiles := ins.resolveTargets()
 
 	if len(resolvedFiles) > ins.MaxTargets {
+		ins.globExceeded = true
 		q.PushFront(types.BuildEvent(map[string]string{
 			"check":  "logfile::match",
 			"target": "glob",
@@ -210,6 +218,12 @@ func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
 			SetDescription(fmt.Sprintf("targets resolved to %d files, exceeding max_targets(%d), only monitoring the first %d",
 				len(resolvedFiles), ins.MaxTargets, ins.MaxTargets)))
 		resolvedFiles = resolvedFiles[:ins.MaxTargets]
+	} else if prevGlobExceeded {
+		q.PushFront(types.BuildEvent(map[string]string{
+			"check":  "logfile::match",
+			"target": "glob",
+		}).SetTitleRule("[check]").
+			SetDescription(fmt.Sprintf("target count back to normal (%d files)", len(resolvedFiles))))
 	}
 
 	resolvedSet := make(map[string]bool, len(resolvedFiles))
@@ -255,6 +269,7 @@ func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
 
 	for _, filePath := range resolvedFiles {
 		if time.Now().After(deadline) {
+			ins.gatherTimedOut = true
 			q.PushFront(types.BuildEvent(map[string]string{
 				"check":  "logfile::match",
 				"target": "gather_timeout",
@@ -265,6 +280,14 @@ func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
 		}
 
 		ins.processFile(q, filePath)
+	}
+
+	if prevTimedOut && !ins.gatherTimedOut {
+		q.PushFront(types.BuildEvent(map[string]string{
+			"check":  "logfile::match",
+			"target": "gather_timeout",
+		}).SetTitleRule("[check]").
+			SetDescription("gather completed within timeout"))
 	}
 
 	if ins.stateDirty {

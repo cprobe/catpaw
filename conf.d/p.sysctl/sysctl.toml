@@ -1,0 +1,28 @@
+[[instances]]
+## ===== 最小可用示例（60 秒跑起来）=====
+## 检查内核参数是否符合期望基线
+## 防止重启、升级后调优参数被静默重置
+## 比较操作：eq（等于）、ne（不等于）、ge（>=）、le（<=）、gt（>）、lt（<）
+## 告警级别：默认 Warning，可 per-param 配置为 Critical
+## 多值参数（如 net.ipv4.tcp_rmem = "4096 131072 6291456"）在 eq/ne 比较时
+## 会自动规范化空白字符（tab → 空格、合并连续空白），无需精确匹配原始格式
+
+interval = "60s"
+
+[instances.param_check]
+# title_rule = "[check] [target]"
+params = [
+  { key = "net.core.somaxconn", op = "ge", value = "65535" },
+  { key = "vm.swappiness", op = "le", value = "10" },
+  # { key = "net.ipv4.ip_forward", value = "1", severity = "Critical" },
+  # { key = "net.ipv4.tcp_tw_reuse", value = "1" },
+  # { key = "net.ipv4.tcp_max_syn_backlog", op = "ge", value = "65535" },
+  # { key = "fs.file-max", op = "ge", value = "1000000" },
+]
+
+[instances.alerting]
+for_duration = 0
+repeat_interval = "30m"
+repeat_number = 3
+# disabled = false
+# disable_recovery_notification = false
