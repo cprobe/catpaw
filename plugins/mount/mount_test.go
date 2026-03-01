@@ -189,11 +189,11 @@ func TestInitPlatformGuard(t *testing.T) {
 	}
 }
 
-func TestInitRejectsEmptyMounts(t *testing.T) {
+func TestInitAcceptsEmptyConfig(t *testing.T) {
 	skipIfNotLinux(t)
 	ins := &Instance{}
-	if err := ins.Init(); err == nil {
-		t.Fatal("should reject empty mounts")
+	if err := ins.Init(); err != nil {
+		t.Fatalf("empty config should be accepted (no-op): %v", err)
 	}
 }
 
@@ -346,11 +346,11 @@ func TestInitAllowsFstabOnly(t *testing.T) {
 	}
 }
 
-func TestInitRejectsNoMountsNoFstab(t *testing.T) {
+func TestInitAcceptsNoMountsNoFstab(t *testing.T) {
 	skipIfNotLinux(t)
 	ins := &Instance{}
-	if err := ins.Init(); err == nil {
-		t.Fatal("should reject when neither mounts nor fstab configured")
+	if err := ins.Init(); err != nil {
+		t.Fatalf("no mounts + no fstab should be accepted (no-op): %v", err)
 	}
 }
 

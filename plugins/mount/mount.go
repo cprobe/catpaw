@@ -63,9 +63,7 @@ func (ins *Instance) Init() error {
 		return fmt.Errorf("mount plugin only supports linux (current: %s)", runtime.GOOS)
 	}
 
-	if len(ins.Mounts) == 0 && !ins.Fstab.Enabled {
-		return fmt.Errorf("at least one check must be configured: mounts list or fstab.enabled")
-	}
+	// 用户没有配置任何检查项时不报错，Gather 时静默跳过
 
 	seen := make(map[string]bool, len(ins.Mounts))
 	for i := range ins.Mounts {
