@@ -30,7 +30,38 @@ priority = "emerg..err"
 ## 支持 glob + 正则混用：
 ##   glob 示例：*Out of memory*
 ##   正则示例：/(?i)oom|segfault/
-filter_include = ["*Out of memory*", "*nf_conntrack: table full*", "*kernel panic*", "*segfault*", "*oom-killer*", "*I/O error*", "*Read-only file system*", "*Hardware Error*", "*Hardware Error*"]
+filter_include = [
+    ## ── 内存 ──
+    "*Out of memory*",          # 进程因内存不足被 OOM 杀死。排查：dmesg 看被杀进程，检查是否需要加内存或设置 memory cgroup 限制
+    "*oom-killer*",             # OOM killer 被触发。排查：同上，关注 oom_score_adj 配置是否合理
+    "*Killed process*",         # OOM killer 杀进程的另一种消息格式
+    "*page allocation failure*", # 内核无法分配内存页。排查：检查内存碎片（buddyinfo）和 vm.min_free_kbytes 设置
+
+    ## ── 内核崩溃/BUG ──
+    "*kernel panic*",           # 内核崩溃，系统不可用。排查：收集 vmcore（kdump），分析 crash dump
+    "*kernel BUG*",             # 内核代码触发 BUG() 断言。排查：检查内核版本，搜索对应 BUG 的补丁，考虑升级内核
+    "*soft lockup*",            # CPU 被内核代码长时间占用（>20s）。排查：检查是否有内核模块死循环，dmesg 中的 Call Trace 定位卡点
+    "*hard lockup*",            # CPU 完全无响应，NMI watchdog 检测到。排查：通常是硬件或驱动问题，检查 BIOS/固件更新
+
+    ## ── CPU/硬件故障 ──
+    "*machine check*",          # MCE：CPU/内存硬件故障。排查：mcelog 或 rasdaemon 查看详情，定位故障 DIMM 或 CPU，准备更换硬件
+    "*Hardware Error*",         # 通用硬件错误（GHES/EDAC 报告）。排查：rasdaemon 查看错误类型，关注是否 correctable
+
+    ## ── 进程异常 ──
+    "*segfault*",               # 用户态段错误（非法内存访问）。排查：检查对应进程是否有 coredump，用 gdb/addr2line 分析
+    "*dumped core*",            # 进程产生核心转储。排查：coredumpctl list 查看详情，分析 coredump 定位 crash 原因
+
+    ## ── 磁盘/文件系统 ──
+    "*I/O error*",              # 块设备 I/O 失败。排查：smartctl 检查磁盘健康，dmesg 看具体设备号，准备更换磁盘
+    "*medium error*",           # SCSI/SATA 坏扇区。排查：smartctl -a 看 Reallocated_Sector_Ct，若持续增长需更换磁盘
+    "*EXT4-fs error*",          # ext4 文件系统错误。排查：umount 后 fsck 修复，检查底层磁盘是否有坏道
+    "*XFS error*",              # XFS 文件系统错误。排查：xfs_repair 修复，检查底层磁盘健康
+    "*Read-only file system*",  # 文件系统降级为只读（通常因磁盘/fs 错误触发）。排查：检查 dmesg 中前序错误，修复后 remount
+
+    ## ── 网络 ──
+    "*nf_conntrack: table full*", # 连接跟踪表满，新连接被丢弃。排查：sysctl net.netfilter.nf_conntrack_max 调大，或优化连接超时
+    "*neighbour table overflow*", # ARP/邻居表满，新 IP 无法通信（K8s 大集群高发）。排查：sysctl net.ipv4.neigh.default.gc_thresh3 调大
+]
 ## exclude 为排除规则（优先级高于 include）
 # filter_exclude = ["*expected*"]
 

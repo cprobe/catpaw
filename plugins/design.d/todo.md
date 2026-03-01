@@ -1,12 +1,5 @@
 # 插件规划
 
-## secmod — 安全模块基线检查（已实现）
-
-- **检查维度**：`selinux_mode`（SELinux 实际模式是否与期望一致）、`apparmor_enabled`（AppArmor 是否与期望状态一致）
-- **价值**：运维人员常临时 `setenforce 0` 排障后忘记恢复，导致安全策略长期失效
-- **实现**：读 `/sys/fs/selinux/enforce`（0=permissive, 1=enforcing）、`/sys/module/apparmor/parameters/enabled`
-- **参考**：Nagios `check_selinux`
-
 ## mount — 挂载点一致性检查
 
 - **检查维度**：`expected_mounts`（期望的挂载点是否存在）、`mount_options`（挂载选项是否符合预期）
@@ -27,15 +20,6 @@
   ```
 - **参考**：Nagios `check_mount`
 
-## dmesg — 内核日志监控
-
-- **检查维度**：`kernel_error`（匹配指定模式的内核消息触发告警）
-- **价值**：OOM Kill、硬件故障（MCE/ECC）、文件系统错误（ext4 error）、磁盘 I/O 错误等关键内核事件，应用层完全无感知
-- **实现**：执行 `dmesg --time-format iso -l err,crit,alert,emerg` 并过滤新增消息（记录上次读取的时间戳）
-- **默认匹配模式**：`Out of memory`、`I/O error`、`EXT4-fs error`、`XFS.*error`、`Hardware Error`、`mce:`
-- **与 journaltail 的区别**：journaltail 针对 systemd 服务日志，dmesg 专门针对内核环缓冲区
-- **参考**：Nagios `check_dmesg`
-
 ## coredump — 核心转储检测
 
 - **检查维度**：`new_coredump`（指定目录下最近 N 分钟内是否出现新的 coredump 文件）
@@ -44,7 +28,7 @@
 - **注意**：可选集成 `coredumpctl list --since` 获取更结构化的信息
 - **参考**：无直接对标，属于 catpaw 特色功能
 
-## 第四档：锦上添花
+## 锦上添花
 
 | 插件 | 说明 | 参考 |
 | --- | --- | --- |
@@ -53,4 +37,3 @@
 | backup | 备份文件新鲜度检查（最近 N 小时内是否有新备份） | filecheck 的 stale 模式可部分替代 |
 | mailq | 邮件队列积压检测（Postfix/Sendmail） | Nagios `check_mailq` |
 | apt | 可用安全更新数量 | Nagios `check_apt` |
-| entropy | 系统熵池不足检测（影响 TLS/加密性能） | 读 `/proc/sys/kernel/random/entropy_avail` |
