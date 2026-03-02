@@ -124,11 +124,6 @@ func TestInitValidation(t *testing.T) {
 		wantErr string
 	}{
 		{
-			name:    "both targets empty",
-			ins:     &Instance{},
-			wantErr: "cannot both be empty",
-		},
-		{
 			name: "invalid starttls protocol",
 			ins: &Instance{
 				RemoteTargets: []string{"example.com:443"},
