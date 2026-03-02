@@ -169,3 +169,4 @@ func (r *ToolRegistry) HasAccessorFactory(plugin string) bool {
 	_, ok := r.accessorFactory[plugin]
 	return ok
 }
+

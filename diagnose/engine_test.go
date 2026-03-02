@@ -379,6 +379,24 @@ func TestPromptMultipleChecks(t *testing.T) {
 	}
 }
 
+func TestPromptInspectMode(t *testing.T) {
+	req := &DiagnoseRequest{
+		Mode:   ModeInspect,
+		Plugin: "redis",
+		Target: "10.0.0.1:6379",
+	}
+	prompt := buildInspectPrompt(req, "- redis_info: show info\n", "myhost", true)
+	if !strings.Contains(prompt, "主动健康巡检") {
+		t.Fatal("inspect prompt should mention health inspection")
+	}
+	if !strings.Contains(prompt, "🟢") {
+		t.Fatal("inspect prompt should contain status markers")
+	}
+	if strings.Contains(prompt, "告警详情") {
+		t.Fatal("inspect prompt should not contain alert details")
+	}
+}
+
 func TestRecordSaveAndLoad(t *testing.T) {
 	initTestConfig(t)
 
