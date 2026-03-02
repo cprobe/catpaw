@@ -326,11 +326,12 @@ func (e *DiagnoseEngine) forwardReport(req *DiagnoseRequest, report string) {
 	desc := FormatReportForFlashDuty(req.Session.Record, report)
 
 	event := &types.Event{
-		EventTime:   time.Now().Unix(),
-		EventStatus: types.EventStatusInfo,
-		AlertKey:    original.AlertKey,
-		Labels:      original.Labels,
-		Description: desc,
+		EventTime:         time.Now().Unix(),
+		EventStatus:       types.EventStatusInfo,
+		AlertKey:          original.AlertKey,
+		Labels:            original.Labels,
+		Description:       desc,
+		DescriptionFormat: types.DescFormatMarkdown,
 	}
 
 	if notify.Forward(event) {

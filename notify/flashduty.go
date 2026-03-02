@@ -84,13 +84,18 @@ func (f *FlashdutyNotifier) toPayload(event *types.Event) *flashDutyPayload {
 		titleRule = "[TPL]${check} ${from_hostip} ${target}"
 	}
 
+	desc := event.Description
+	if event.DescriptionFormat == types.DescFormatMarkdown {
+		desc = "[MD]" + desc
+	}
+
 	return &flashDutyPayload{
 		EventTime:   event.EventTime,
 		EventStatus: event.EventStatus,
 		AlertKey:    event.AlertKey,
 		Labels:      labels,
 		TitleRule:   titleRule,
-		Description: event.Description,
+		Description: desc,
 	}
 }
 

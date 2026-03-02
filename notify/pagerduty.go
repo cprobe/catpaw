@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/cprobe/catpaw/config"
@@ -94,6 +95,9 @@ func (p *PagerDutyNotifier) toPayload(event *types.Event) *pdEnvelope {
 	}
 
 	summary := event.Description
+	if event.DescriptionFormat == types.DescFormatMarkdown {
+		summary = strings.TrimPrefix(summary, "[MD]")
+	}
 	if check := event.Labels["check"]; check != "" {
 		summary = check + " " + summary
 	}

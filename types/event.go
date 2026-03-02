@@ -5,6 +5,9 @@ const (
 	EventStatusWarning  = "Warning"
 	EventStatusInfo     = "Info"
 	EventStatusOk       = "Ok"
+
+	DescFormatText     = ""
+	DescFormatMarkdown = "markdown"
 )
 
 type Event struct {
@@ -12,8 +15,9 @@ type Event struct {
 	EventStatus string            `json:"event_status"`
 	AlertKey    string            `json:"alert_key"`
 	Labels      map[string]string `json:"labels"`
-	Attrs       map[string]string `json:"attrs,omitempty"`
-	Description string            `json:"description"`
+	Attrs             map[string]string `json:"attrs,omitempty"`
+	Description       string            `json:"description"`
+	DescriptionFormat string            `json:"description_format,omitempty"`
 
 	// for internal use
 	FirstFireTime int64 `json:"-"`
