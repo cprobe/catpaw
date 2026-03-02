@@ -54,15 +54,15 @@ build_linux_amd64_bin() {
 }
 
 usage() {
-    echo "Usage: $0 {local|build_linux_amd64|build_linux_amd64_bin}"
+    echo "Usage: $0 {build_local|build_linux_amd64|build_linux_amd64_bin}"
     echo ""
-    echo "  local                Build for current platform"
+    echo "  build_local          Build for current platform"
     echo "  build_linux_amd64    Cross-compile linux/amd64 and package binary + conf.d as zip"
     echo "  build_linux_amd64_bin Cross-compile linux/amd64 and package binary only as zip"
 }
 
 case "${1}" in
-    local)
+    build_local)
         build_local
         ;;
     build_linux_amd64)

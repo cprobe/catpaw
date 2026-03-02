@@ -78,8 +78,9 @@ func PushRawEvents(pluginName string, pluginObj plugins.Plugin, ins plugins.Inst
 		if events[i].EventStatus == types.EventStatusOk {
 			handleRecoveryEvent(ins, events[i])
 		} else {
-			handleAlertEvent(ins, events[i])
-			mayTriggerDiagnose(events[i], pluginName, ins)
+			if handleAlertEvent(ins, events[i]) {
+				mayTriggerDiagnose(events[i], pluginName, ins)
+			}
 		}
 	}
 }
@@ -117,8 +118,8 @@ func handleRecoveryEvent(ins plugins.Instance, event *types.Event) {
 	}
 }
 
-// 处理告警事件
-func handleAlertEvent(ins plugins.Instance, event *types.Event) {
+// 处理告警事件，返回 true 表示告警已实际发送到 notify 后端。
+func handleAlertEvent(ins plugins.Instance, event *types.Event) bool {
 	alerting := ins.GetAlerting()
 	old := Events.Get(event.AlertKey)
 	if old == nil {
@@ -133,28 +134,28 @@ func handleAlertEvent(ins plugins.Instance, event *types.Event) {
 			if notify.Forward(event) {
 				event.LastSent = event.EventTime
 				event.NotifyCount++
+				return true
 			}
-			return
 		}
 
-		return
+		return false
 	}
 
 	// old != nil 这已经不是第一次产生告警事件了
 	// 如果 ForDuration 没有满足，则不能继续发送
 	if alerting.ForDuration > 0 && event.EventTime-old.FirstFireTime < int64(alerting.ForDuration/config.Duration(time.Second)) {
-		return
+		return false
 	}
 
 	// ForDuration 满足了，可以继续发送了
 	// 首先看是否达到最大发送次数
 	if alerting.RepeatNumber > 0 && old.NotifyCount >= int64(alerting.RepeatNumber) {
-		return
+		return false
 	}
 
 	// 其次看发送频率，不能发的太快了
 	if alerting.RepeatInterval > 0 && event.EventTime-old.LastSent < int64(alerting.RepeatInterval/config.Duration(time.Second)) {
-		return
+		return false
 	}
 
 	// 最后，可以发了
@@ -163,7 +164,9 @@ func handleAlertEvent(ins plugins.Instance, event *types.Event) {
 	if notify.Forward(event) {
 		event.LastSent = event.EventTime
 		Events.Set(event)
+		return true
 	}
+	return false
 }
 
 func clean(event *types.Event, now int64, pluginName string, pluginObj plugins.Plugin, ins plugins.Instance) error {

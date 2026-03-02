@@ -6,6 +6,7 @@ import (
 	"os"
 	"runtime/debug"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/cprobe/catpaw/config"
@@ -32,7 +33,7 @@ type DiagnoseEngine struct {
 	mu       sync.Mutex
 	inFlight map[string]context.CancelFunc // "plugin::target" → cancel
 	sem      chan struct{}                 // concurrency limiter
-	stopped  bool
+	stopped  atomic.Bool
 }
 
 // NewDiagnoseEngine creates a new engine from global config.
@@ -72,7 +73,7 @@ func NewDiagnoseEngine(registry *ToolRegistry, cfg config.AIConfig) *DiagnoseEng
 // limits, and concurrency bounds. Returns immediately; actual diagnosis runs
 // in a goroutine.
 func (e *DiagnoseEngine) Submit(req *DiagnoseRequest) {
-	if e.stopped {
+	if e.stopped.Load() {
 		return
 	}
 
@@ -192,6 +193,7 @@ func (e *DiagnoseEngine) diagnose(ctx context.Context, req *DiagnoseRequest) (st
 		MaxRetries:   e.maxRetries,
 		RetryBackoff: e.retryBackoff,
 	}
+	contextWarned := false
 
 	for round := 0; round < e.maxRounds; round++ {
 		if round == e.maxRounds-1 {
@@ -201,7 +203,8 @@ func (e *DiagnoseEngine) diagnose(ctx context.Context, req *DiagnoseRequest) (st
 			})
 		}
 
-		if estimatedTokens > e.contextWindowLimit {
+		if !contextWarned && estimatedTokens > e.contextWindowLimit {
+			contextWarned = true
 			messages = append(messages, aiclient.Message{
 				Role:    "user",
 				Content: "上下文空间即将耗尽。请基于目前收集到的信息，立即输出最终诊断报告。",
@@ -305,8 +308,8 @@ func (e *DiagnoseEngine) unregisterInFlight(req *DiagnoseRequest) {
 
 // Shutdown cancels all in-flight diagnoses for graceful termination.
 func (e *DiagnoseEngine) Shutdown() {
+	e.stopped.Store(true)
 	e.mu.Lock()
-	e.stopped = true
 	cancels := make([]context.CancelFunc, 0, len(e.inFlight))
 	for _, cancel := range e.inFlight {
 		cancels = append(cancels, cancel)
@@ -325,11 +328,16 @@ func (e *DiagnoseEngine) forwardReport(req *DiagnoseRequest, report string) {
 	original := req.Events[0]
 	desc := FormatReportForFlashDuty(req.Session.Record, report)
 
+	labels := make(map[string]string, len(original.Labels))
+	for k, v := range original.Labels {
+		labels[k] = v
+	}
+
 	event := &types.Event{
 		EventTime:         time.Now().Unix(),
 		EventStatus:       types.EventStatusInfo,
 		AlertKey:          original.AlertKey,
-		Labels:            original.Labels,
+		Labels:            labels,
 		Description:       desc,
 		DescriptionFormat: types.DescFormatMarkdown,
 	}
