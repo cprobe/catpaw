@@ -30,13 +30,13 @@ type ConnectivityCheck struct {
 type PacketLossCheck struct {
 	WarnGe     float64 `toml:"warn_ge"`
 	CriticalGe float64 `toml:"critical_ge"`
-	TitleRule   string  `toml:"title_rule"`
+	TitleRule  string  `toml:"title_rule"`
 }
 
 type RttCheck struct {
 	WarnGe     config.Duration `toml:"warn_ge"`
 	CriticalGe config.Duration `toml:"critical_ge"`
-	TitleRule   string          `toml:"title_rule"`
+	TitleRule  string          `toml:"title_rule"`
 }
 
 type Partial struct {
@@ -252,7 +252,7 @@ func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
 					q.PushFront(types.BuildEvent(map[string]string{
 						"check":  "ping::connectivity",
 						"target": target,
-					}).SetTitleRule("[check] [target]").
+					}).SetTitleRule("[TPL]${check} ${from_hostip} ${target}").
 						SetEventStatus(types.EventStatusCritical).
 						SetDescription(fmt.Sprintf("panic during check: %v", r)))
 				}
@@ -274,7 +274,7 @@ func (ins *Instance) gather(q *safe.Queue[*types.Event], target string) {
 
 	connTR := ins.Connectivity.TitleRule
 	if connTR == "" {
-		connTR = "[check] [target]"
+		connTR = "[TPL]${check} ${from_hostip} ${target}"
 	}
 
 	connEvent := types.BuildEvent(map[string]string{
@@ -311,14 +311,14 @@ func (ins *Instance) gather(q *safe.Queue[*types.Event], target string) {
 	if ins.PacketLoss.WarnGe > 0 || ins.PacketLoss.CriticalGe > 0 {
 		plTR := ins.PacketLoss.TitleRule
 		if plTR == "" {
-			plTR = "[check] [target]"
+			plTR = "[TPL]${check} ${from_hostip} ${target}"
 		}
 
 		plEvent := types.BuildEvent(map[string]string{
-			"check":                                    "ping::packet_loss",
-			types.AttrPrefix + "packet_loss":           fmt.Sprintf("%.2f%%", stats.PacketLoss),
-			types.AttrPrefix + "warn_threshold":        fmt.Sprintf("%.1f%%", ins.PacketLoss.WarnGe),
-			types.AttrPrefix + "critical_threshold":    fmt.Sprintf("%.1f%%", ins.PacketLoss.CriticalGe),
+			"check":                                 "ping::packet_loss",
+			types.AttrPrefix + "packet_loss":        fmt.Sprintf("%.2f%%", stats.PacketLoss),
+			types.AttrPrefix + "warn_threshold":     fmt.Sprintf("%.1f%%", ins.PacketLoss.WarnGe),
+			types.AttrPrefix + "critical_threshold": fmt.Sprintf("%.1f%%", ins.PacketLoss.CriticalGe),
 		}, labels).SetTitleRule(plTR)
 
 		if ins.PacketLoss.CriticalGe > 0 && stats.PacketLoss >= ins.PacketLoss.CriticalGe {
@@ -337,16 +337,16 @@ func (ins *Instance) gather(q *safe.Queue[*types.Event], target string) {
 	if ins.Rtt.WarnGe > 0 || ins.Rtt.CriticalGe > 0 {
 		rttTR := ins.Rtt.TitleRule
 		if rttTR == "" {
-			rttTR = "[check] [target]"
+			rttTR = "[TPL]${check} ${from_hostip} ${target}"
 		}
 
 		rttEvent := types.BuildEvent(map[string]string{
-			"check":                                    "ping::rtt",
-			types.AttrPrefix + "avg_rtt":               stats.AvgRtt.String(),
-			types.AttrPrefix + "min_rtt":               stats.MinRtt.String(),
-			types.AttrPrefix + "max_rtt":               stats.MaxRtt.String(),
-			types.AttrPrefix + "warn_threshold":        ins.Rtt.WarnGe.HumanString(),
-			types.AttrPrefix + "critical_threshold":    ins.Rtt.CriticalGe.HumanString(),
+			"check":                                 "ping::rtt",
+			types.AttrPrefix + "avg_rtt":            stats.AvgRtt.String(),
+			types.AttrPrefix + "min_rtt":            stats.MinRtt.String(),
+			types.AttrPrefix + "max_rtt":            stats.MaxRtt.String(),
+			types.AttrPrefix + "warn_threshold":     ins.Rtt.WarnGe.HumanString(),
+			types.AttrPrefix + "critical_threshold": ins.Rtt.CriticalGe.HumanString(),
 		}, labels).SetTitleRule(rttTR)
 
 		if ins.Rtt.CriticalGe > 0 && stats.AvgRtt >= time.Duration(ins.Rtt.CriticalGe) {
@@ -426,4 +426,3 @@ func (ins *Instance) ping(destination string) (*pingStats, error) {
 
 	return ps, nil
 }
-

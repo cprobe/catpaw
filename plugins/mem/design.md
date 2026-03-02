@@ -12,7 +12,7 @@
 | Swap 使用率 | `mem::swap_usage` | Swap 使用率，Swap 总量为 0 时自动跳过 |
 
 - **target label** 统一为 `"memory"`（本机唯一资源，无需区分多 target）
-- **默认 title_rule** 为 `"[check]"`（target 固定，标题中无需再显示）
+- **默认 title_rule** 为 `"[TPL]${check} ${from_hostip}"`（target 固定，标题中无需再显示）
 
 ## 数据来源
 

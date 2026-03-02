@@ -29,7 +29,7 @@ interval = "60s"
 severity = "Info"
 mode = "changed"
 time_span = "3m"
-# title_rule = "[check] [target]"
+# title_rule = "[TPL]${check} ${from_hostip} ${target}"
 
 ## 维度2：checksum（文件内容哈希）
 ## 从第二次采集开始，若 SHA256 变化则告警
@@ -38,13 +38,13 @@ time_span = "3m"
 # [instances.checksum]
 # severity = "Critical"
 # max_file_size = "50MB"
-# title_rule = "[check] [target]"
+# title_rule = "[TPL]${check} ${from_hostip} ${target}"
 
 ## 维度3：existence（存在性）
 ## 任一目标不存在、glob 无匹配，或文件无权限访问时告警
 # [instances.existence]
 # severity = "Critical"
-# title_rule = "[check] [target]"
+# title_rule = "[TPL]${check} ${from_hostip} ${target}"
 
 [instances.alerting]
 for_duration = 0

@@ -22,7 +22,7 @@
 两个维度独立配置、独立产出事件。用户可以只配一个、也可以两个都配、也可以两个都不配（expect 留空则跳过该检查）。
 
 - **target label** 固定为 `"selinux"` / `"apparmor"`
-- **默认 title_rule** 为 `"[check] [target]"`
+- **默认 title_rule** 为 `"[TPL]${check} ${from_hostip} ${target}"`
 
 ## 数据来源
 
@@ -288,7 +288,7 @@ interval = "60s"
 [instances.enforce_mode]
 # expect = "enforcing"
 # severity = "Warning"
-# title_rule = "[check] [target]"
+# title_rule = "[TPL]${check} ${from_hostip} ${target}"
 
 ## AppArmor 状态检查
 ## expect 可选值：yes / no
@@ -296,7 +296,7 @@ interval = "60s"
 [instances.apparmor_enabled]
 # expect = "yes"
 # severity = "Warning"
-# title_rule = "[check] [target]"
+# title_rule = "[TPL]${check} ${from_hostip} ${target}"
 
 [instances.alerting]
 for_duration = 0

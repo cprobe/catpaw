@@ -17,7 +17,7 @@
 | 日志行匹配 | `logfile::match` | 新增日志行匹配 filter_include 规则时告警 |
 
 - **target label** 为日志文件路径（如 `/var/log/myapp/error.log`），每个文件独立告警/恢复
-- **默认 title_rule** 为 `"[check] [target]"`（多 target，标题中需区分）
+- **默认 title_rule** 为 `"[TPL]${check} ${from_hostip} ${target}"`（多 target，标题中需区分）
 
 ## 数据来源
 
@@ -639,7 +639,7 @@ interval = "30s"
 ## 匹配到内容后的事件级别
 [instances.match]
 severity = "Warning"
-# title_rule = "[check] [target]"
+# title_rule = "[TPL]${check} ${from_hostip} ${target}"
 
 [instances.alerting]
 for_duration = 0

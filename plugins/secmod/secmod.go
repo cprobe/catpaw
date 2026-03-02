@@ -120,7 +120,7 @@ func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
 func (ins *Instance) checkEnforceMode(q *safe.Queue[*types.Event]) {
 	tr := ins.EnforceMode.TitleRule
 	if tr == "" {
-		tr = "[check] [target]"
+		tr = "[TPL]${check} ${from_hostip} ${target}"
 	}
 
 	actual, err := readSELinuxMode()
@@ -155,7 +155,7 @@ func (ins *Instance) checkEnforceMode(q *safe.Queue[*types.Event]) {
 func (ins *Instance) checkAppArmor(q *safe.Queue[*types.Event]) {
 	tr := ins.AppArmor.TitleRule
 	if tr == "" {
-		tr = "[check] [target]"
+		tr = "[TPL]${check} ${from_hostip} ${target}"
 	}
 
 	actual, err := readAppArmorStatus()

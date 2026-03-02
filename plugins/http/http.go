@@ -36,19 +36,19 @@ type ConnectivityCheck struct {
 type ResponseTimeCheck struct {
 	WarnGe     config.Duration `toml:"warn_ge"`
 	CriticalGe config.Duration `toml:"critical_ge"`
-	TitleRule   string          `toml:"title_rule"`
+	TitleRule  string          `toml:"title_rule"`
 }
 
 type CertExpiryCheck struct {
 	WarnWithin     config.Duration `toml:"warn_within"`
 	CriticalWithin config.Duration `toml:"critical_within"`
-	TitleRule       string          `toml:"title_rule"`
+	TitleRule      string          `toml:"title_rule"`
 }
 
 type StatusCodeCheck struct {
-	Expect    []string      `toml:"expect"`
-	Severity  string        `toml:"severity"`
-	TitleRule string        `toml:"title_rule"`
+	Expect    []string `toml:"expect"`
+	Severity  string   `toml:"severity"`
+	TitleRule string   `toml:"title_rule"`
 	filter    filter.Filter
 }
 
@@ -285,7 +285,7 @@ func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
 					q.PushFront(types.BuildEvent(map[string]string{
 						"check":  "http::connectivity",
 						"target": target,
-					}).SetTitleRule("[check] [target]").
+					}).SetTitleRule("[TPL]${check} ${from_hostip} ${target}").
 						SetEventStatus(types.EventStatusCritical).
 						SetDescription(fmt.Sprintf("panic during check: %v", r)))
 				}
@@ -315,7 +315,7 @@ func (ins *Instance) gather(q *safe.Queue[*types.Event], target string) {
 	if err != nil {
 		connTR := ins.Connectivity.TitleRule
 		if connTR == "" {
-			connTR = "[check] [target]"
+			connTR = "[TPL]${check} ${from_hostip} ${target}"
 		}
 		connEvent := types.BuildEvent(map[string]string{
 			"check": "http::connectivity",
@@ -340,7 +340,7 @@ func (ins *Instance) gather(q *safe.Queue[*types.Event], target string) {
 	// connectivity check
 	connTR := ins.Connectivity.TitleRule
 	if connTR == "" {
-		connTR = "[check] [target]"
+		connTR = "[TPL]${check} ${from_hostip} ${target}"
 	}
 
 	start := time.Now()
@@ -348,7 +348,7 @@ func (ins *Instance) gather(q *safe.Queue[*types.Event], target string) {
 	responseTime := time.Since(start)
 
 	connEvent := types.BuildEvent(map[string]string{
-		"check": "http::connectivity",
+		"check":                            "http::connectivity",
 		types.AttrPrefix + "response_time": responseTime.String(),
 	}, labels).SetTitleRule(connTR)
 
@@ -372,14 +372,14 @@ func (ins *Instance) gather(q *safe.Queue[*types.Event], target string) {
 	if ins.ResponseTime.WarnGe > 0 || ins.ResponseTime.CriticalGe > 0 {
 		rtTR := ins.ResponseTime.TitleRule
 		if rtTR == "" {
-			rtTR = "[check] [target]"
+			rtTR = "[TPL]${check} ${from_hostip} ${target}"
 		}
 
 		rtEvent := types.BuildEvent(map[string]string{
-			"check":                                    "http::response_time",
-			types.AttrPrefix + "response_time":         responseTime.String(),
-			types.AttrPrefix + "warn_threshold":        ins.ResponseTime.WarnGe.HumanString(),
-			types.AttrPrefix + "critical_threshold":    ins.ResponseTime.CriticalGe.HumanString(),
+			"check":                                 "http::response_time",
+			types.AttrPrefix + "response_time":      responseTime.String(),
+			types.AttrPrefix + "warn_threshold":     ins.ResponseTime.WarnGe.HumanString(),
+			types.AttrPrefix + "critical_threshold": ins.ResponseTime.CriticalGe.HumanString(),
 		}, labels).SetTitleRule(rtTR)
 
 		if ins.ResponseTime.CriticalGe > 0 && responseTime >= time.Duration(ins.ResponseTime.CriticalGe) {
@@ -401,7 +401,7 @@ func (ins *Instance) gather(q *safe.Queue[*types.Event], target string) {
 
 		certTR := ins.CertExpiry.TitleRule
 		if certTR == "" {
-			certTR = "[check] [target]"
+			certTR = "[TPL]${check} ${from_hostip} ${target}"
 		}
 
 		certEvent := types.BuildEvent(map[string]string{
@@ -453,14 +453,14 @@ func (ins *Instance) gather(q *safe.Queue[*types.Event], target string) {
 	if len(ins.StatusCode.Expect) > 0 {
 		scTR := ins.StatusCode.TitleRule
 		if scTR == "" {
-			scTR = "[check] [target]"
+			scTR = "[TPL]${check} ${from_hostip} ${target}"
 		}
 
 		scEvent := types.BuildEvent(map[string]string{
-			"check":                                "http::status_code",
-			types.AttrPrefix + "status_code":       statusCode,
-			types.AttrPrefix + "expect_code":       fmt.Sprintf("%v", ins.StatusCode.Expect),
-			types.AttrPrefix + "response_body":     truncateBody(body, maxBodyDisplaySize),
+			"check":                            "http::status_code",
+			types.AttrPrefix + "status_code":   statusCode,
+			types.AttrPrefix + "expect_code":   fmt.Sprintf("%v", ins.StatusCode.Expect),
+			types.AttrPrefix + "response_body": truncateBody(body, maxBodyDisplaySize),
 		}, labels).SetTitleRule(scTR)
 
 		if !ins.StatusCode.filter.Match(statusCode) {
@@ -477,13 +477,13 @@ func (ins *Instance) gather(q *safe.Queue[*types.Event], target string) {
 	if ins.ResponseBody.ExpectSubstring != "" || ins.ResponseBody.compiledRegex != nil {
 		rbTR := ins.ResponseBody.TitleRule
 		if rbTR == "" {
-			rbTR = "[check] [target]"
+			rbTR = "[TPL]${check} ${from_hostip} ${target}"
 		}
 
 		rbEvent := types.BuildEvent(map[string]string{
-			"check":                                "http::response_body",
-			types.AttrPrefix + "status_code":       statusCode,
-			types.AttrPrefix + "response_body":     truncateBody(body, maxBodyDisplaySize),
+			"check":                            "http::response_body",
+			types.AttrPrefix + "status_code":   statusCode,
+			types.AttrPrefix + "response_body": truncateBody(body, maxBodyDisplaySize),
 		}, labels).SetTitleRule(rbTR)
 
 		var matched bool

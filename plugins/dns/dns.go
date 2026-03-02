@@ -29,23 +29,23 @@ type ResolutionCheck struct {
 type ResponseTimeCheck struct {
 	WarnGe     config.Duration `toml:"warn_ge"`
 	CriticalGe config.Duration `toml:"critical_ge"`
-	TitleRule   string          `toml:"title_rule"`
+	TitleRule  string          `toml:"title_rule"`
 }
 
 type Instance struct {
 	config.InternalConfig
 
-	Targets      []string        `toml:"targets"`
-	Servers      []string        `toml:"servers"`
-	ExpectedIPs  []string        `toml:"expected_ips"`
-	Timeout      config.Duration `toml:"timeout"`
-	Concurrency  int             `toml:"concurrency"`
-	Resolution   ResolutionCheck `toml:"resolution"`
+	Targets      []string          `toml:"targets"`
+	Servers      []string          `toml:"servers"`
+	ExpectedIPs  []string          `toml:"expected_ips"`
+	Timeout      config.Duration   `toml:"timeout"`
+	Concurrency  int               `toml:"concurrency"`
+	Resolution   ResolutionCheck   `toml:"resolution"`
 	ResponseTime ResponseTimeCheck `toml:"response_time"`
 
-	resolver     *net.Resolver
-	expectedSet  map[string]struct{}
-	serverLabel  string
+	resolver    *net.Resolver
+	expectedSet map[string]struct{}
+	serverLabel string
 }
 
 type DNSPlugin struct {
@@ -180,7 +180,7 @@ func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
 					q.PushFront(types.BuildEvent(map[string]string{
 						"check":  "dns::resolution",
 						"target": target,
-					}).SetTitleRule("[check] [target]").
+					}).SetTitleRule("[TPL]${check} ${from_hostip} ${target}").
 						SetEventStatus(types.EventStatusCritical).
 						SetDescription(fmt.Sprintf("panic during check: %v", r)))
 				}
@@ -244,7 +244,7 @@ func (ins *Instance) gatherTarget(q *safe.Queue[*types.Event], target string) {
 func (ins *Instance) checkResolution(q *safe.Queue[*types.Event], target string, ips []string, err error, rt time.Duration, baseLabels, attrLabels map[string]string) {
 	tr := ins.Resolution.TitleRule
 	if tr == "" {
-		tr = "[check] [target]"
+		tr = "[TPL]${check} ${from_hostip} ${target}"
 	}
 
 	event := types.BuildEvent(mergeMaps(map[string]string{
@@ -265,7 +265,7 @@ func (ins *Instance) checkResolution(q *safe.Queue[*types.Event], target string,
 func (ins *Instance) checkExpectedIPs(q *safe.Queue[*types.Event], target string, ips []string, baseLabels, attrLabels map[string]string) {
 	tr := ins.Resolution.TitleRule
 	if tr == "" {
-		tr = "[check] [target]"
+		tr = "[TPL]${check} ${from_hostip} ${target}"
 	}
 
 	extraAttrs := map[string]string{
@@ -303,7 +303,7 @@ func (ins *Instance) checkResponseTime(q *safe.Queue[*types.Event], target strin
 
 	tr := ins.ResponseTime.TitleRule
 	if tr == "" {
-		tr = "[check] [target]"
+		tr = "[TPL]${check} ${from_hostip} ${target}"
 	}
 
 	extraAttrs := map[string]string{}

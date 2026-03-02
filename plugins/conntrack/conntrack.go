@@ -80,7 +80,7 @@ func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
 
 	tr := ins.ConntrackUsage.TitleRule
 	if tr == "" {
-		tr = "[check]"
+		tr = "[TPL]${check} ${from_hostip}"
 	}
 
 	count, max, err := readConntrackFiles()

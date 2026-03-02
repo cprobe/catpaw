@@ -33,7 +33,7 @@
 
 - **系统级聚合**——不按进程/端口拆分，因为连接状态异常通常需要从系统全局角度判断
 - **target 固定为 `"system"`**——一个 instance 只产出最多 2 个事件
-- **默认 title_rule** 为 `"[check]"`
+- **默认 title_rule** 为 `"[TPL]${check} ${from_hostip}"`
 
 ### 为什么只关注 CLOSE_WAIT 和 TIME_WAIT
 
@@ -272,7 +272,7 @@ Gather(q):
 
 
 emitStateEvent(q, check, count, config, establishedCount):
-    tr = config.titleRule or "[check]"
+    tr = config.titleRule or "[TPL]${check} ${from_hostip}"
     event = BuildEvent(check=check, target="system")
     event._attr_count = count
     if establishedCount >= 0:
@@ -460,7 +460,7 @@ interval = "60s"
 [instances.close_wait]
 warn_ge = 100
 critical_ge = 1000
-# title_rule = "[check]"
+# title_rule = "[TPL]${check} ${from_hostip}"
 
 ## TIME_WAIT 连接数阈值
 ## 与 QPS 和连接模式相关，高并发短连接场景常见
@@ -468,7 +468,7 @@ critical_ge = 1000
 [instances.time_wait]
 warn_ge = 5000
 critical_ge = 20000
-# title_rule = "[check]"
+# title_rule = "[TPL]${check} ${from_hostip}"
 
 [instances.alerting]
 for_duration = "2m"

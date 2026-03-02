@@ -132,7 +132,7 @@ func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
 		q.PushFront(types.BuildEvent(map[string]string{
 			"check":  "mount::compliance",
 			"target": "mounts",
-		}).SetTitleRule("[check]").
+		}).SetTitleRule("[TPL]${check} ${from_hostip}").
 			SetEventStatus(types.EventStatusCritical).
 			SetDescription(fmt.Sprintf("failed to parse /proc/mounts: %v", err)))
 		return
@@ -150,7 +150,7 @@ func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
 func (ins *Instance) checkMount(q *safe.Queue[*types.Event], spec *MountSpec, mountMap map[string]mountEntry) {
 	tr := spec.TitleRule
 	if tr == "" {
-		tr = "[check] [target]"
+		tr = "[TPL]${check} ${from_hostip} ${target}"
 	}
 
 	entry, exists := mountMap[spec.Path]
@@ -311,7 +311,7 @@ func (ins *Instance) checkFstabMounts(q *safe.Queue[*types.Event], mountMap map[
 		q.PushFront(types.BuildEvent(map[string]string{
 			"check":  "mount::compliance",
 			"target": "fstab",
-		}).SetTitleRule("[check]").
+		}).SetTitleRule("[TPL]${check} ${from_hostip}").
 			SetEventStatus(types.EventStatusCritical).
 			SetDescription(fmt.Sprintf("failed to read /etc/fstab: %v", err)))
 		return

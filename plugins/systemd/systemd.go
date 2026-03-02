@@ -125,7 +125,7 @@ func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
 					q.PushFront(types.BuildEvent(map[string]string{
 						"check":  "systemd::state",
 						"target": unit,
-					}).SetTitleRule("[check] [target]").
+					}).SetTitleRule("[TPL]${check} ${from_hostip} ${target}").
 						SetEventStatus(types.EventStatusCritical).
 						SetDescription(fmt.Sprintf("panic during check: %v", r)))
 				}
@@ -165,7 +165,7 @@ func (ins *Instance) gatherUnit(q *safe.Queue[*types.Event], unit string) {
 
 	tr := ins.State.TitleRule
 	if tr == "" {
-		tr = "[check] [target]"
+		tr = "[TPL]${check} ${from_hostip} ${target}"
 	}
 
 	labels := map[string]string{
@@ -173,10 +173,10 @@ func (ins *Instance) gatherUnit(q *safe.Queue[*types.Event], unit string) {
 		"target": unit,
 	}
 	attrLabels := map[string]string{
-		types.AttrPrefix + "active_state":    activeState,
-		types.AttrPrefix + "sub_state":       subState,
-		types.AttrPrefix + "load_state":      loadState,
-		types.AttrPrefix + "canonical_unit":  canonicalUnit,
+		types.AttrPrefix + "active_state":   activeState,
+		types.AttrPrefix + "sub_state":      subState,
+		types.AttrPrefix + "load_state":     loadState,
+		types.AttrPrefix + "canonical_unit": canonicalUnit,
 	}
 	if unitType != "" {
 		attrLabels[types.AttrPrefix+"type"] = unitType
@@ -290,7 +290,7 @@ func parseProperties(data []byte) map[string]string {
 func (ins *Instance) buildErrorEvent(unit, errMsg string) *types.Event {
 	tr := ins.State.TitleRule
 	if tr == "" {
-		tr = "[check] [target]"
+		tr = "[TPL]${check} ${from_hostip} ${target}"
 	}
 
 	return types.BuildEvent(map[string]string{

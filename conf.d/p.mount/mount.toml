@@ -7,7 +7,7 @@
 ## fstype：可选，期望的文件系统类型（ext4/xfs/nfs/tmpfs/...）
 ## options：可选，必须存在的挂载选项列表
 ## severity：可选，默认 Warning（支持 Info / Warning / Critical）
-## title_rule：可选，默认 "[check] [target]"
+## title_rule：可选，默认 "[TPL]${check} ${from_hostip} ${target}"
 
 interval = "60s"
 

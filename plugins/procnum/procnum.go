@@ -320,7 +320,7 @@ func (ins *Instance) winServicePIDs() ([]procutil.PID, error) {
 func (ins *Instance) newEvent() *types.Event {
 	tr := ins.ProcessCount.TitleRule
 	if tr == "" {
-		tr = "[check] [target]"
+		tr = "[TPL]${check} ${from_hostip} ${target}"
 	}
 
 	labels := map[string]string{
@@ -345,4 +345,3 @@ func (ins *Instance) newEvent() *types.Event {
 
 	return types.BuildEvent(labels).SetTitleRule(tr)
 }
-

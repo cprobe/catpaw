@@ -33,7 +33,7 @@
 
 - **每个接口 × 每个维度独立产出事件**——eth0 的 errors 事件不影响 eth1 的 drops 事件
 - **target label** 为接口名（如 `"eth0"`、`"bond0"`）
-- **默认 title_rule** 为 `"[check] [target]"`
+- **默认 title_rule** 为 `"[TPL]${check} ${from_hostip} ${target}"`
 
 ### 为什么将 errors 和 drops 拆成两个 check label
 
@@ -410,13 +410,13 @@ exclude = ["lo", "docker*", "veth*", "br-*", "virbr*", "cali*", "flannel*", "cni
 [instances.errors]
 warn_ge = 1
 critical_ge = 100
-# title_rule = "[check] [target]"
+# title_rule = "[TPL]${check} ${from_hostip} ${target}"
 
 ## 丢包增量检查（rx_dropped + tx_dropped 合计增量）
 [instances.drops]
 warn_ge = 1
 critical_ge = 100
-# title_rule = "[check] [target]"
+# title_rule = "[TPL]${check} ${from_hostip} ${target}"
 
 ## 链路状态检查（手动指定期望 up 的接口）
 ## 不是所有接口都需要 up（备用网卡、管理口可能正常 down），所以需要手动列出
@@ -425,7 +425,7 @@ critical_ge = 100
 # [[instances.link_up]]
 # interface = "eth0"
 # severity = "Critical"
-# # title_rule = "[check] [target]"
+# # title_rule = "[TPL]${check} ${from_hostip} ${target}"
 
 # [[instances.link_up]]
 # interface = "bond0"

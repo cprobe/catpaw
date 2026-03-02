@@ -15,7 +15,7 @@
 ##      {
 ##        "event_status": "Warning",
 ##        "labels": { "check": "oom killed" },
-##        "title_rule": "[check]",
+##        "title_rule": "[TPL]${check} ${from_hostip}",
 ##        "description": "kernel: Out of memory: Kill process 9163 (mysqld)"
 ##      }
 ##    ]

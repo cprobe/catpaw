@@ -18,8 +18,8 @@ import (
 const pluginName = "netif"
 
 var (
-	sysClassNet   = "/sys/class/net"
-	runtimeGOOS   = runtime.GOOS
+	sysClassNet = "/sys/class/net"
+	runtimeGOOS = runtime.GOOS
 )
 
 type DeltaCheck struct {
@@ -37,8 +37,8 @@ type LinkSpec struct {
 type Instance struct {
 	config.InternalConfig
 
-	Include []string   `toml:"include"`
-	Exclude []string   `toml:"exclude"`
+	Include []string `toml:"include"`
+	Exclude []string `toml:"exclude"`
 
 	Errors DeltaCheck `toml:"errors"`
 	Drops  DeltaCheck `toml:"drops"`
@@ -221,7 +221,7 @@ func emitDeltaEvent(q *safe.Queue[*types.Event], checkLabel, kind, iface string,
 
 	tr := dc.TitleRule
 	if tr == "" {
-		tr = "[check] [target]"
+		tr = "[TPL]${check} ${from_hostip} ${target}"
 	}
 
 	event := types.BuildEvent(map[string]string{
@@ -253,7 +253,7 @@ func emitDeltaEvent(q *safe.Queue[*types.Event], checkLabel, kind, iface string,
 func (ins *Instance) gatherLink(q *safe.Queue[*types.Event], spec *LinkSpec) {
 	tr := spec.TitleRule
 	if tr == "" {
-		tr = "[check] [target]"
+		tr = "[TPL]${check} ${from_hostip} ${target}"
 	}
 
 	operstate, err := readOperstate(spec.Interface)
@@ -268,10 +268,10 @@ func (ins *Instance) gatherLink(q *safe.Queue[*types.Event], spec *LinkSpec) {
 	}
 
 	event := types.BuildEvent(map[string]string{
-		"check":                          "netif::link",
-		"target":                         spec.Interface,
-		types.AttrPrefix + "operstate":   operstate,
-		types.AttrPrefix + "expect":      "up",
+		"check":                        "netif::link",
+		"target":                       spec.Interface,
+		types.AttrPrefix + "operstate": operstate,
+		types.AttrPrefix + "expect":    "up",
 	}).SetTitleRule(tr)
 
 	if operstate == "not_found" {

@@ -17,7 +17,7 @@
 | 连接跟踪表使用率 | `conntrack::conntrack_usage` | count/max 百分比超阈值告警 |
 
 - **target label** 为 `"system"`（连接跟踪表是系统级唯一资源）
-- **默认 title_rule** 为 `"[check]"`
+- **默认 title_rule** 为 `"[TPL]${check} ${from_hostip}"`
 
 ## 数据来源
 
@@ -299,7 +299,7 @@ conf.d/p.conntrack/
 [instances.conntrack_usage]
 warn_ge = 75.0
 critical_ge = 90.0
-# title_rule = "[check]"
+# title_rule = "[TPL]${check} ${from_hostip}"
 
 ## 采集间隔
 interval = "30s"

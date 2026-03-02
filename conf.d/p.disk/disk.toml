@@ -33,7 +33,7 @@ ignore_fs_types = [
 [instances.space_usage]
 warn_ge     = 90.0
 critical_ge = 99.0
-# title_rule = "[check] [target]"
+# title_rule = "[TPL]${check} ${from_hostip} ${target}"
 
 ## inode 使用率阈值（禁用：不写或两个都设0）
 ## Windows 下 InodesTotal=0 时自动跳过
@@ -41,7 +41,7 @@ critical_ge = 99.0
 [instances.inode_usage]
 warn_ge     = 90.0
 critical_ge = 99.0
-# title_rule = "[check] [target]"
+# title_rule = "[TPL]${check} ${from_hostip} ${target}"
 
 ## 读写健康检测（severity 非空则启用）
 ## 开启后会在每个挂载点下写入临时文件并读回校验，需要 catpaw 进程有写权限
@@ -49,7 +49,7 @@ critical_ge = 99.0
 # [instances.writable]
 # severity = "Critical"
 # test_file = ".catpaw_disk_check"
-# title_rule = "[check] [target]"
+# title_rule = "[TPL]${check} ${from_hostip} ${target}"
 
 ## 并发控制：同时检查的挂载点数量上限
 # concurrency = 10

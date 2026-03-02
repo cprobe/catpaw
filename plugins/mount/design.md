@@ -24,7 +24,7 @@
 
 - **每个挂载条目独立产出事件**——一个挂载点检查失败不影响其他挂载点（原则 13）
 - **target label** 为被检查的挂载路径（如 `"/data"`、`"/tmp"`）
-- **默认 title_rule** 为 `"[check] [target]"`
+- **默认 title_rule** 为 `"[TPL]${check} ${from_hostip} ${target}"`
 
 ### 为什么用单一 check label 而非拆分 existence 和 options
 
@@ -72,7 +72,7 @@ path = "/data"            # 必填：期望的挂载路径
 fstype = "ext4"           # 可选：期望的文件系统类型
 options = ["rw"]          # 可选：必须存在的挂载选项
 severity = "Critical"     # 可选：告警级别，默认 Warning
-# title_rule = "[check] [target]"
+# title_rule = "[TPL]${check} ${from_hostip} ${target}"
 ```
 
 检查逻辑：
@@ -206,7 +206,7 @@ Gather(q):
 
 
 checkMount(q, spec, mountMap):
-    tr = spec.titleRule or "[check] [target]"
+    tr = spec.titleRule or "[TPL]${check} ${from_hostip} ${target}"
     entry, exists = mountMap[spec.path]
 
     if !exists:
@@ -408,7 +408,7 @@ interval = "60s"
 ## fstype：可选，期望的文件系统类型（ext4/xfs/nfs/tmpfs/...）
 ## options：可选，必须存在的挂载选项列表
 ## severity：可选，默认 Warning
-## title_rule：可选，默认 "[check] [target]"
+## title_rule：可选，默认 "[TPL]${check} ${from_hostip} ${target}"
 
 ## 数据盘 — 检查是否挂载且是 ext4
 # [[instances.mounts]]

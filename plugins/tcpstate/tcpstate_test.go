@@ -441,8 +441,8 @@ func TestDefaultTitleRule(t *testing.T) {
 	ins.Gather(q)
 
 	e := popEvent(t, q)
-	if e.TitleRule != "[check]" {
-		t.Fatalf("default title_rule should be [check], got %q", e.TitleRule)
+	if e.TitleRule != "[TPL]${check} ${from_hostip}" {
+		t.Fatalf("default title_rule should be [TPL]${check} ${from_hostip}, got %q", e.TitleRule)
 	}
 }
 
@@ -450,14 +450,14 @@ func TestCustomTitleRule(t *testing.T) {
 	defer mockLinux()()
 	defer mockQueryStates(&stateCounts{closeWait: 10}, nil)()
 
-	ins := &Instance{CloseWait: StateCheck{WarnGe: 100, TitleRule: "[check] [target]"}}
+	ins := &Instance{CloseWait: StateCheck{WarnGe: 100, TitleRule: "[TPL]${check} ${from_hostip} ${target}"}}
 	ins.Init()
 
 	q := safe.NewQueue[*types.Event]()
 	ins.Gather(q)
 
 	e := popEvent(t, q)
-	if e.TitleRule != "[check] [target]" {
+	if e.TitleRule != "[TPL]${check} ${from_hostip} ${target}" {
 		t.Fatalf("expected custom title_rule, got %q", e.TitleRule)
 	}
 }

@@ -17,7 +17,7 @@
 | 参数基线比对 | `sysctl::param_check` | 逐个参数检查，不匹配的参数产出告警 |
 
 - **target label** 为被检查的参数 key（如 `"net.core.somaxconn"`）
-- **默认 title_rule** 为 `"[check] [target]"`
+- **默认 title_rule** 为 `"[TPL]${check} ${from_hostip} ${target}"`
 - **每个参数独立产出事件**——参数之间互不干扰，一个参数读取失败不影响其他参数的检查（原则 13）
 
 ### 为什么每个参数独立一个事件
@@ -303,7 +303,7 @@ conf.d/p.sysctl/
 interval = "60s"
 
 [instances.param_check]
-# title_rule = "[check] [target]"
+# title_rule = "[TPL]${check} ${from_hostip} ${target}"
 params = [
   { key = "net.core.somaxconn", expect = "65535", op = "ge" },
   { key = "vm.swappiness", expect = "10", op = "le" },

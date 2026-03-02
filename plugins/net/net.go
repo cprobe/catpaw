@@ -27,7 +27,7 @@ type ConnectivityCheck struct {
 type ResponseTimeCheck struct {
 	WarnGe     config.Duration `toml:"warn_ge"`
 	CriticalGe config.Duration `toml:"critical_ge"`
-	TitleRule   string          `toml:"title_rule"`
+	TitleRule  string          `toml:"title_rule"`
 }
 
 type Partial struct {
@@ -188,7 +188,7 @@ func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
 					q.PushFront(types.BuildEvent(map[string]string{
 						"check":  "net::connectivity",
 						"target": target,
-					}).SetTitleRule("[check] [target]").
+					}).SetTitleRule("[TPL]${check} ${from_hostip} ${target}").
 						SetEventStatus(types.EventStatusCritical).
 						SetDescription(fmt.Sprintf("panic during check: %v", r)))
 				}
@@ -220,7 +220,7 @@ func (ins *Instance) gather(q *safe.Queue[*types.Event], target string) {
 func (ins *Instance) TCPGather(address string, labels map[string]string, q *safe.Queue[*types.Event]) {
 	connTR := ins.Connectivity.TitleRule
 	if connTR == "" {
-		connTR = "[check] [target]"
+		connTR = "[TPL]${check} ${from_hostip} ${target}"
 	}
 
 	event := types.BuildEvent(map[string]string{
@@ -293,7 +293,7 @@ func (ins *Instance) TCPGather(address string, labels map[string]string, q *safe
 func (ins *Instance) UDPGather(address string, labels map[string]string, q *safe.Queue[*types.Event]) {
 	connTR := ins.Connectivity.TitleRule
 	if connTR == "" {
-		connTR = "[check] [target]"
+		connTR = "[TPL]${check} ${from_hostip} ${target}"
 	}
 
 	event := types.BuildEvent(map[string]string{
@@ -372,14 +372,14 @@ func (ins *Instance) checkResponseTime(q *safe.Queue[*types.Event], address stri
 
 	tr := ins.ResponseTime.TitleRule
 	if tr == "" {
-		tr = "[check] [target]"
+		tr = "[TPL]${check} ${from_hostip} ${target}"
 	}
 
 	rtEvent := types.BuildEvent(map[string]string{
-		"check":                                    "net::response_time",
-		types.AttrPrefix + "response_time":         responseTime.String(),
-		types.AttrPrefix + "warn_threshold":        ins.ResponseTime.WarnGe.HumanString(),
-		types.AttrPrefix + "critical_threshold":    ins.ResponseTime.CriticalGe.HumanString(),
+		"check":                                 "net::response_time",
+		types.AttrPrefix + "response_time":      responseTime.String(),
+		types.AttrPrefix + "warn_threshold":     ins.ResponseTime.WarnGe.HumanString(),
+		types.AttrPrefix + "critical_threshold": ins.ResponseTime.CriticalGe.HumanString(),
 	}, labels).SetTitleRule(tr)
 
 	if ins.ResponseTime.CriticalGe > 0 && responseTime >= time.Duration(ins.ResponseTime.CriticalGe) {
@@ -403,4 +403,3 @@ func truncateStr(s string, max int) string {
 	}
 	return s[:max] + "... (truncated)"
 }
-

@@ -9,7 +9,7 @@
 [instances.reboot_detected]
 critical_lt = "10m"
 # warn_lt = "1h"
-# title_rule = "[check]"
+# title_rule = "[TPL]${check} ${from_hostip}"
 
 ## 采集间隔（重启检测需及时，建议 1 分钟）
 interval = "1m"

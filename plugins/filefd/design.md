@@ -17,7 +17,7 @@
 | 文件描述符使用率 | `filefd::filefd_usage` | allocated/max 百分比超阈值告警 |
 
 - **target label** 为 `"system"`（文件描述符是系统级共享资源）
-- **默认 title_rule** 为 `"[check]"`
+- **默认 title_rule** 为 `"[TPL]${check} ${from_hostip}"`
 
 ## 数据来源
 
@@ -279,7 +279,7 @@ conf.d/p.filefd/
 [instances.filefd_usage]
 warn_ge = 80.0
 critical_ge = 90.0
-# title_rule = "[check]"
+# title_rule = "[TPL]${check} ${from_hostip}"
 
 ## 采集间隔
 interval = "30s"

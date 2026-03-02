@@ -26,7 +26,7 @@
 - **尚未生效**（NotBefore 在未来）→ 无条件 Critical
 
 - **target label** 为检查对象标识：远程模式为 `host:port`（含 per-target SNI 时仍为 `host:port`），文件模式为文件路径
-- **默认 title_rule** 为 `"[check] [target]"`
+- **默认 title_rule** 为 `"[TPL]${check} ${from_hostip} ${target}"`
 
 ### 未来扩展维度（本版本不实现）
 
@@ -663,13 +663,13 @@ interval = "1h"
 [instances.remote_expiry]
 warn_within = "720h"
 critical_within = "168h"
-# title_rule = "[check] [target]"
+# title_rule = "[TPL]${check} ${from_hostip} ${target}"
 
 ## 文件证书过期检测（阈值含义同上）
 [instances.file_expiry]
 warn_within = "720h"
 critical_within = "168h"
-# title_rule = "[check] [target]"
+# title_rule = "[TPL]${check} ${from_hostip} ${target}"
 
 [instances.alerting]
 for_duration = 0

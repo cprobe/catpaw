@@ -9,7 +9,7 @@
 [instances.listen_overflow]
 warn_ge = 1
 critical_ge = 100
-# title_rule = "[check]"
+# title_rule = "[TPL]${check} ${from_hostip}"
 
 ## 采集间隔
 interval = "30s"

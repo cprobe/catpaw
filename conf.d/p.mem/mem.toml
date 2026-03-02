@@ -13,7 +13,7 @@
 [instances.memory_usage]
 warn_ge     = 85.0
 critical_ge = 90.0
-# title_rule = "[check]"
+# title_rule = "[TPL]${check} ${from_hostip}"
 
 ## Swap 使用率阈值（禁用：不写或两个都设0）
 ## Swap 总量为 0（未启用 Swap）时自动跳过，不会报错
@@ -21,7 +21,7 @@ critical_ge = 90.0
 [instances.swap_usage]
 warn_ge     = 10.0
 critical_ge = 30.0
-# title_rule = "[check]"
+# title_rule = "[TPL]${check} ${from_hostip}"
 
 ## 采集间隔，不配则继承全局 interval
 # interval = "30s"

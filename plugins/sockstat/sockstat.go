@@ -77,7 +77,7 @@ func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
 
 	tr := ins.ListenOverflow.TitleRule
 	if tr == "" {
-		tr = "[check]"
+		tr = "[TPL]${check} ${from_hostip}"
 	}
 
 	overflows, drops, err := readListenStats()
@@ -100,11 +100,11 @@ func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
 		ins.initialized = true
 
 		q.PushFront(types.BuildEvent(map[string]string{
-			"check":                                    "sockstat::listen_overflow",
-			"target":                                   "system",
-			types.AttrPrefix + "delta":                 "0",
-			types.AttrPrefix + "total_overflows":       overflowsStr,
-			types.AttrPrefix + "total_drops":           dropsStr,
+			"check":                              "sockstat::listen_overflow",
+			"target":                             "system",
+			types.AttrPrefix + "delta":           "0",
+			types.AttrPrefix + "total_overflows": overflowsStr,
+			types.AttrPrefix + "total_drops":     dropsStr,
 		}).SetTitleRule(tr).
 			SetEventStatus(types.EventStatusOk).
 			SetDescription(fmt.Sprintf("listen overflow baseline established (total overflows: %s)", overflowsStr)))
@@ -122,11 +122,11 @@ func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
 	deltaStr := strconv.FormatUint(delta, 10)
 
 	event := types.BuildEvent(map[string]string{
-		"check":                                    "sockstat::listen_overflow",
-		"target":                                   "system",
-		types.AttrPrefix + "delta":                 deltaStr,
-		types.AttrPrefix + "total_overflows":       overflowsStr,
-		types.AttrPrefix + "total_drops":           dropsStr,
+		"check":                              "sockstat::listen_overflow",
+		"target":                             "system",
+		types.AttrPrefix + "delta":           deltaStr,
+		types.AttrPrefix + "total_overflows": overflowsStr,
+		types.AttrPrefix + "total_drops":     dropsStr,
 	}).SetTitleRule(tr)
 
 	status := types.EvaluateGeThreshold(float64(delta), ins.ListenOverflow.WarnGe, ins.ListenOverflow.CriticalGe)

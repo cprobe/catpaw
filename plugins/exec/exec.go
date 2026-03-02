@@ -148,7 +148,7 @@ func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
 					q.PushFront(types.BuildEvent(map[string]string{
 						"check":  "exec::error",
 						"target": command,
-					}).SetTitleRule("[check] [target]").
+					}).SetTitleRule("[TPL]${check} ${from_hostip} ${target}").
 						SetEventStatus(types.EventStatusCritical).
 						SetDescription(fmt.Sprintf("panic during check: %v", r)))
 				}
@@ -250,9 +250,9 @@ func (ins *Instance) gatherNagios(q *safe.Queue[*types.Event], command string, s
 	}
 
 	eventLabels := map[string]string{
-		"check":                            "exec::nagios",
-		"target":                           command,
-		types.AttrPrefix + "exit_code":     fmt.Sprintf("%d", exitCode),
+		"check":                        "exec::nagios",
+		"target":                       command,
+		types.AttrPrefix + "exit_code": fmt.Sprintf("%d", exitCode),
 	}
 	if statusLine != "" {
 		eventLabels[types.AttrPrefix+"status"] = statusLine
@@ -269,7 +269,7 @@ func (ins *Instance) gatherNagios(q *safe.Queue[*types.Event], command string, s
 		desc += "\n" + longText
 	}
 
-	event := types.BuildEvent(eventLabels).SetTitleRule("[check] [target]").
+	event := types.BuildEvent(eventLabels).SetTitleRule("[TPL]${check} ${from_hostip} ${target}").
 		SetEventStatus(status).
 		SetDescription(desc)
 
@@ -349,7 +349,7 @@ func (ins *Instance) buildErrorEvent(command string, err error, output []byte) *
 	return types.BuildEvent(map[string]string{
 		"check":  "exec::error",
 		"target": command,
-	}).SetTitleRule("[check] [target]").
+	}).SetTitleRule("[TPL]${check} ${from_hostip} ${target}").
 		SetEventStatus(types.EventStatusCritical).
 		SetDescription(desc)
 }

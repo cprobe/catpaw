@@ -13,7 +13,7 @@ interval = "60s"
 [instances.close_wait]
 warn_ge = 100
 critical_ge = 1000
-# title_rule = "[check]"
+# title_rule = "[TPL]${check} ${from_hostip}"
 
 ## TIME_WAIT 连接数阈值
 ## 与 QPS 和连接模式相关，高并发短连接场景常见
@@ -21,7 +21,7 @@ critical_ge = 1000
 [instances.time_wait]
 warn_ge = 5000
 critical_ge = 20000
-# title_rule = "[check]"
+# title_rule = "[TPL]${check} ${from_hostip}"
 
 [instances.alerting]
 for_duration = "2m"

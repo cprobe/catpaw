@@ -213,7 +213,7 @@ func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
 
 	tr := ins.Match.TitleRule
 	if tr == "" {
-		tr = "[check] [target]"
+		tr = "[TPL]${check} ${from_hostip} ${target}"
 	}
 
 	labels := map[string]string{
@@ -257,7 +257,7 @@ func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
 func (ins *Instance) buildErrorEvent(target, errMsg string) *types.Event {
 	tr := ins.Match.TitleRule
 	if tr == "" {
-		tr = "[check] [target]"
+		tr = "[TPL]${check} ${from_hostip} ${target}"
 	}
 
 	return types.BuildEvent(map[string]string{

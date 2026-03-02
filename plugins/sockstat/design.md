@@ -35,7 +35,7 @@ listen 队列（accept backlog）满时，内核静默丢弃新到达的 SYN 包
 | TCP listen 队列溢出 | `sockstat::listen_overflow` | ListenOverflows 增量超阈值告警 |
 
 - **target label** 为 `"system"`（ListenOverflows 是系统级全局计数器）
-- **默认 title_rule** 为 `"[check]"`
+- **默认 title_rule** 为 `"[TPL]${check} ${from_hostip}"`
 
 ## 数据来源
 
@@ -387,7 +387,7 @@ conf.d/p.sockstat/
 [instances.listen_overflow]
 warn_ge = 1
 critical_ge = 100
-# title_rule = "[check]"
+# title_rule = "[TPL]${check} ${from_hostip}"
 
 ## 采集间隔
 interval = "30s"

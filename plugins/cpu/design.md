@@ -12,7 +12,7 @@
 | 负载均值 | `cpu::load_average` | 1/5/15 分钟负载均值，按 CPU 核心数归一化后比较阈值 |
 
 - **target label** 统一为 `"cpu"`（本机单一资源）
-- **默认 title_rule** 为 `"[check]"`（target 固定，标题中无需显示）
+- **默认 title_rule** 为 `"[TPL]${check} ${from_hostip}"`（target 固定，标题中无需显示）
 
 ## 数据来源
 

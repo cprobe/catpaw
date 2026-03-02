@@ -67,7 +67,7 @@ func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
 
 	tr := ins.RebootDetected.TitleRule
 	if tr == "" {
-		tr = "[check]"
+		tr = "[TPL]${check} ${from_hostip}"
 	}
 
 	uptimeSec, err := host.Uptime()
@@ -87,10 +87,10 @@ func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
 	uptimeHuman := humanDuration(uptimeDur)
 
 	labels := map[string]string{
-		"check":                              "uptime::reboot_detected",
-		"target":                             "system",
-		types.AttrPrefix + "uptime":          uptimeHuman,
-		types.AttrPrefix + "uptime_seconds":  strconv.FormatUint(uptimeSec, 10),
+		"check":                             "uptime::reboot_detected",
+		"target":                            "system",
+		types.AttrPrefix + "uptime":         uptimeHuman,
+		types.AttrPrefix + "uptime_seconds": strconv.FormatUint(uptimeSec, 10),
 	}
 
 	if bootTimeSec > 0 {

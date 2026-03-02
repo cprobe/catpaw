@@ -94,7 +94,7 @@ func (ins *Instance) checkMemoryUsage(q *safe.Queue[*types.Event]) {
 		q.PushFront(types.BuildEvent(map[string]string{
 			"check":  "mem::memory_usage",
 			"target": "memory",
-		}).SetTitleRule("[check]").
+		}).SetTitleRule("[TPL]${check} ${from_hostip}").
 			SetEventStatus(types.EventStatusCritical).
 			SetDescription(fmt.Sprintf("failed to get memory info: %v", err)))
 		return
@@ -102,18 +102,18 @@ func (ins *Instance) checkMemoryUsage(q *safe.Queue[*types.Event]) {
 
 	tr := ins.MemoryUsage.TitleRule
 	if tr == "" {
-		tr = "[check]"
+		tr = "[TPL]${check} ${from_hostip}"
 	}
 
 	event := types.BuildEvent(map[string]string{
-		"check":                            "mem::memory_usage",
-		"target":                           "memory",
-		types.AttrPrefix + "total":         conv.HumanBytes(vm.Total),
-		types.AttrPrefix + "used":          conv.HumanBytes(vm.Used),
-		types.AttrPrefix + "available":     conv.HumanBytes(vm.Available),
-		types.AttrPrefix + "used_percent":  fmt.Sprintf("%.1f%%", vm.UsedPercent),
-		types.AttrPrefix + "buffers":       conv.HumanBytes(vm.Buffers),
-		types.AttrPrefix + "cached":        conv.HumanBytes(vm.Cached),
+		"check":                           "mem::memory_usage",
+		"target":                          "memory",
+		types.AttrPrefix + "total":        conv.HumanBytes(vm.Total),
+		types.AttrPrefix + "used":         conv.HumanBytes(vm.Used),
+		types.AttrPrefix + "available":    conv.HumanBytes(vm.Available),
+		types.AttrPrefix + "used_percent": fmt.Sprintf("%.1f%%", vm.UsedPercent),
+		types.AttrPrefix + "buffers":      conv.HumanBytes(vm.Buffers),
+		types.AttrPrefix + "cached":       conv.HumanBytes(vm.Cached),
 	}).SetTitleRule(tr).SetDescription("everything is ok")
 
 	status := types.EvaluateGeThreshold(vm.UsedPercent, ins.MemoryUsage.WarnGe, ins.MemoryUsage.CriticalGe)
@@ -143,7 +143,7 @@ func (ins *Instance) checkSwapUsage(q *safe.Queue[*types.Event]) {
 		q.PushFront(types.BuildEvent(map[string]string{
 			"check":  "mem::swap_usage",
 			"target": "memory",
-		}).SetTitleRule("[check]").
+		}).SetTitleRule("[TPL]${check} ${from_hostip}").
 			SetEventStatus(types.EventStatusCritical).
 			SetDescription(fmt.Sprintf("failed to get swap info: %v", err)))
 		return
@@ -156,16 +156,16 @@ func (ins *Instance) checkSwapUsage(q *safe.Queue[*types.Event]) {
 
 	tr := ins.SwapUsage.TitleRule
 	if tr == "" {
-		tr = "[check]"
+		tr = "[TPL]${check} ${from_hostip}"
 	}
 
 	event := types.BuildEvent(map[string]string{
-		"check":                                 "mem::swap_usage",
-		"target":                                "memory",
-		types.AttrPrefix + "swap_total":         conv.HumanBytes(swap.Total),
-		types.AttrPrefix + "swap_used":          conv.HumanBytes(swap.Used),
-		types.AttrPrefix + "swap_free":          conv.HumanBytes(swap.Free),
-		types.AttrPrefix + "swap_used_percent":  fmt.Sprintf("%.1f%%", swap.UsedPercent),
+		"check":                                "mem::swap_usage",
+		"target":                               "memory",
+		types.AttrPrefix + "swap_total":        conv.HumanBytes(swap.Total),
+		types.AttrPrefix + "swap_used":         conv.HumanBytes(swap.Used),
+		types.AttrPrefix + "swap_free":         conv.HumanBytes(swap.Free),
+		types.AttrPrefix + "swap_used_percent": fmt.Sprintf("%.1f%%", swap.UsedPercent),
 	}).SetTitleRule(tr).SetDescription("everything is ok")
 
 	status := types.EvaluateGeThreshold(swap.UsedPercent, ins.SwapUsage.WarnGe, ins.SwapUsage.CriticalGe)

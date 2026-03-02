@@ -12,7 +12,7 @@ interval = "60s"
 [instances.enforce_mode]
 # expect = "enforcing"
 # severity = "Warning"
-# title_rule = "[check] [target]"
+# title_rule = "[TPL]${check} ${from_hostip} ${target}"
 
 ## AppArmor 状态检查
 ## expect 可选值：yes / no
@@ -20,7 +20,7 @@ interval = "60s"
 [instances.apparmor_enabled]
 # expect = "yes"
 # severity = "Warning"
-# title_rule = "[check] [target]"
+# title_rule = "[TPL]${check} ${from_hostip} ${target}"
 
 [instances.alerting]
 for_duration = 0

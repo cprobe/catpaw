@@ -120,7 +120,7 @@ func (ins *Instance) checkCpuUsage(q *safe.Queue[*types.Event]) {
 		q.PushFront(types.BuildEvent(map[string]string{
 			"check":  "cpu::cpu_usage",
 			"target": "cpu",
-		}).SetTitleRule("[check]").
+		}).SetTitleRule("[TPL]${check} ${from_hostip}").
 			SetEventStatus(types.EventStatusCritical).
 			SetDescription(fmt.Sprintf("failed to get CPU usage: %v", err)))
 		return
@@ -130,7 +130,7 @@ func (ins *Instance) checkCpuUsage(q *safe.Queue[*types.Event]) {
 		q.PushFront(types.BuildEvent(map[string]string{
 			"check":  "cpu::cpu_usage",
 			"target": "cpu",
-		}).SetTitleRule("[check]").
+		}).SetTitleRule("[TPL]${check} ${from_hostip}").
 			SetEventStatus(types.EventStatusCritical).
 			SetDescription("cpu.Percent returned empty result"))
 		return
@@ -140,14 +140,14 @@ func (ins *Instance) checkCpuUsage(q *safe.Queue[*types.Event]) {
 
 	tr := ins.CpuUsage.TitleRule
 	if tr == "" {
-		tr = "[check]"
+		tr = "[TPL]${check} ${from_hostip}"
 	}
 
 	event := types.BuildEvent(map[string]string{
-		"check":                            "cpu::cpu_usage",
-		"target":                           "cpu",
-		types.AttrPrefix + "cpu_usage":     fmt.Sprintf("%.1f%%", usage),
-		types.AttrPrefix + "cpu_cores":     fmt.Sprintf("%d", ins.cpuCores),
+		"check":                        "cpu::cpu_usage",
+		"target":                       "cpu",
+		types.AttrPrefix + "cpu_usage": fmt.Sprintf("%.1f%%", usage),
+		types.AttrPrefix + "cpu_cores": fmt.Sprintf("%d", ins.cpuCores),
 	}).SetTitleRule(tr).SetDescription("everything is ok")
 
 	intervalHint := "interval avg"
@@ -182,7 +182,7 @@ func (ins *Instance) checkLoadAverage(q *safe.Queue[*types.Event]) {
 		q.PushFront(types.BuildEvent(map[string]string{
 			"check":  "cpu::load_average",
 			"target": "cpu",
-		}).SetTitleRule("[check]").
+		}).SetTitleRule("[TPL]${check} ${from_hostip}").
 			SetEventStatus(types.EventStatusCritical).
 			SetDescription(fmt.Sprintf("failed to get load average: %v", err)))
 		return
@@ -202,18 +202,18 @@ func (ins *Instance) checkLoadAverage(q *safe.Queue[*types.Event]) {
 
 	tr := ins.LoadAverage.TitleRule
 	if tr == "" {
-		tr = "[check]"
+		tr = "[TPL]${check} ${from_hostip}"
 	}
 
 	event := types.BuildEvent(map[string]string{
-		"check":                                "cpu::load_average",
-		"target":                               "cpu",
-		types.AttrPrefix + "load1":             fmt.Sprintf("%.2f", avg.Load1),
-		types.AttrPrefix + "load5":             fmt.Sprintf("%.2f", avg.Load5),
-		types.AttrPrefix + "load15":            fmt.Sprintf("%.2f", avg.Load15),
-		types.AttrPrefix + "per_core_load":     fmt.Sprintf("%.2f", perCoreLoad),
-		types.AttrPrefix + "cpu_cores":         fmt.Sprintf("%d", ins.cpuCores),
-		types.AttrPrefix + "period":            ins.LoadAverage.Period,
+		"check":                            "cpu::load_average",
+		"target":                           "cpu",
+		types.AttrPrefix + "load1":         fmt.Sprintf("%.2f", avg.Load1),
+		types.AttrPrefix + "load5":         fmt.Sprintf("%.2f", avg.Load5),
+		types.AttrPrefix + "load15":        fmt.Sprintf("%.2f", avg.Load15),
+		types.AttrPrefix + "per_core_load": fmt.Sprintf("%.2f", perCoreLoad),
+		types.AttrPrefix + "cpu_cores":     fmt.Sprintf("%d", ins.cpuCores),
+		types.AttrPrefix + "period":        ins.LoadAverage.Period,
 	}).SetTitleRule(tr).SetDescription("everything is ok")
 
 	status := types.EvaluateGeThreshold(perCoreLoad, ins.LoadAverage.WarnGe, ins.LoadAverage.CriticalGe)

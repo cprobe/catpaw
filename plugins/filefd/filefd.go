@@ -74,7 +74,7 @@ func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
 
 	tr := ins.FilefdUsage.TitleRule
 	if tr == "" {
-		tr = "[check]"
+		tr = "[TPL]${check} ${from_hostip}"
 	}
 
 	allocated, max, err := readFileNr()
@@ -103,11 +103,11 @@ func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
 	maxStr := strconv.FormatUint(max, 10)
 
 	event := types.BuildEvent(map[string]string{
-		"check":                                "filefd::filefd_usage",
-		"target":                               "system",
-		types.AttrPrefix + "allocated":         allocatedStr,
-		types.AttrPrefix + "max":               maxStr,
-		types.AttrPrefix + "usage_percent":     fmt.Sprintf("%.1f%%", usagePercent),
+		"check":                            "filefd::filefd_usage",
+		"target":                           "system",
+		types.AttrPrefix + "allocated":     allocatedStr,
+		types.AttrPrefix + "max":           maxStr,
+		types.AttrPrefix + "usage_percent": fmt.Sprintf("%.1f%%", usagePercent),
 	}).SetTitleRule(tr)
 
 	status := types.EvaluateGeThreshold(usagePercent, ins.FilefdUsage.WarnGe, ins.FilefdUsage.CriticalGe)

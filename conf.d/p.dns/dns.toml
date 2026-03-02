@@ -25,14 +25,14 @@ targets = ["www.baidu.com"]
 ## 解析失败时的告警级别，默认 Critical
 [instances.resolution]
 severity = "Critical"
-# title_rule = "[check] [target]"
+# title_rule = "[TPL]${check} ${from_hostip} ${target}"
 
 ## DNS 响应时间检查（可选）
 ## 响应时间超过阈值时告警
 # [instances.response_time]
 # warn_ge = "200ms"
 # critical_ge = "1s"
-# title_rule = "[check] [target]"
+# title_rule = "[TPL]${check} ${from_hostip} ${target}"
 
 [instances.alerting]
 for_duration = 0

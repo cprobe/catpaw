@@ -76,7 +76,7 @@ interval = "30s"
 
 [instances.match]
 severity = "Warning"
-# title_rule = "[check] [target]"
+# title_rule = "[TPL]${check} ${from_hostip} ${target}"
 
 [instances.alerting]
 for_duration = 0

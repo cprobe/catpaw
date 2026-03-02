@@ -156,13 +156,13 @@ func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
 
 	tr := ins.Match.TitleRule
 	if tr == "" {
-		tr = "[check] [target]"
+		tr = "[TPL]${check} ${from_hostip} ${target}"
 	}
 
 	e := types.BuildEvent(map[string]string{
-		"check":                        "scriptfilter::match",
-		"target":                       ins.target,
-		types.AttrPrefix + "command":   ins.Command,
+		"check":                      "scriptfilter::match",
+		"target":                     ins.target,
+		types.AttrPrefix + "command": ins.Command,
 	}).SetTitleRule(tr)
 
 	if len(matched) == 0 {
@@ -193,7 +193,7 @@ func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
 func (ins *Instance) buildErrorEvent(errMsg string) *types.Event {
 	tr := ins.Match.TitleRule
 	if tr == "" {
-		tr = "[check] [target]"
+		tr = "[TPL]${check} ${from_hostip} ${target}"
 	}
 
 	return types.BuildEvent(map[string]string{

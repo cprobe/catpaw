@@ -21,10 +21,10 @@ import (
 const pluginName = "ntp"
 
 const (
-	modeChrony     = "chrony"
-	modeNtpd       = "ntpd"
+	modeChrony      = "chrony"
+	modeNtpd        = "ntpd"
 	modeTimedatectl = "timedatectl"
-	modeAuto       = "auto"
+	modeAuto        = "auto"
 )
 
 type SyncCheck struct {
@@ -35,13 +35,13 @@ type SyncCheck struct {
 type OffsetCheck struct {
 	WarnGe     config.Duration `toml:"warn_ge"`
 	CriticalGe config.Duration `toml:"critical_ge"`
-	TitleRule   string          `toml:"title_rule"`
+	TitleRule  string          `toml:"title_rule"`
 }
 
 type StratumCheck struct {
 	WarnGe     int    `toml:"warn_ge"`
 	CriticalGe int    `toml:"critical_ge"`
-	TitleRule   string `toml:"title_rule"`
+	TitleRule  string `toml:"title_rule"`
 }
 
 type Instance struct {
@@ -50,8 +50,8 @@ type Instance struct {
 	Mode    string          `toml:"mode"`
 	Timeout config.Duration `toml:"timeout"`
 	Sync    SyncCheck       `toml:"sync"`
-	Offset        OffsetCheck     `toml:"offset"`
-	Stratum       StratumCheck    `toml:"stratum"`
+	Offset  OffsetCheck     `toml:"offset"`
+	Stratum StratumCheck    `toml:"stratum"`
 
 	detectedMode string
 	bin          string
@@ -402,7 +402,7 @@ func parseTimedatectl(data []byte) (*ntpResult, error) {
 func (ins *Instance) checkSync(q *safe.Queue[*types.Event], r *ntpResult) {
 	tr := ins.Sync.TitleRule
 	if tr == "" {
-		tr = "[check] [target]"
+		tr = "[TPL]${check} ${from_hostip} ${target}"
 	}
 
 	event := types.BuildEvent(map[string]string{
@@ -440,15 +440,15 @@ func (ins *Instance) checkOffset(q *safe.Queue[*types.Event], r *ntpResult) {
 
 	tr := ins.Offset.TitleRule
 	if tr == "" {
-		tr = "[check] [target]"
+		tr = "[TPL]${check} ${from_hostip} ${target}"
 	}
 
 	absOffset := time.Duration(math.Abs(float64(r.offset)))
 
 	event := types.BuildEvent(map[string]string{
-		"check":                        "ntp::offset",
-		"target":                       "ntp",
-		types.AttrPrefix + "offset":    r.offset.String(),
+		"check":                         "ntp::offset",
+		"target":                        "ntp",
+		types.AttrPrefix + "offset":     r.offset.String(),
 		types.AttrPrefix + "abs_offset": absOffset.String(),
 	}, ins.attrLabels(r)).SetTitleRule(tr)
 
@@ -480,13 +480,13 @@ func (ins *Instance) checkStratum(q *safe.Queue[*types.Event], r *ntpResult) {
 
 	tr := ins.Stratum.TitleRule
 	if tr == "" {
-		tr = "[check] [target]"
+		tr = "[TPL]${check} ${from_hostip} ${target}"
 	}
 
 	event := types.BuildEvent(map[string]string{
-		"check":                         "ntp::stratum",
-		"target":                        "ntp",
-		types.AttrPrefix + "stratum":    fmt.Sprintf("%d", r.stratum),
+		"check":                      "ntp::stratum",
+		"target":                     "ntp",
+		types.AttrPrefix + "stratum": fmt.Sprintf("%d", r.stratum),
 	}, ins.attrLabels(r)).SetTitleRule(tr)
 
 	if ins.Stratum.CriticalGe > 0 && r.stratum >= ins.Stratum.CriticalGe {
@@ -526,10 +526,10 @@ func (ins *Instance) attrLabels(r *ntpResult) map[string]string {
 
 func (ins *Instance) buildErrorEvent(errMsg string) *types.Event {
 	return types.BuildEvent(map[string]string{
-		"check":                        "ntp::sync",
-		"target":                       "ntp",
-		types.AttrPrefix + "mode":      ins.detectedMode,
-	}).SetTitleRule("[check] [target]").
+		"check":                   "ntp::sync",
+		"target":                  "ntp",
+		types.AttrPrefix + "mode": ins.detectedMode,
+	}).SetTitleRule("[TPL]${check} ${from_hostip} ${target}").
 		SetEventStatus(ins.Sync.Severity).
 		SetDescription(errMsg)
 }

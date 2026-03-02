@@ -75,7 +75,7 @@ func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
         event := types.BuildEvent(map[string]string{
             "check":  "myplugin::health",
             "target": target,
-        }).SetTitleRule("[check] [target]")
+        }).SetTitleRule("[TPL]${check} ${from_hostip} ${target}")
 
         // ... 执行检查逻辑 ...
 
@@ -137,7 +137,7 @@ repeat_number = 3
 
 ### TitleRule
 
-通常为 `"[check] [target]"`，FlashDuty 会从 Labels 中取值渲染为告警标题。
+通常为 `"[TPL]${check} ${from_hostip} ${target}"`，FlashDuty 会从 Labels 中取值渲染为告警标题。
 
 ## 多维度检查
 

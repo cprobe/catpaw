@@ -17,7 +17,7 @@
 | 进程 fd 使用率 | `procfd::fd_usage` | 匹配到的所有进程中，fd 使用率最高的那个超阈值告警 |
 
 - **target label** 为进程匹配条件的描述（与 procnum 一致，如 `"nginx"`、`"java && user:app"`）
-- **默认 title_rule** 为 `"[check] [target]"`
+- **默认 title_rule** 为 `"[TPL]${check} ${from_hostip} ${target}"`
 
 ## 进程匹配
 
@@ -402,7 +402,7 @@ interval = "30s"
 [instances.fd_usage]
 warn_ge = 80.0
 critical_ge = 90.0
-# title_rule = "[check] [target]"
+# title_rule = "[TPL]${check} ${from_hostip} ${target}"
 
 [instances.alerting]
 for_duration = 0

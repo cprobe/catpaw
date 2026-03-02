@@ -211,7 +211,7 @@ func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
 		q.PushFront(types.BuildEvent(map[string]string{
 			"check":  "cert::file_expiry",
 			"target": "glob",
-		}).SetTitleRule("[check]").
+		}).SetTitleRule("[TPL]${check} ${from_hostip}").
 			SetEventStatus(types.EventStatusWarning).
 			SetDescription(fmt.Sprintf("file_targets resolved to %d files, exceeding max_file_targets(%d), only checking the first %d",
 				len(resolvedFiles), ins.MaxFileTargets, ins.MaxFileTargets)))
@@ -493,7 +493,7 @@ func earliestExpiry(certs []*x509.Certificate) (*x509.Certificate, int) {
 func (ins *Instance) buildRemoteEvent(target string) *types.Event {
 	tr := ins.RemoteExpiry.TitleRule
 	if tr == "" {
-		tr = "[check] [target]"
+		tr = "[TPL]${check} ${from_hostip} ${target}"
 	}
 	return types.BuildEvent(map[string]string{
 		"check":  "cert::remote_expiry",
@@ -504,7 +504,7 @@ func (ins *Instance) buildRemoteEvent(target string) *types.Event {
 func (ins *Instance) buildFileEvent(target string) *types.Event {
 	tr := ins.FileExpiry.TitleRule
 	if tr == "" {
-		tr = "[check] [target]"
+		tr = "[TPL]${check} ${from_hostip} ${target}"
 	}
 	return types.BuildEvent(map[string]string{
 		"check":  "cert::file_expiry",

@@ -16,7 +16,7 @@ import (
 const pluginName = "neigh"
 
 var (
-	arpPath      = "/proc/net/arp"
+	arpPath       = "/proc/net/arp"
 	gcThresh3Path = "/proc/sys/net/ipv4/neigh/default/gc_thresh3"
 )
 
@@ -77,7 +77,7 @@ func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
 
 	tr := ins.NeighUsage.TitleRule
 	if tr == "" {
-		tr = "[check]"
+		tr = "[TPL]${check} ${from_hostip}"
 	}
 
 	entries, gcThresh3, err := readNeighData()
@@ -106,11 +106,11 @@ func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
 	gcThresh3Str := strconv.FormatUint(gcThresh3, 10)
 
 	event := types.BuildEvent(map[string]string{
-		"check":                                "neigh::neigh_usage",
-		"target":                               "system",
-		types.AttrPrefix + "entries":           entriesStr,
-		types.AttrPrefix + "gc_thresh3":        gcThresh3Str,
-		types.AttrPrefix + "usage_percent":     fmt.Sprintf("%.1f%%", usagePercent),
+		"check":                            "neigh::neigh_usage",
+		"target":                           "system",
+		types.AttrPrefix + "entries":       entriesStr,
+		types.AttrPrefix + "gc_thresh3":    gcThresh3Str,
+		types.AttrPrefix + "usage_percent": fmt.Sprintf("%.1f%%", usagePercent),
 	}).SetTitleRule(tr)
 
 	status := types.EvaluateGeThreshold(usagePercent, ins.NeighUsage.WarnGe, ins.NeighUsage.CriticalGe)

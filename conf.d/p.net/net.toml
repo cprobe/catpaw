@@ -36,14 +36,14 @@ id = "default"
 ## check 标签固定为 "net::connectivity"
 [partials.connectivity]
 severity = "Critical"
-# title_rule = "[check] [target]"
+# title_rule = "[TPL]${check} ${from_hostip} ${target}"
 
 ## 响应时间检测（warn_ge 和 critical_ge 都为 0 则关闭）
 ## check 标签固定为 "net::response_time"
 # [partials.response_time]
 # warn_ge = "200ms"
 # critical_ge = "1s"
-# title_rule = "[check] [target]"
+# title_rule = "[TPL]${check} ${from_hostip} ${target}"
 
 
 [[instances]]

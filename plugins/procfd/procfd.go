@@ -188,12 +188,12 @@ func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
 
 	tr := ins.FdUsage.TitleRule
 	if tr == "" {
-		tr = "[check] [target]"
+		tr = "[TPL]${check} ${from_hostip} ${target}"
 	}
 
 	event := types.BuildEvent(map[string]string{
-		"check":  "procfd::fd_usage",
-		"target": ins.searchLabel,
+		"check":                            "procfd::fd_usage",
+		"target":                           ins.searchLabel,
 		types.AttrPrefix + "pid":           fmt.Sprintf("%d", worst.pid),
 		types.AttrPrefix + "open_fds":      fmt.Sprintf("%d", worst.openFds),
 		types.AttrPrefix + "nofile_soft":   fmt.Sprintf("%d", worst.softLimit),
@@ -430,7 +430,7 @@ func (ins *Instance) findByPidFile() ([]int32, error) {
 func (ins *Instance) newEvent() *types.Event {
 	tr := ins.FdUsage.TitleRule
 	if tr == "" {
-		tr = "[check] [target]"
+		tr = "[TPL]${check} ${from_hostip} ${target}"
 	}
 	return types.BuildEvent(map[string]string{
 		"check":  "procfd::fd_usage",

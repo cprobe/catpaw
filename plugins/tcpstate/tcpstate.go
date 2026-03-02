@@ -137,7 +137,7 @@ func (ins *Instance) emitStateEvent(q *safe.Queue[*types.Event], check, stateNam
 
 	tr := sc.TitleRule
 	if tr == "" {
-		tr = "[check]"
+		tr = "[TPL]${check} ${from_hostip}"
 	}
 
 	labels := map[string]string{
@@ -178,7 +178,7 @@ func (ins *Instance) buildErrorEvent(errMsg string) *types.Event {
 	return types.BuildEvent(map[string]string{
 		"check":  check,
 		"target": "system",
-	}).SetTitleRule("[check]").
+	}).SetTitleRule("[TPL]${check} ${from_hostip}").
 		SetEventStatus(types.EventStatusCritical).
 		SetDescription(errMsg)
 }

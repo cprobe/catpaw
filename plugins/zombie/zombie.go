@@ -96,7 +96,7 @@ func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
 func (ins *Instance) newEvent() *types.Event {
 	tr := ins.TitleRule
 	if tr == "" {
-		tr = "[check] [target]"
+		tr = "[TPL]${check} ${from_hostip} ${target}"
 	}
 	return types.BuildEvent(map[string]string{
 		"check":  "zombie::count",

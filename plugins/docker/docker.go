@@ -251,7 +251,7 @@ func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
 				if r := recover(); r != nil {
 					name := containerName(c)
 					logger.Logger.Errorw("panic in docker gather goroutine", "container", name, "recover", r)
-					q.PushFront(ins.buildEvent("docker::panic", name, "[check] [target]").
+					q.PushFront(ins.buildEvent("docker::panic", name, "[TPL]${check} ${from_hostip} ${target}").
 						SetEventStatus(types.EventStatusCritical).
 						SetDescription(fmt.Sprintf("panic during check: %v", r)))
 				}
@@ -603,7 +603,7 @@ func (ins *Instance) checkMemoryUsage(q *safe.Queue[*types.Event], stats *contai
 
 func (ins *Instance) buildEvent(check, target, titleRule string) *types.Event {
 	if titleRule == "" {
-		titleRule = "[check] [target]"
+		titleRule = "[TPL]${check} ${from_hostip} ${target}"
 	}
 	return types.BuildEvent(map[string]string{
 		"check":  check,
@@ -613,7 +613,7 @@ func (ins *Instance) buildEvent(check, target, titleRule string) *types.Event {
 
 func (ins *Instance) buildContainerEvent(check, name, shortID, image, titleRule string) *types.Event {
 	if titleRule == "" {
-		titleRule = "[check] [target]"
+		titleRule = "[TPL]${check} ${from_hostip} ${target}"
 	}
 	labels := map[string]string{
 		"check":  check,

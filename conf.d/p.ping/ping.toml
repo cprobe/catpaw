@@ -37,7 +37,7 @@ id = "default"
 ## check 标签固定为 "ping::connectivity"
 [partials.connectivity]
 severity = "Critical"
-# title_rule = "[check] [target]"
+# title_rule = "[TPL]${check} ${from_hostip} ${target}"
 
 ## 丢包率检测（warn_ge 和 critical_ge 都为 0 则关闭）
 ## 单位是百分比（0~100）
@@ -45,14 +45,14 @@ severity = "Critical"
 [partials.packet_loss]
 warn_ge = 1.0
 critical_ge = 50.0
-# title_rule = "[check] [target]"
+# title_rule = "[TPL]${check} ${from_hostip} ${target}"
 
 ## 平均 RTT 检测（warn_ge 和 critical_ge 都为 0 则关闭）
 ## check 标签固定为 "ping::rtt"
 # [partials.rtt]
 # warn_ge = "100ms"
 # critical_ge = "500ms"
-# title_rule = "[check] [target]"
+# title_rule = "[TPL]${check} ${from_hostip} ${target}"
 
 [[instances]]
 ## 目标主机列表（IP 或域名）

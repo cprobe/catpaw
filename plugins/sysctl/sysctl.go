@@ -138,7 +138,7 @@ func isAlertSeverity(s string) bool {
 func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
 	tr := ins.ParamCheck.TitleRule
 	if tr == "" {
-		tr = "[check] [target]"
+		tr = "[TPL]${check} ${from_hostip} ${target}"
 	}
 
 	for i := range ins.ParamCheck.Params {

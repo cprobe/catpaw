@@ -213,7 +213,7 @@ func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
 		q.PushFront(types.BuildEvent(map[string]string{
 			"check":  "logfile::match",
 			"target": "glob",
-		}).SetTitleRule("[check]").
+		}).SetTitleRule("[TPL]${check} ${from_hostip}").
 			SetEventStatus(types.EventStatusWarning).
 			SetDescription(fmt.Sprintf("targets resolved to %d files, exceeding max_targets(%d), only monitoring the first %d",
 				len(resolvedFiles), ins.MaxTargets, ins.MaxTargets)))
@@ -222,7 +222,7 @@ func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
 		q.PushFront(types.BuildEvent(map[string]string{
 			"check":  "logfile::match",
 			"target": "glob",
-		}).SetTitleRule("[check]").
+		}).SetTitleRule("[TPL]${check} ${from_hostip}").
 			SetDescription(fmt.Sprintf("target count back to normal (%d files)", len(resolvedFiles))))
 	}
 
@@ -273,7 +273,7 @@ func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
 			q.PushFront(types.BuildEvent(map[string]string{
 				"check":  "logfile::match",
 				"target": "gather_timeout",
-			}).SetTitleRule("[check]").
+			}).SetTitleRule("[TPL]${check} ${from_hostip}").
 				SetEventStatus(types.EventStatusCritical).
 				SetDescription(fmt.Sprintf("gather_timeout (%s) exceeded, skipped remaining files", time.Duration(ins.GatherTimeout))))
 			break
@@ -286,7 +286,7 @@ func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
 		q.PushFront(types.BuildEvent(map[string]string{
 			"check":  "logfile::match",
 			"target": "gather_timeout",
-		}).SetTitleRule("[check]").
+		}).SetTitleRule("[TPL]${check} ${from_hostip}").
 			SetDescription("gather completed within timeout"))
 	}
 
@@ -548,7 +548,7 @@ func (ins *Instance) buildDescription(lines []string, matchedIndices []int) stri
 func (ins *Instance) buildEvent(filePath string) *types.Event {
 	tr := ins.Match.TitleRule
 	if tr == "" {
-		tr = "[check] [target]"
+		tr = "[TPL]${check} ${from_hostip} ${target}"
 	}
 	return types.BuildEvent(map[string]string{
 		"check":  "logfile::match",

@@ -19,7 +19,7 @@
 | 内存使用率 | `docker::memory_usage` | 容器内存使用率超阈值 |
 
 - **target label** 为容器名称（去除 Docker API 返回的前导 `/`）
-- **默认 title_rule** 为 `"[check] [target]"`
+- **默认 title_rule** 为 `"[TPL]${check} ${from_hostip} ${target}"`
 
 ### 维度启用规则
 
@@ -797,7 +797,7 @@ targets = ["*"]
 
 ## 容器运行状态检查（始终启用）
 [instances.container_running]
-# title_rule = "[check] [target]"
+# title_rule = "[TPL]${check} ${from_hostip} ${target}"
 
 ## 频繁重启检测（滑动窗口内重启次数超阈值 → crashloop）
 ## 单次重启不告警，短时间多次重启才是异常信号
@@ -805,23 +805,23 @@ targets = ["*"]
 window = "10m"
 warn_ge = 3
 critical_ge = 5
-# title_rule = "[check] [target]"
+# title_rule = "[TPL]${check} ${from_hostip} ${target}"
 
 ## Docker HEALTHCHECK 状态（始终启用，仅对有 HEALTHCHECK 的容器生效）
 [instances.health_status]
-# title_rule = "[check] [target]"
+# title_rule = "[TPL]${check} ${from_hostip} ${target}"
 
 ## 内存使用率
 [instances.memory_usage]
 warn_ge = 80.0
 critical_ge = 95.0
-# title_rule = "[check] [target]"
+# title_rule = "[TPL]${check} ${from_hostip} ${target}"
 
 ## CPU 使用率（默认不启用，按需开启）
 # [instances.cpu_usage]
 # warn_ge = 80.0
 # critical_ge = 95.0
-# title_rule = "[check] [target]"
+# title_rule = "[TPL]${check} ${from_hostip} ${target}"
 
 ## 采集间隔
 interval = "30s"

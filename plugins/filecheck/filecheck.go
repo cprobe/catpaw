@@ -212,7 +212,7 @@ func (ins *Instance) checkExistence(q *safe.Queue[*types.Event], missing []strin
 	target := ins.targetLabel()
 	tr := ins.Existence.TitleRule
 	if tr == "" {
-		tr = "[check] [target]"
+		tr = "[TPL]${check} ${from_hostip} ${target}"
 	}
 
 	if len(missing) == 0 && len(accessErrors) == 0 {
@@ -283,7 +283,7 @@ func (ins *Instance) checkMtime(q *safe.Queue[*types.Event], files []string) {
 	target := ins.targetLabel()
 	tr := ins.Mtime.TitleRule
 	if tr == "" {
-		tr = "[check] [target]"
+		tr = "[TPL]${check} ${from_hostip} ${target}"
 	}
 
 	if len(matched) == 0 {
@@ -304,11 +304,11 @@ func (ins *Instance) checkMtime(q *safe.Queue[*types.Event], files []string) {
 	}
 
 	labels := map[string]string{
-		"check":                                "filecheck::mtime",
-		"target":                               target,
-		types.AttrPrefix + "matched_count":     fmt.Sprintf("%d", len(matched)),
-		types.AttrPrefix + "mode":              ins.Mtime.Mode,
-		types.AttrPrefix + "time_span":         timeSpan.String(),
+		"check":                            "filecheck::mtime",
+		"target":                           target,
+		types.AttrPrefix + "matched_count": fmt.Sprintf("%d", len(matched)),
+		types.AttrPrefix + "mode":          ins.Mtime.Mode,
+		types.AttrPrefix + "time_span":     timeSpan.String(),
 	}
 
 	var desc strings.Builder
@@ -369,7 +369,7 @@ func (ins *Instance) checkChecksum(q *safe.Queue[*types.Event], files []string) 
 	target := ins.targetLabel()
 	tr := ins.Checksum.TitleRule
 	if tr == "" {
-		tr = "[check] [target]"
+		tr = "[TPL]${check} ${from_hostip} ${target}"
 	}
 
 	if len(changedFiles) == 0 {
@@ -386,9 +386,9 @@ func (ins *Instance) checkChecksum(q *safe.Queue[*types.Event], files []string) 
 	}
 
 	labels := map[string]string{
-		"check":                                "filecheck::checksum",
-		"target":                               target,
-		types.AttrPrefix + "changed_count":     fmt.Sprintf("%d", len(changedFiles)),
+		"check":                            "filecheck::checksum",
+		"target":                           target,
+		types.AttrPrefix + "changed_count": fmt.Sprintf("%d", len(changedFiles)),
 	}
 
 	var desc strings.Builder

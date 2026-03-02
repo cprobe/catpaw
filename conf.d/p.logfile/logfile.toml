@@ -77,7 +77,7 @@ interval = "30s"
 ## 匹配到内容后的事件级别
 [instances.match]
 severity = "Warning"
-# title_rule = "[check] [target]"
+# title_rule = "[TPL]${check} ${from_hostip} ${target}"
 
 [instances.alerting]
 for_duration = 0

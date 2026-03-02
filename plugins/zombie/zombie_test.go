@@ -69,7 +69,7 @@ func TestNewEvent(t *testing.T) {
 }
 
 func TestNewEventCustomTitleRule(t *testing.T) {
-	ins := &Instance{WarnGt: intPtr(0), TitleRule: "[check] on [target]"}
+	ins := &Instance{WarnGt: intPtr(0), TitleRule: "[TPL]${check} ${from_hostip} on [target]"}
 	_ = ins.Init()
 	event := ins.newEvent()
 

@@ -21,7 +21,7 @@ interval = "30s"
 [instances.fd_usage]
 warn_ge = 80.0
 critical_ge = 90.0
-# title_rule = "[check] [target]"
+# title_rule = "[TPL]${check} ${from_hostip} ${target}"
 
 [instances.alerting]
 for_duration = 0
