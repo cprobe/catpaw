@@ -74,7 +74,8 @@ func (c *Client) Chat(ctx context.Context, messages []Message, tools []Tool) (*C
 	}
 	defer resp.Body.Close()
 
-	body, err := io.ReadAll(resp.Body)
+	const maxResponseBody = 10 << 20 // 10 MB
+	body, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseBody))
 	if err != nil {
 		return nil, fmt.Errorf("read response: %w", err)
 	}

@@ -9,6 +9,7 @@ import (
 
 	"github.com/chai2010/winsvc"
 	"github.com/cprobe/catpaw/agent"
+	"github.com/cprobe/catpaw/chat"
 	"github.com/cprobe/catpaw/config"
 	"github.com/cprobe/catpaw/diagnose"
 	"github.com/cprobe/catpaw/logger"
@@ -107,6 +108,9 @@ func handleSubcommand(args []string) bool {
 	case "inspect":
 		handleInspectSubcommand(args)
 		return true
+	case "chat":
+		handleChatSubcommand()
+		return true
 	default:
 		return false
 	}
@@ -137,6 +141,18 @@ func handleDiagnoseSubcommand(args []string) {
 		}
 	default:
 		printDiagnoseUsage()
+	}
+}
+
+func handleChatSubcommand() {
+	if err := config.InitConfig(*configDir, false, 0, "", *loglevel); err != nil {
+		fmt.Fprintf(os.Stderr, "Error loading config: %v\n", err)
+		os.Exit(1)
+	}
+
+	if err := chat.Run(); err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
 	}
 }
 
@@ -172,6 +188,7 @@ func printUsage() {
 
 Usage:
   catpaw [flags]                          Start the monitoring agent
+  catpaw chat                             Interactive AI chat for troubleshooting
   catpaw inspect <plugin> [target]        Run health inspection on a target
   catpaw diagnose <command>               Manage diagnosis records
   catpaw help [command]                   Show help for a command
@@ -181,6 +198,7 @@ Flags:
 	flag.PrintDefaults()
 	fmt.Fprintln(os.Stderr, `
 Commands:
+  chat        Interactive AI chat for troubleshooting
   inspect     Proactive health inspection (AI-powered)
   diagnose    View past diagnosis / inspection records
 
@@ -189,6 +207,8 @@ Run 'catpaw help <command>' for details on a specific command.`)
 
 func printSubcommandHelp(cmd string) {
 	switch cmd {
+	case "chat":
+		printChatUsage()
 	case "inspect":
 		printInspectUsage()
 	case "diagnose":
@@ -197,6 +217,20 @@ func printSubcommandHelp(cmd string) {
 		fmt.Fprintf(os.Stderr, "Unknown command: %q\n\n", cmd)
 		printUsage()
 	}
+}
+
+func printChatUsage() {
+	fmt.Println(`Usage: catpaw chat
+
+Start an interactive AI-powered chat session for troubleshooting.
+The AI can use built-in diagnostic tools and execute shell commands
+(with user confirmation) to help investigate issues on this machine.
+
+Requires [ai] enabled = true in config.toml.
+
+Examples:
+  catpaw chat                 Start interactive chat
+  catpaw --configs /etc/catpaw/conf.d chat   Use custom config directory`)
 }
 
 func printDiagnoseUsage() {
