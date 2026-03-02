@@ -333,11 +333,20 @@ func (e *DiagnoseEngine) forwardReport(req *DiagnoseRequest, report string) {
 		labels[k] = v
 	}
 
+	var attrs map[string]string
+	if len(original.Attrs) > 0 {
+		attrs = make(map[string]string, len(original.Attrs))
+		for k, v := range original.Attrs {
+			attrs[k] = v
+		}
+	}
+
 	event := &types.Event{
 		EventTime:         time.Now().Unix(),
-		EventStatus:       types.EventStatusInfo,
+		EventStatus:       original.EventStatus,
 		AlertKey:          original.AlertKey,
 		Labels:            labels,
+		Attrs:             attrs,
 		Description:       desc,
 		DescriptionFormat: types.DescFormatMarkdown,
 	}
