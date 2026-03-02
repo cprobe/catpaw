@@ -7,6 +7,7 @@ import (
 
 	"github.com/BurntSushi/toml"
 	"github.com/cprobe/catpaw/config"
+	"github.com/cprobe/catpaw/diagnose"
 	"github.com/cprobe/catpaw/logger"
 	"github.com/cprobe/catpaw/pkg/choice"
 	"github.com/cprobe/catpaw/plugins"
@@ -69,6 +70,8 @@ func New() *Agent {
 func (a *Agent) Start() {
 	logger.Logger.Info("agent starting")
 
+	a.initDiagnoseEngine()
+
 	pcs, err := loadFileConfigs()
 	if err != nil {
 		logger.Logger.Errorw("load file configs fail", "error", err)
@@ -80,6 +83,19 @@ func (a *Agent) Start() {
 	}
 
 	logger.Logger.Info("agent started")
+}
+
+func (a *Agent) initDiagnoseEngine() {
+	if !config.Config.AI.Enabled {
+		return
+	}
+	registry := diagnose.NewToolRegistry()
+	for name, creator := range plugins.PluginCreators {
+		p := creator()
+		plugins.MayRegisterDiagnoseTools(p, registry)
+		_ = name
+	}
+	diagnose.Init(registry)
 }
 
 func (a *Agent) LoadPlugin(name string, pc *PluginConfig) {
@@ -157,6 +173,8 @@ func (a *Agent) GetPluginConfig(name string) *PluginConfig {
 
 func (a *Agent) Stop() {
 	logger.Logger.Info("agent stopping")
+
+	diagnose.Shutdown()
 
 	a.Lock()
 	defer a.Unlock()

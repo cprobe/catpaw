@@ -16,6 +16,13 @@ type Alerting struct {
 	DisableRecoveryNotification bool `toml:"disable_recovery_notification"`
 }
 
+type DiagnoseConfig struct {
+	Enabled     bool     `toml:"enabled"`
+	MinSeverity string   `toml:"min_severity"`
+	Timeout     Duration `toml:"timeout"`
+	Cooldown    Duration `toml:"cooldown"`
+}
+
 type InternalConfig struct {
 	// append labels to every event
 	Labels map[string]string `toml:"labels"`
@@ -25,6 +32,9 @@ type InternalConfig struct {
 
 	// alerting rule
 	Alerting Alerting `toml:"alerting"`
+
+	// AI diagnose config
+	Diagnose DiagnoseConfig `toml:"diagnose"`
 }
 
 func (ic *InternalConfig) GetLabels() map[string]string {
@@ -41,4 +51,8 @@ func (ic *InternalConfig) GetInterval() Duration {
 
 func (ic *InternalConfig) GetAlerting() Alerting {
 	return ic.Alerting
+}
+
+func (ic *InternalConfig) GetDiagnoseConfig() DiagnoseConfig {
+	return ic.Diagnose
 }

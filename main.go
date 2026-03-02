@@ -4,11 +4,13 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"path/filepath"
 	"runtime"
 
 	"github.com/chai2010/winsvc"
 	"github.com/cprobe/catpaw/agent"
 	"github.com/cprobe/catpaw/config"
+	"github.com/cprobe/catpaw/diagnose"
 	"github.com/cprobe/catpaw/logger"
 	"github.com/cprobe/catpaw/winx"
 	"github.com/toolkits/pkg/runner"
@@ -38,6 +40,10 @@ func main() {
 	if *showVersion {
 		fmt.Println(config.Version)
 		os.Exit(0)
+	}
+
+	if handleSubcommand(flag.Args()) {
+		return
 	}
 
 	winx.Args(appPath)
@@ -73,4 +79,47 @@ func main() {
 
 	ag.Stop()
 	logger.Logger.Info("agent exited")
+}
+
+// handleSubcommand handles CLI subcommands that don't require the full agent.
+// Returns true if a subcommand was handled (caller should exit).
+func handleSubcommand(args []string) bool {
+	if len(args) == 0 || args[0] != "diagnose" {
+		return false
+	}
+
+	stateDir := filepath.Join(filepath.Dir(*configDir), "state.d")
+
+	if len(args) < 2 {
+		printDiagnoseUsage()
+		return true
+	}
+
+	switch args[1] {
+	case "list":
+		if err := diagnose.CLIList(stateDir, 50); err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
+		}
+	case "show":
+		if len(args) < 3 {
+			fmt.Fprintf(os.Stderr, "Usage: catpaw diagnose show <record-id>\n")
+			os.Exit(1)
+		}
+		if err := diagnose.CLIShow(stateDir, args[2]); err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
+		}
+	default:
+		printDiagnoseUsage()
+	}
+	return true
+}
+
+func printDiagnoseUsage() {
+	fmt.Println("Usage: catpaw diagnose <command>")
+	fmt.Println()
+	fmt.Println("Commands:")
+	fmt.Println("  list          List recent diagnosis records")
+	fmt.Println("  show <id>     Show full details of a diagnosis record")
 }

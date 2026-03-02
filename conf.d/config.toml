@@ -15,3 +15,32 @@ level = "info"
 [flashduty]
 url = "https://api.flashcat.cloud/event/push/alert/standard?integration_key=x"
 timeout = "10s"
+
+## AI 智能诊断配置（告警触发后自动分析根因）
+# [ai]
+# enabled = true
+# base_url = "https://api.openai.com/v1"
+# api_key = "${OPENAI_API_KEY}"      # 支持 ${ENV_VAR} 语法引用环境变量
+# model = "gpt-4o"
+#
+## AI 请求参数
+# max_tokens = 4000                  # 单次 AI 请求最大 token 数
+# max_rounds = 8                     # AI Agent 最大交互轮次
+# request_timeout = "60s"            # 单次 AI 请求超时
+#
+## 重试配置
+# max_retries = 2                    # AI API 失败重试次数
+# retry_backoff = "2s"               # 重试间隔
+#
+## 并发与限流
+# max_concurrent_diagnoses = 3       # 最大并发诊断数
+# queue_full_policy = "drop"         # 并发满时策略: drop(丢弃) 或 wait(等待)
+# daily_token_limit = 500000         # 每日 token 消耗上限（0=不限）
+#
+## 工具与聚合
+# tool_timeout = "10s"               # 单个诊断工具执行超时
+# aggregate_window = "5s"            # 同目标告警聚合窗口
+#
+## 诊断记录保留策略（保存在 state.d/diagnoses/）
+# diagnose_retention = "168h"        # 7 天
+# diagnose_max_count = 1000

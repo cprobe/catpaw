@@ -35,6 +35,30 @@ type Flashduty struct {
 	Client     *http.Client `toml:"-"`
 }
 
+type AIConfig struct {
+	Enabled  bool   `toml:"enabled"`
+	BaseURL  string `toml:"base_url"`
+	APIKey   string `toml:"api_key"`
+	Model    string `toml:"model"`
+
+	MaxTokens      int      `toml:"max_tokens"`
+	MaxRounds      int      `toml:"max_rounds"`
+	RequestTimeout Duration `toml:"request_timeout"`
+
+	MaxRetries   int      `toml:"max_retries"`
+	RetryBackoff Duration `toml:"retry_backoff"`
+
+	MaxConcurrentDiagnoses int    `toml:"max_concurrent_diagnoses"`
+	QueueFullPolicy        string `toml:"queue_full_policy"`
+	DailyTokenLimit        int    `toml:"daily_token_limit"`
+
+	ToolTimeout     Duration `toml:"tool_timeout"`
+	AggregateWindow Duration `toml:"aggregate_window"`
+
+	DiagnoseRetention Duration `toml:"diagnose_retention"`
+	DiagnoseMaxCount  int      `toml:"diagnose_max_count"`
+}
+
 type ConfigType struct {
 	ConfigDir string `toml:"-"`
 	StateDir  string `toml:"-"`
@@ -46,6 +70,7 @@ type ConfigType struct {
 	Global    Global    `toml:"global"`
 	LogConfig LogConfig `toml:"log"`
 	Flashduty Flashduty `toml:"flashduty"`
+	AI        AIConfig  `toml:"ai"`
 }
 
 var Config *ConfigType
@@ -113,6 +138,9 @@ func InitConfig(configDir string, testMode bool, interval int64, plugins, url, l
 		Timeout: time.Duration(Config.Flashduty.Timeout),
 	}
 
+	Config.AI.applyDefaults()
+	Config.AI.resolveAPIKey()
+
 	if Config.Global.Labels == nil {
 		Config.Global.Labels = make(map[string]string)
 	}
@@ -175,4 +203,66 @@ func GetOutboundIP() (net.IP, error) {
 	localAddr := conn.LocalAddr().(*net.UDPAddr)
 
 	return localAddr.IP, nil
+}
+
+func (c *AIConfig) applyDefaults() {
+	if c.Model == "" {
+		c.Model = "gpt-4o"
+	}
+	if c.MaxTokens <= 0 {
+		c.MaxTokens = 4000
+	}
+	if c.MaxRounds <= 0 {
+		c.MaxRounds = 8
+	}
+	if time.Duration(c.RequestTimeout) == 0 {
+		c.RequestTimeout = Duration(60 * time.Second)
+	}
+	if c.MaxRetries == 0 && c.Enabled {
+		c.MaxRetries = 2
+	}
+	if time.Duration(c.RetryBackoff) == 0 {
+		c.RetryBackoff = Duration(2 * time.Second)
+	}
+	if c.MaxConcurrentDiagnoses <= 0 {
+		c.MaxConcurrentDiagnoses = 3
+	}
+	if c.QueueFullPolicy == "" {
+		c.QueueFullPolicy = "drop"
+	}
+	if time.Duration(c.ToolTimeout) == 0 {
+		c.ToolTimeout = Duration(10 * time.Second)
+	}
+	if time.Duration(c.AggregateWindow) == 0 {
+		c.AggregateWindow = Duration(5 * time.Second)
+	}
+	if time.Duration(c.DiagnoseRetention) == 0 {
+		c.DiagnoseRetention = Duration(7 * 24 * time.Hour)
+	}
+	if c.DiagnoseMaxCount <= 0 {
+		c.DiagnoseMaxCount = 1000
+	}
+}
+
+func (c *AIConfig) resolveAPIKey() {
+	if strings.HasPrefix(c.APIKey, "${") && strings.HasSuffix(c.APIKey, "}") {
+		envKey := c.APIKey[2 : len(c.APIKey)-1]
+		c.APIKey = os.Getenv(envKey)
+	}
+}
+
+func (c *AIConfig) Validate() error {
+	if !c.Enabled {
+		return nil
+	}
+	if c.BaseURL == "" {
+		return fmt.Errorf("[ai] base_url is required when enabled=true")
+	}
+	if c.APIKey == "" {
+		return fmt.Errorf("[ai] api_key is required when enabled=true (supports ${ENV_VAR} syntax)")
+	}
+	if c.QueueFullPolicy != "drop" && c.QueueFullPolicy != "wait" {
+		return fmt.Errorf("[ai] queue_full_policy must be \"drop\" or \"wait\", got %q", c.QueueFullPolicy)
+	}
+	return nil
 }

@@ -2,6 +2,7 @@ package plugins
 
 import (
 	"github.com/cprobe/catpaw/config"
+	"github.com/cprobe/catpaw/diagnose"
 	"github.com/cprobe/catpaw/pkg/safe"
 	"github.com/cprobe/catpaw/types"
 )
@@ -10,6 +11,7 @@ type Instance interface {
 	GetLabels() map[string]string
 	GetInterval() config.Duration
 	GetAlerting() config.Alerting
+	GetDiagnoseConfig() config.DiagnoseConfig
 }
 
 type Plugin interface {
@@ -68,6 +70,16 @@ func MayGetInstances(t any) []Instance {
 		return instancesGetter.GetInstances()
 	}
 	return nil
+}
+
+type Diagnosable interface {
+	RegisterDiagnoseTools(registry *diagnose.ToolRegistry)
+}
+
+func MayRegisterDiagnoseTools(t any, registry *diagnose.ToolRegistry) {
+	if d, ok := t.(Diagnosable); ok {
+		d.RegisterDiagnoseTools(registry)
+	}
 }
 
 type Creator func() Plugin

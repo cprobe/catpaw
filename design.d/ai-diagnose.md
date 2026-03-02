@@ -44,6 +44,18 @@ AI 辅助诊断的目标：**告警触发时自动诊断，将问题和根因分
 
 catpaw 充当 AI agent 的 tool executor：AI 决定执行哪些诊断命令，catpaw 执行后返回结果，AI 据此推理下一步或输出最终报告。
 
+### 包依赖关系
+
+```
+agent  → diagnose     （Init 引擎、Shutdown）
+engine → diagnose     （告警触发诊断 mayTriggerDiagnose）
+engine → flashduty    （告警事件推送）
+diagnose → flashduty  （诊断报告推送）
+diagnose → aiclient   （AI API 调用）
+```
+
+`flashduty` 是独立的事件发送包，`engine` 和 `diagnose` 都直接 import 它，避免循环依赖和回调模式。
+
 ## 三层架构
 
 诊断功能的引入要求对插件代码做分层重构。核心原则：**数据获取是公共能力，告警和诊断是两种消费方式**。
@@ -1463,70 +1475,69 @@ GET /api/v1/diagnoses/{id}         # 详情
 
 ## 代码文件规划
 
-### 目录总览
+### 目录总览（首版实际实现）
 
 ```
 catpaw/
 ├── diagnose/                        # 诊断引擎核心（新顶层包）
-│   ├── types.go                     # 核心类型定义
-│   ├── config.go                    # AI + 诊断配置解析
-│   ├── registry.go                  # 全局工具注册表
+│   ├── types.go                     # 核心类型 + DiagnoseSession（含 Accessor 生命周期管理）
+│   ├── config.go                    # SeverityRank 辅助函数
+│   ├── registry.go                  # 全局工具注册表 + AccessorFactory
 │   ├── index.go                     # InstanceIndex（fallback）
-│   ├── aggregator.go                # 短窗口聚合器
-│   ├── scheduler.go                 # 优先级调度器
-│   ├── session.go                   # 诊断会话管理
-│   ├── engine.go                    # 诊断引擎主逻辑
-│   ├── prompt.go                    # System Prompt 模板
-│   ├── executor.go                  # 工具执行 + 元工具
-│   ├── report.go                    # 报告格式化 + FlashDuty 拼接
-│   ├── record.go                    # 本地诊断记录
-│   ├── state.go                     # 状态持久化（daily token + cooldown）
-│   ├── metrics.go                   # 可观测性 metrics
-│   ├── security.go                  # 参数校验 + 敏感信息过滤 + 输出截断
-│   ├── aiclient/                    # AI API 客户端（子包）
-│   │   ├── client.go                # OpenAI-compatible HTTP 客户端
-│   │   ├── types.go                 # Message, ChatResponse, ToolCall, Usage
-│   │   ├── retry.go                 # chatWithRetry + isRetryableError
-│   │   └── token.go                 # estimateTokensChinese
-│   └── cli/                         # diagnose CLI（子包）
-│       └── cmd.go                   # catpaw diagnose list/show
+│   ├── aggregator.go                # 短窗口聚合器 + shouldTrigger + ExtractCheckSnapshot
+│   ├── global.go                    # 全局单例管理（Init/Shutdown/定时清理）
+│   ├── engine.go                    # 诊断引擎：Submit → RunDiagnose → diagnose(agent loop) → forwardReport
+│   ├── prompt.go                    # System Prompt 模板（text/template）
+│   ├── executor.go                  # 工具执行（buildToolSet + executeTool + 元工具 + 截断）
+│   ├── report.go                    # 报告格式化（2048 字节截断 + UTF-8 安全）
+│   ├── record.go                    # 本地诊断记录（原子写入 temp+rename）
+│   ├── state.go                     # 状态持久化（daily token + cooldown → diagnose_state.json）
+│   ├── cleanup.go                   # 诊断记录自动清理（保留天数 + 最大数量）
+│   ├── cli.go                       # CLI: catpaw diagnose list/show（直接在 diagnose 包内）
+│   └── aiclient/                    # AI API 客户端（子包）
+│       ├── client.go                # OpenAI-compatible HTTP 客户端
+│       ├── types.go                 # Message, ChatResponse, ToolCall, Tool, Usage
+│       ├── retry.go                 # ChatWithRetry + IsRetryableError
+│       └── token.go                 # EstimateTokensChinese
+│
+├── flashduty/                       # FlashDuty 事件发送（独立包，engine 和 diagnose 共享）
+│   └── flashduty.go                 # Forward() + doForward() + PrintStdout()
 │
 ├── plugins/
-│   ├── diagnosable.go               # Diagnosable 接口定义（新文件，plugins 包级别）
+│   ├── plugins.go                   # Diagnosable 接口 + MayRegisterDiagnoseTools（已有文件扩展）
 │   │
 │   ├── redis/
 │   │   ├── redis.go                 # 现有（Gather 改为调用 Accessor）
-│   │   ├── accessor.go              # RedisAccessor（新：建连、INFO、SLOWLOG 等）
-│   │   └── diagnose_tools.go        # RegisterDiagnoseTools（新：工具注册）
+│   │   ├── accessor.go              # RedisAccessor（建连、INFO、SLOWLOG、CLIENT LIST、CONFIG GET 等）
+│   │   ├── diagnose.go              # RegisterDiagnoseTools（5 个远端工具 + AccessorFactory）
+│   │   └── diagnose_test.go
 │   │
 │   ├── disk/
-│   │   ├── disk.go                  # 现有（Gather 改为调用 Accessor）
-│   │   ├── accessor.go              # DiskAccessor（新：iostat、df、diskstats）
-│   │   └── diagnose_tools.go        # RegisterDiagnoseTools（新）
+│   │   ├── disk.go                  # 现有（未重构，diagnose 工具直接用 gopsutil）
+│   │   ├── diagnose.go              # RegisterDiagnoseTools（3 个本机工具: usage/partitions/io）
+│   │   └── diagnose_test.go
 │   │
 │   ├── cpu/
 │   │   ├── cpu.go                   # 现有
-│   │   ├── accessor.go              # CPUAccessor（新：/proc/stat、top）
-│   │   └── diagnose_tools.go        # RegisterDiagnoseTools（新）
+│   │   ├── diagnose.go              # RegisterDiagnoseTools（3 个本机工具: usage/load/top_processes）
+│   │   └── diagnose_test.go
 │   │
-│   ├── mem/
-│   │   ├── mem.go                   # 现有
-│   │   ├── accessor.go              # MemAccessor（新：/proc/meminfo、free）
-│   │   └── diagnose_tools.go        # RegisterDiagnoseTools（新）
-│   │
-│   ├── procnum/
-│   │   └── diagnose_tools.go        # RegisterDiagnoseTools（新：进程诊断工具）
-│   │
-│   └── net/
-│       └── diagnose_tools.go        # RegisterDiagnoseTools（新：网络诊断工具）
+│   └── mem/
+│       ├── mem.go                   # 现有
+│       ├── diagnose.go              # RegisterDiagnoseTools（3 个本机工具: mem/swap/top_processes）
+│       └── diagnose_test.go
 │
 ├── config/
-│   └── config.go                    # 现有（扩展：增加 [ai] 段解析入口）
+│   ├── config.go                    # 扩展：AIConfig 定义 + [ai] 段解析
+│   └── inline.go                    # 扩展：DiagnoseConfig 嵌入 InternalConfig
+│
+├── engine/
+│   └── engine.go                    # 扩展：mayTriggerDiagnose + 调用 flashduty.Forward
 │
 ├── agent/
-│   └── agent.go                     # 现有（扩展：启动时注册诊断工具 + 初始化 DiagnoseEngine）
+│   └── agent.go                     # 扩展：initDiagnoseEngine + diagnose.Shutdown
 │
-└── main.go                          # 现有（扩展：增加 diagnose 子命令入口）
+└── main.go                          # 扩展：handleSubcommand（diagnose list/show）
 ```
 
 ### 文件职责详解
@@ -1827,30 +1838,33 @@ OpenAI-compatible API 的 HTTP 调用。
 // 注册 mem_info, mem_oom 等本机工具
 ```
 
-### 文件数量汇总
+### 首版文件数量汇总
 
 | 目录 | 新增文件数 | 修改文件数 |
 |------|-----------|-----------|
-| `diagnose/` | 15 | 0 |
-| `diagnose/aiclient/` | 4 | 0 |
-| `diagnose/cli/` | 1 | 0 |
-| `plugins/` (包级) | 1 | 0 |
-| `plugins/redis/` | 2 | 1（redis.go 重构） |
-| `plugins/disk/` | 2 | 1（disk.go 重构） |
-| `plugins/cpu/` | 2 | 1（cpu.go 重构） |
-| `plugins/mem/` | 2 | 1（mem.go 重构） |
-| `plugins/procnum/` | 1 | 0 |
-| `plugins/net/` | 1 | 0 |
-| `config/` | 0 | 1（config.go 扩展） |
+| `diagnose/` | 14（含测试） | 0 |
+| `diagnose/aiclient/` | 5（含测试） | 0 |
+| `flashduty/` | 1 | 0 |
+| `plugins/redis/` | 3（accessor + diagnose + test） | 1（redis.go 重构） |
+| `plugins/disk/` | 2（diagnose + test） | 0 |
+| `plugins/cpu/` | 2（diagnose + test） | 0 |
+| `plugins/mem/` | 2（diagnose + test） | 0 |
+| `config/` | 0 | 2（config.go + inline.go） |
+| `plugins/` | 0 | 1（plugins.go 扩展） |
+| `engine/` | 0 | 1（engine.go 扩展） |
 | `agent/` | 0 | 1（agent.go 扩展） |
 | `main.go` | 0 | 1（diagnose 子命令） |
-| **合计** | **31 新增** | **6 修改** |
+| **合计** | **29 新增** | **7 修改** |
 
-### Phase 与文件的对应关系
+### 设计 vs 实际差异说明
 
-| Phase | 涉及文件 |
-|-------|---------|
-| Phase 1（Accessor 重构） | `plugins/redis/accessor.go`, `plugins/disk/accessor.go`, `plugins/cpu/accessor.go`, `plugins/mem/accessor.go` + 修改各插件现有 `.go` |
-| Phase 2（注册表 + 聚合） | `diagnose/types.go`, `diagnose/config.go`, `diagnose/registry.go`, `diagnose/index.go`, `diagnose/aggregator.go`, `diagnose/session.go`, `plugins/diagnosable.go`, `plugins/*/diagnose_tools.go` |
-| Phase 3（AI + 引擎） | `diagnose/aiclient/*`, `diagnose/engine.go`, `diagnose/prompt.go`, `diagnose/executor.go`, `diagnose/scheduler.go`, `diagnose/security.go`, `diagnose/record.go`, `diagnose/state.go`, `diagnose/metrics.go` |
-| Phase 4（FlashDuty + 端到端） | `diagnose/report.go`, `diagnose/cli/cmd.go`, `agent/agent.go`（修改）, `main.go`（修改）, `config/config.go`（修改） |
+| 设计中的计划 | 实际处理 |
+|-------------|---------|
+| `diagnose/scheduler.go` 优先级调度器 | 首版用 semaphore 并发控制（engine.go），优先级队列推迟 |
+| `diagnose/metrics.go` 可观测性 metrics | 推迟到 Phase 5，结构化日志已覆盖核心指标 |
+| `diagnose/security.go` 安全机制 | 敏感过滤在 `redis/accessor.go`，截断在 `executor.go`，分散实现 |
+| `diagnose/session.go` 独立文件 | 合并到 `types.go`，Session 类型与其他核心类型放在一起 |
+| `diagnose/cli/cmd.go` 子包 | 简化为 `diagnose/cli.go`，无需独立子包 |
+| `flashduty/` 独立包 | 原设计中报告推送在 engine 包，后重构为独立包以避免循环依赖 |
+| `plugins/*/accessor.go`（disk/cpu/mem） | 本机插件不需要 Accessor 抽象层，直接在 `diagnose.go` 中用 gopsutil |
+| `plugins/procnum/` `plugins/net/` 诊断工具 | 推迟到 Phase 5 |

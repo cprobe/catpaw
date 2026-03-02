@@ -1,9 +1,7 @@
 package redis
 
 import (
-	"bufio"
 	"crypto/tls"
-	"errors"
 	"fmt"
 	"net"
 	"strconv"
@@ -582,20 +580,33 @@ func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
 	}
 }
 
+func (ins *Instance) newAccessor(target string) (*RedisAccessor, error) {
+	return NewRedisAccessor(RedisAccessorConfig{
+		Target:      target,
+		Username:    ins.Username,
+		Password:    ins.Password,
+		DB:          ins.DB,
+		Timeout:     time.Duration(ins.Timeout),
+		ReadTimeout: time.Duration(ins.ReadTimeout),
+		TLSConfig:   ins.tlsConfig,
+		DialFunc:    ins.dialFunc,
+	})
+}
+
 func (ins *Instance) gatherTarget(q *safe.Queue[*types.Event], target string) {
 	connEvent := ins.newEvent("redis::connectivity", target, ins.Connectivity.TitleRule)
 	start := time.Now()
 
-	client, err := ins.connect(target)
+	acc, err := ins.newAccessor(target)
 	if err != nil {
 		connEvent.Labels[types.AttrPrefix+"response_time"] = time.Since(start).String()
 		q.PushFront(connEvent.SetEventStatus(ins.Connectivity.Severity).
 			SetDescription(fmt.Sprintf("redis ping failed: %v", err)))
 		return
 	}
-	defer client.Close()
+	defer acc.Close()
 
-	if _, err := client.command("PING"); err != nil {
+	if err := acc.Ping(); err != nil {
 		connEvent.Labels[types.AttrPrefix+"response_time"] = time.Since(start).String()
 		q.PushFront(connEvent.SetEventStatus(ins.Connectivity.Severity).
 			SetDescription(fmt.Sprintf("redis ping failed: %v", err)))
@@ -613,11 +624,10 @@ func (ins *Instance) gatherTarget(q *safe.Queue[*types.Event], target string) {
 		if info, ok := infoCache[section]; ok {
 			return info, nil
 		}
-		raw, err := client.info(section)
+		info, err := acc.Info(section)
 		if err != nil {
 			return nil, err
 		}
-		info := parseInfoToMap(raw)
 		infoCache[section] = info
 		return info, nil
 	}
@@ -745,86 +755,6 @@ func (ins *Instance) gatherTarget(q *safe.Queue[*types.Event], target string) {
 	}
 }
 
-func (ins *Instance) connect(target string) (*redisClient, error) {
-	var conn net.Conn
-	var err error
-
-	if ins.tlsConfig != nil {
-		cfg := ins.tlsConfig.Clone()
-		host, _, splitErr := net.SplitHostPort(target)
-		if splitErr == nil && cfg.ServerName == "" && net.ParseIP(host) == nil {
-			cfg.ServerName = host
-		}
-
-		rawConn, dialErr := ins.dialTarget("tcp", target)
-		if dialErr != nil {
-			return nil, dialErr
-		}
-
-		tlsConn := tls.Client(rawConn, cfg)
-		if err := tlsConn.SetDeadline(time.Now().Add(time.Duration(ins.Timeout))); err != nil {
-			rawConn.Close()
-			return nil, err
-		}
-		if err := tlsConn.Handshake(); err != nil {
-			rawConn.Close()
-			return nil, err
-		}
-		_ = tlsConn.SetDeadline(time.Time{})
-		conn = tlsConn
-	} else {
-		conn, err = ins.dialTarget("tcp", target)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	client := &redisClient{
-		conn:        conn,
-		reader:      bufio.NewReader(conn),
-		timeout:     time.Duration(ins.Timeout),
-		readTimeout: time.Duration(ins.ReadTimeout),
-	}
-
-	if ins.Password != "" || ins.Username != "" {
-		args := []string{"AUTH"}
-		if ins.Username != "" {
-			args = append(args, ins.Username)
-		}
-		args = append(args, ins.Password)
-		reply, err := client.command(args...)
-		if err != nil {
-			client.Close()
-			return nil, err
-		}
-		if strings.ToUpper(reply) != "OK" {
-			client.Close()
-			return nil, fmt.Errorf("unexpected AUTH reply: %q", reply)
-		}
-	}
-
-	if ins.DB > 0 {
-		reply, err := client.command("SELECT", strconv.Itoa(ins.DB))
-		if err != nil {
-			client.Close()
-			return nil, err
-		}
-		if strings.ToUpper(reply) != "OK" {
-			client.Close()
-			return nil, fmt.Errorf("unexpected SELECT reply: %q", reply)
-		}
-	}
-
-	return client, nil
-}
-
-func (ins *Instance) dialTarget(network, target string) (net.Conn, error) {
-	if ins.dialFunc != nil {
-		return ins.dialFunc(network, target)
-	}
-	dialer := &net.Dialer{Timeout: time.Duration(ins.Timeout)}
-	return dialer.Dial(network, target)
-}
 
 func (ins *Instance) checkResponseTime(q *safe.Queue[*types.Event], target string, responseTime time.Duration) {
 	if ins.ResponseTime.WarnGe == 0 && ins.ResponseTime.CriticalGe == 0 {
@@ -1239,189 +1169,3 @@ func (ins *Instance) newEvent(check, target, titleRule string) *types.Event {
 	}).SetTitleRule(titleRule)
 }
 
-type redisClient struct {
-	conn        net.Conn
-	reader      *bufio.Reader
-	timeout     time.Duration
-	readTimeout time.Duration
-}
-
-func (c *redisClient) Close() error {
-	return c.conn.Close()
-}
-
-func (c *redisClient) info(section string) (string, error) {
-	reply, err := c.command("INFO", section)
-	if err != nil {
-		return "", err
-	}
-	return reply, nil
-}
-
-func (c *redisClient) command(args ...string) (string, error) {
-	if err := c.writeCommand(args...); err != nil {
-		return "", err
-	}
-	reply, err := c.readReply()
-	if err != nil {
-		return "", err
-	}
-
-	switch v := reply.(type) {
-	case string:
-		return v, nil
-	case nil:
-		return "", nil
-	default:
-		return "", fmt.Errorf("unsupported redis reply type %T", reply)
-	}
-}
-
-func (c *redisClient) writeCommand(args ...string) error {
-	if err := c.conn.SetWriteDeadline(time.Now().Add(c.timeout)); err != nil {
-		return err
-	}
-
-	var b strings.Builder
-	b.WriteString("*")
-	b.WriteString(strconv.Itoa(len(args)))
-	b.WriteString("\r\n")
-	for _, arg := range args {
-		b.WriteString("$")
-		b.WriteString(strconv.Itoa(len(arg)))
-		b.WriteString("\r\n")
-		b.WriteString(arg)
-		b.WriteString("\r\n")
-	}
-
-	_, err := c.conn.Write([]byte(b.String()))
-	return err
-}
-
-func (c *redisClient) readReply() (any, error) {
-	if err := c.conn.SetReadDeadline(time.Now().Add(c.readTimeout)); err != nil {
-		return nil, err
-	}
-
-	prefix, err := c.reader.ReadByte()
-	if err != nil {
-		return nil, err
-	}
-
-	switch prefix {
-	case '+':
-		line, err := c.readLine()
-		if err != nil {
-			return nil, err
-		}
-		return line, nil
-	case '-':
-		line, err := c.readLine()
-		if err != nil {
-			return nil, err
-		}
-		return nil, errors.New(line)
-	case ':':
-		line, err := c.readLine()
-		if err != nil {
-			return nil, err
-		}
-		n, err := strconv.ParseInt(line, 10, 64)
-		if err != nil {
-			return nil, err
-		}
-		return strconv.FormatInt(n, 10), nil
-	case '$':
-		line, err := c.readLine()
-		if err != nil {
-			return nil, err
-		}
-		size, err := strconv.Atoi(line)
-		if err != nil {
-			return nil, err
-		}
-		if size < 0 {
-			return nil, nil
-		}
-		if size > maxBulkSize {
-			return nil, fmt.Errorf("redis bulk string size %d exceeds limit %d", size, maxBulkSize)
-		}
-		buf := make([]byte, size+2)
-		if _, err := ioReadFull(c.reader, buf); err != nil {
-			return nil, err
-		}
-		return string(buf[:size]), nil
-	default:
-		return nil, fmt.Errorf("unsupported redis reply prefix %q", prefix)
-	}
-}
-
-func (c *redisClient) readLine() (string, error) {
-	line, err := c.reader.ReadString('\n')
-	if err != nil {
-		return "", err
-	}
-	return strings.TrimSuffix(strings.TrimSuffix(line, "\n"), "\r"), nil
-}
-
-func ioReadFull(r *bufio.Reader, buf []byte) (int, error) {
-	read := 0
-	for read < len(buf) {
-		n, err := r.Read(buf[read:])
-		read += n
-		if err != nil {
-			return read, err
-		}
-	}
-	return read, nil
-}
-
-func parseInfoToMap(raw string) map[string]string {
-	fields := make(map[string]string)
-	for _, line := range strings.Split(raw, "\n") {
-		line = strings.TrimSpace(line)
-		if line == "" || strings.HasPrefix(line, "#") {
-			continue
-		}
-		if idx := strings.IndexByte(line, ':'); idx >= 0 {
-			fields[line[:idx]] = strings.TrimSpace(line[idx+1:])
-		}
-	}
-	return fields
-}
-
-func infoGetInt(info map[string]string, key string) (int, bool, error) {
-	value, ok := info[key]
-	if !ok {
-		return 0, false, nil
-	}
-	n, err := strconv.Atoi(value)
-	if err != nil {
-		return 0, true, err
-	}
-	return n, true, nil
-}
-
-func infoGetInt64(info map[string]string, key string) (int64, bool, error) {
-	value, ok := info[key]
-	if !ok {
-		return 0, false, nil
-	}
-	n, err := strconv.ParseInt(value, 10, 64)
-	if err != nil {
-		return 0, true, err
-	}
-	return n, true, nil
-}
-
-func infoGetUint64(info map[string]string, key string) (uint64, bool, error) {
-	value, ok := info[key]
-	if !ok {
-		return 0, false, nil
-	}
-	n, err := strconv.ParseUint(value, 10, 64)
-	if err != nil {
-		return 0, true, err
-	}
-	return n, true, nil
-}
