@@ -389,7 +389,7 @@ func TestPromptInspectMode(t *testing.T) {
 	if !strings.Contains(prompt, "主动健康巡检") {
 		t.Fatal("inspect prompt should mention health inspection")
 	}
-	if !strings.Contains(prompt, "🟢") {
+	if !strings.Contains(prompt, "[OK]") {
 		t.Fatal("inspect prompt should contain status markers")
 	}
 	if strings.Contains(prompt, "告警详情") {

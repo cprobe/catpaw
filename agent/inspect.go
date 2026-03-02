@@ -69,7 +69,7 @@ func runInspectRequest(registry *diagnose.ToolRegistry, pluginName, target strin
 		Timeout:     2 * time.Minute,
 	}
 
-	fmt.Printf("🔍 Starting health inspection: plugin=%s target=%s\n", pluginName, target)
+	fmt.Printf("[*] Starting health inspection: plugin=%s target=%s\n", pluginName, target)
 	fmt.Printf("   AI model: %s, max rounds: %d\n", config.Config.AI.Model, config.Config.AI.MaxRounds)
 	fmt.Println()
 

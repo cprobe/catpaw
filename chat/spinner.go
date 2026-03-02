@@ -6,7 +6,7 @@ import (
 	"time"
 )
 
-var spinnerFrames = []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"}
+var spinnerFrames = []string{"|", "/", "-", "\\"}
 
 type spinner struct {
 	done chan struct{}

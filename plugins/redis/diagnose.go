@@ -222,7 +222,7 @@ func clientSummaryFromInfo(acc *RedisAccessor, clientCount int) (string, error) 
 	}
 
 	var b strings.Builder
-	fmt.Fprintf(&b, "⚠ CLIENT LIST skipped: %d connected clients exceeds safe threshold (5000).\n", clientCount)
+	fmt.Fprintf(&b, "[!] CLIENT LIST skipped: %d connected clients exceeds safe threshold (5000).\n", clientCount)
 	fmt.Fprintf(&b, "Running CLIENT LIST with this many clients would block Redis for ~%dms.\n\n", clientCount/500)
 	fmt.Fprintf(&b, "Client summary from INFO clients:\n")
 

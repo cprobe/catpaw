@@ -42,7 +42,7 @@ func FormatReportForFlashDuty(record *DiagnoseRecord, report string) string {
 
 func formatHeader(record *DiagnoseRecord) string {
 	var b strings.Builder
-	b.WriteString(fmt.Sprintf("🔍 AI 诊断报告 [%s]\n", record.Status))
+	b.WriteString(fmt.Sprintf("[*] AI 诊断报告 [%s]\n", record.Status))
 	b.WriteString(fmt.Sprintf("插件: %s | 目标: %s\n", record.Alert.Plugin, record.Alert.Target))
 	b.WriteString(fmt.Sprintf("诊断时间: %s | 耗时: %dms | AI轮次: %d\n",
 		record.CreatedAt.Format(time.DateTime),
