@@ -1,0 +1,85 @@
+services:
+  redis-master:
+    image: redis:7.2-alpine
+    container_name: catpaw-redis-master
+    command:
+      - redis-server
+      - --bind
+      - 0.0.0.0
+      - --port
+      - "6379"
+      - --requirepass
+      - catpaw-test
+      - --appendonly
+      - "yes"
+      - --appendfsync
+      - everysec
+      - --save
+      - "60 100"
+      - --maxmemory
+      - 64mb
+      - --maxmemory-policy
+      - allkeys-lru
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-master-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "catpaw-test", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis-replica:
+    image: redis:7.2-alpine
+    container_name: catpaw-redis-replica
+    depends_on:
+      redis-master:
+        condition: service_healthy
+    command:
+      - redis-server
+      - --bind
+      - 0.0.0.0
+      - --port
+      - "6379"
+      - --requirepass
+      - catpaw-test
+      - --masterauth
+      - catpaw-test
+      - --replicaof
+      - redis-master
+      - "6379"
+      - --appendonly
+      - "yes"
+      - --appendfsync
+      - everysec
+    ports:
+      - "6380:6379"
+    volumes:
+      - redis-replica-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "catpaw-test", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis-loadgen:
+    image: redis:7.2-alpine
+    container_name: catpaw-redis-loadgen
+    profiles: ["tools"]
+    depends_on:
+      redis-master:
+        condition: service_healthy
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - >
+        echo "Load generator is idle.";
+        echo "Examples:";
+        echo "  docker compose exec redis-loadgen redis-cli -h redis-master -a catpaw-test --scan";
+        echo "  docker compose exec redis-loadgen redis-benchmark -h redis-master -a catpaw-test -n 10000 -c 20";
+        echo "  docker compose exec redis-loadgen redis-cli -h redis-master -a catpaw-test setex catpaw:ttl 30 ok";
+        tail -f /dev/null
+
+volumes:
+  redis-master-data:
+  redis-replica-data:
