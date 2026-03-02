@@ -82,7 +82,8 @@ severity = "Critical"
 # critical_ge = "1GB"
 # title_rule = "[TPL]${check} ${from_hostip} ${target}"
 
-## 被拒绝连接数检测（两个阈值都为 0 则关闭）
+## 每周期被拒绝连接数检测（两个阈值都为 0 则关闭）
+## 注意：这是采集周期内 delta，不是 Redis 启动以来累计值
 ## 指标来自 INFO stats 的 rejected_connections
 ## check 标签固定为 "redis::rejected_connections"
 # [partials.rejected_connections]

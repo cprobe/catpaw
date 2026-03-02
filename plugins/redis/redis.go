@@ -24,6 +24,7 @@ import (
 const (
 	pluginName       = "redis"
 	defaultRedisPort = "6379"
+	maxBulkSize      = 1 << 20 // 1MB, prevent unbounded allocation from malformed replies
 )
 
 type ConnectivityCheck struct {
@@ -138,8 +139,9 @@ type Instance struct {
 }
 
 type redisCounterSnapshot struct {
-	evictedKeys uint64
-	expiredKeys uint64
+	evictedKeys  uint64
+	expiredKeys  uint64
+	rejectedConn uint64
 }
 
 type RedisPlugin struct {
@@ -184,124 +186,128 @@ func (p *RedisPlugin) ApplyPartials() error {
 				ins.DB = partial.DB
 			}
 			mergeClientConfig(&ins.ClientConfig, partial.ClientConfig)
-			if ins.Connectivity.Severity == "" {
-				ins.Connectivity.Severity = partial.Connectivity.Severity
-			}
-			if ins.Connectivity.TitleRule == "" {
-				ins.Connectivity.TitleRule = partial.Connectivity.TitleRule
-			}
-			if ins.ResponseTime.WarnGe == 0 {
-				ins.ResponseTime.WarnGe = partial.ResponseTime.WarnGe
-			}
-			if ins.ResponseTime.CriticalGe == 0 {
-				ins.ResponseTime.CriticalGe = partial.ResponseTime.CriticalGe
-			}
-			if ins.ResponseTime.TitleRule == "" {
-				ins.ResponseTime.TitleRule = partial.ResponseTime.TitleRule
-			}
-			if ins.Role.Expect == "" {
-				ins.Role.Expect = partial.Role.Expect
-			}
-			if ins.Role.Severity == "" {
-				ins.Role.Severity = partial.Role.Severity
-			}
-			if ins.Role.TitleRule == "" {
-				ins.Role.TitleRule = partial.Role.TitleRule
-			}
-			if ins.ConnectedClients.WarnGe == 0 {
-				ins.ConnectedClients.WarnGe = partial.ConnectedClients.WarnGe
-			}
-			if ins.ConnectedClients.CriticalGe == 0 {
-				ins.ConnectedClients.CriticalGe = partial.ConnectedClients.CriticalGe
-			}
-			if ins.ConnectedClients.TitleRule == "" {
-				ins.ConnectedClients.TitleRule = partial.ConnectedClients.TitleRule
-			}
-			if ins.BlockedClients.WarnGe == 0 {
-				ins.BlockedClients.WarnGe = partial.BlockedClients.WarnGe
-			}
-			if ins.BlockedClients.CriticalGe == 0 {
-				ins.BlockedClients.CriticalGe = partial.BlockedClients.CriticalGe
-			}
-			if ins.BlockedClients.TitleRule == "" {
-				ins.BlockedClients.TitleRule = partial.BlockedClients.TitleRule
-			}
-			if ins.UsedMemory.WarnGe == 0 {
-				ins.UsedMemory.WarnGe = partial.UsedMemory.WarnGe
-			}
-			if ins.UsedMemory.CriticalGe == 0 {
-				ins.UsedMemory.CriticalGe = partial.UsedMemory.CriticalGe
-			}
-			if ins.UsedMemory.TitleRule == "" {
-				ins.UsedMemory.TitleRule = partial.UsedMemory.TitleRule
-			}
-			if ins.MasterLink.Expect == "" {
-				ins.MasterLink.Expect = partial.MasterLink.Expect
-			}
-			if ins.MasterLink.Severity == "" {
-				ins.MasterLink.Severity = partial.MasterLink.Severity
-			}
-			if ins.MasterLink.TitleRule == "" {
-				ins.MasterLink.TitleRule = partial.MasterLink.TitleRule
-			}
-			if ins.RejectedConn.WarnGe == 0 {
-				ins.RejectedConn.WarnGe = partial.RejectedConn.WarnGe
-			}
-			if ins.RejectedConn.CriticalGe == 0 {
-				ins.RejectedConn.CriticalGe = partial.RejectedConn.CriticalGe
-			}
-			if ins.RejectedConn.TitleRule == "" {
-				ins.RejectedConn.TitleRule = partial.RejectedConn.TitleRule
-			}
-			if ins.ConnectedSlaves.WarnLt == 0 {
-				ins.ConnectedSlaves.WarnLt = partial.ConnectedSlaves.WarnLt
-			}
-			if ins.ConnectedSlaves.CriticalLt == 0 {
-				ins.ConnectedSlaves.CriticalLt = partial.ConnectedSlaves.CriticalLt
-			}
-			if ins.ConnectedSlaves.TitleRule == "" {
-				ins.ConnectedSlaves.TitleRule = partial.ConnectedSlaves.TitleRule
-			}
-			if ins.EvictedKeys.WarnGe == 0 {
-				ins.EvictedKeys.WarnGe = partial.EvictedKeys.WarnGe
-			}
-			if ins.EvictedKeys.CriticalGe == 0 {
-				ins.EvictedKeys.CriticalGe = partial.EvictedKeys.CriticalGe
-			}
-			if ins.EvictedKeys.TitleRule == "" {
-				ins.EvictedKeys.TitleRule = partial.EvictedKeys.TitleRule
-			}
-			if ins.ExpiredKeys.WarnGe == 0 {
-				ins.ExpiredKeys.WarnGe = partial.ExpiredKeys.WarnGe
-			}
-			if ins.ExpiredKeys.CriticalGe == 0 {
-				ins.ExpiredKeys.CriticalGe = partial.ExpiredKeys.CriticalGe
-			}
-			if ins.ExpiredKeys.TitleRule == "" {
-				ins.ExpiredKeys.TitleRule = partial.ExpiredKeys.TitleRule
-			}
-			if ins.OpsPerSecond.WarnGe == 0 {
-				ins.OpsPerSecond.WarnGe = partial.OpsPerSecond.WarnGe
-			}
-			if ins.OpsPerSecond.CriticalGe == 0 {
-				ins.OpsPerSecond.CriticalGe = partial.OpsPerSecond.CriticalGe
-			}
-			if ins.OpsPerSecond.TitleRule == "" {
-				ins.OpsPerSecond.TitleRule = partial.OpsPerSecond.TitleRule
-			}
-			if !ins.Persistence.Enabled {
-				ins.Persistence.Enabled = partial.Persistence.Enabled
-			}
-			if ins.Persistence.Severity == "" {
-				ins.Persistence.Severity = partial.Persistence.Severity
-			}
-			if ins.Persistence.TitleRule == "" {
-				ins.Persistence.TitleRule = partial.Persistence.TitleRule
-			}
+			mergeConnectivityCheck(&ins.Connectivity, partial.Connectivity)
+			mergeResponseTimeCheck(&ins.ResponseTime, partial.ResponseTime)
+			mergeRoleCheck(&ins.Role, partial.Role)
+			mergeCountCheck(&ins.ConnectedClients, partial.ConnectedClients)
+			mergeCountCheck(&ins.BlockedClients, partial.BlockedClients)
+			mergeMemoryUsageCheck(&ins.UsedMemory, partial.UsedMemory)
+			mergeCountCheck(&ins.RejectedConn, partial.RejectedConn)
+			mergeMasterLinkCheck(&ins.MasterLink, partial.MasterLink)
+			mergeMinCountCheck(&ins.ConnectedSlaves, partial.ConnectedSlaves)
+			mergeCountCheck(&ins.EvictedKeys, partial.EvictedKeys)
+			mergeCountCheck(&ins.ExpiredKeys, partial.ExpiredKeys)
+			mergeOpsPerSecondCheck(&ins.OpsPerSecond, partial.OpsPerSecond)
+			mergePersistenceCheck(&ins.Persistence, partial.Persistence)
 			break
 		}
 	}
 	return nil
+}
+
+func mergeConnectivityCheck(dst *ConnectivityCheck, src ConnectivityCheck) {
+	if dst.Severity == "" {
+		dst.Severity = src.Severity
+	}
+	if dst.TitleRule == "" {
+		dst.TitleRule = src.TitleRule
+	}
+}
+
+func mergeResponseTimeCheck(dst *ResponseTimeCheck, src ResponseTimeCheck) {
+	if dst.WarnGe == 0 {
+		dst.WarnGe = src.WarnGe
+	}
+	if dst.CriticalGe == 0 {
+		dst.CriticalGe = src.CriticalGe
+	}
+	if dst.TitleRule == "" {
+		dst.TitleRule = src.TitleRule
+	}
+}
+
+func mergeRoleCheck(dst *RoleCheck, src RoleCheck) {
+	if dst.Expect == "" {
+		dst.Expect = src.Expect
+	}
+	if dst.Severity == "" {
+		dst.Severity = src.Severity
+	}
+	if dst.TitleRule == "" {
+		dst.TitleRule = src.TitleRule
+	}
+}
+
+func mergeCountCheck(dst *CountCheck, src CountCheck) {
+	if dst.WarnGe == 0 {
+		dst.WarnGe = src.WarnGe
+	}
+	if dst.CriticalGe == 0 {
+		dst.CriticalGe = src.CriticalGe
+	}
+	if dst.TitleRule == "" {
+		dst.TitleRule = src.TitleRule
+	}
+}
+
+func mergeMinCountCheck(dst *MinCountCheck, src MinCountCheck) {
+	if dst.WarnLt == 0 {
+		dst.WarnLt = src.WarnLt
+	}
+	if dst.CriticalLt == 0 {
+		dst.CriticalLt = src.CriticalLt
+	}
+	if dst.TitleRule == "" {
+		dst.TitleRule = src.TitleRule
+	}
+}
+
+func mergeMemoryUsageCheck(dst *MemoryUsageCheck, src MemoryUsageCheck) {
+	if dst.WarnGe == 0 {
+		dst.WarnGe = src.WarnGe
+	}
+	if dst.CriticalGe == 0 {
+		dst.CriticalGe = src.CriticalGe
+	}
+	if dst.TitleRule == "" {
+		dst.TitleRule = src.TitleRule
+	}
+}
+
+func mergeMasterLinkCheck(dst *MasterLinkCheck, src MasterLinkCheck) {
+	if dst.Expect == "" {
+		dst.Expect = src.Expect
+	}
+	if dst.Severity == "" {
+		dst.Severity = src.Severity
+	}
+	if dst.TitleRule == "" {
+		dst.TitleRule = src.TitleRule
+	}
+}
+
+func mergeOpsPerSecondCheck(dst *OpsPerSecondCheck, src OpsPerSecondCheck) {
+	if dst.WarnGe == 0 {
+		dst.WarnGe = src.WarnGe
+	}
+	if dst.CriticalGe == 0 {
+		dst.CriticalGe = src.CriticalGe
+	}
+	if dst.TitleRule == "" {
+		dst.TitleRule = src.TitleRule
+	}
+}
+
+func mergePersistenceCheck(dst *PersistenceCheck, src PersistenceCheck) {
+	if !dst.Enabled {
+		dst.Enabled = src.Enabled
+	}
+	if dst.Severity == "" {
+		dst.Severity = src.Severity
+	}
+	if dst.TitleRule == "" {
+		dst.TitleRule = src.TitleRule
+	}
 }
 
 func (p *RedisPlugin) GetInstances() []plugins.Instance {
@@ -558,7 +564,22 @@ func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
 			ins.gatherTarget(q, target)
 		}(target)
 	}
-	wg.Wait()
+
+	perTarget := time.Duration(ins.Timeout) + time.Duration(ins.ReadTimeout)*8
+	batches := (len(ins.Targets) + ins.Concurrency - 1) / ins.Concurrency
+	gatherTimeout := perTarget * time.Duration(batches+1)
+	if gatherTimeout < 30*time.Second {
+		gatherTimeout = 30 * time.Second
+	}
+
+	done := make(chan struct{})
+	go func() { wg.Wait(); close(done) }()
+	select {
+	case <-done:
+	case <-time.After(gatherTimeout):
+		logger.Logger.Errorw("redis gather timeout, some targets may still be running",
+			"timeout", gatherTimeout, "targets", len(ins.Targets))
+	}
 }
 
 func (ins *Instance) gatherTarget(q *safe.Queue[*types.Event], target string) {
@@ -587,15 +608,16 @@ func (ins *Instance) gatherTarget(q *safe.Queue[*types.Event], target string) {
 
 	ins.checkResponseTime(q, target, responseTime)
 
-	infoCache := make(map[string]string)
-	infoSection := func(section string) (string, error) {
+	infoCache := make(map[string]map[string]string)
+	infoSection := func(section string) (map[string]string, error) {
 		if info, ok := infoCache[section]; ok {
 			return info, nil
 		}
-		info, err := client.info(section)
+		raw, err := client.info(section)
 		if err != nil {
-			return "", err
+			return nil, err
 		}
+		info := parseInfoToMap(raw)
 		infoCache[section] = info
 		return info, nil
 	}
@@ -647,34 +669,14 @@ func (ins *Instance) gatherTarget(q *safe.Queue[*types.Event], target string) {
 					SetEventStatus(types.EventStatusCritical).
 					SetDescription(fmt.Sprintf("failed to query redis client info: %v", err)))
 			}
-			return
-		}
-
-		if ins.ConnectedClients.WarnGe > 0 || ins.ConnectedClients.CriticalGe > 0 {
-			if value, ok, parseErr := parseInfoInt(info, "connected_clients"); parseErr != nil {
-				q.PushFront(ins.newEvent("redis::connected_clients", target, ins.ConnectedClients.TitleRule).
-					SetEventStatus(types.EventStatusCritical).
-					SetDescription(fmt.Sprintf("failed to parse redis connected_clients: %v", parseErr)))
-			} else if !ok {
-				q.PushFront(ins.newEvent("redis::connected_clients", target, ins.ConnectedClients.TitleRule).
-					SetEventStatus(types.EventStatusCritical).
-					SetDescription("redis info output missing connected_clients"))
-			} else {
-				ins.checkCount(q, target, "redis::connected_clients", value, ins.ConnectedClients, "connected clients")
+		} else {
+			if ins.ConnectedClients.WarnGe > 0 || ins.ConnectedClients.CriticalGe > 0 {
+				ins.checkCountFromInfo(q, target, "redis::connected_clients", info, "connected_clients",
+					ins.ConnectedClients, "connected clients")
 			}
-		}
-
-		if ins.BlockedClients.WarnGe > 0 || ins.BlockedClients.CriticalGe > 0 {
-			if value, ok, parseErr := parseInfoInt(info, "blocked_clients"); parseErr != nil {
-				q.PushFront(ins.newEvent("redis::blocked_clients", target, ins.BlockedClients.TitleRule).
-					SetEventStatus(types.EventStatusCritical).
-					SetDescription(fmt.Sprintf("failed to parse redis blocked_clients: %v", parseErr)))
-			} else if !ok {
-				q.PushFront(ins.newEvent("redis::blocked_clients", target, ins.BlockedClients.TitleRule).
-					SetEventStatus(types.EventStatusCritical).
-					SetDescription("redis info output missing blocked_clients"))
-			} else {
-				ins.checkCount(q, target, "redis::blocked_clients", value, ins.BlockedClients, "blocked clients")
+			if ins.BlockedClients.WarnGe > 0 || ins.BlockedClients.CriticalGe > 0 {
+				ins.checkCountFromInfo(q, target, "redis::blocked_clients", info, "blocked_clients",
+					ins.BlockedClients, "blocked clients")
 			}
 		}
 	}
@@ -690,21 +692,18 @@ func (ins *Instance) gatherTarget(q *safe.Queue[*types.Event], target string) {
 		}
 	}
 
-	if ins.RejectedConn.WarnGe > 0 || ins.RejectedConn.CriticalGe > 0 {
+	needStats := (ins.RejectedConn.WarnGe > 0 || ins.RejectedConn.CriticalGe > 0) ||
+		(ins.EvictedKeys.WarnGe > 0 || ins.EvictedKeys.CriticalGe > 0) ||
+		(ins.ExpiredKeys.WarnGe > 0 || ins.ExpiredKeys.CriticalGe > 0) ||
+		(ins.OpsPerSecond.WarnGe > 0 || ins.OpsPerSecond.CriticalGe > 0)
+	if needStats {
 		info, err := infoSection("stats")
 		if err != nil {
-			q.PushFront(ins.newEvent("redis::rejected_connections", target, ins.RejectedConn.TitleRule).
-				SetEventStatus(types.EventStatusCritical).
-				SetDescription(fmt.Sprintf("failed to query redis stats info: %v", err)))
-		} else {
-			ins.checkCountFromInfo(q, target, "redis::rejected_connections", info, "rejected_connections",
-				ins.RejectedConn, "rejected connections")
-		}
-	}
-
-	if ins.EvictedKeys.WarnGe > 0 || ins.EvictedKeys.CriticalGe > 0 || ins.ExpiredKeys.WarnGe > 0 || ins.ExpiredKeys.CriticalGe > 0 || ins.OpsPerSecond.WarnGe > 0 || ins.OpsPerSecond.CriticalGe > 0 {
-		info, err := infoSection("stats")
-		if err != nil {
+			if ins.RejectedConn.WarnGe > 0 || ins.RejectedConn.CriticalGe > 0 {
+				q.PushFront(ins.newEvent("redis::rejected_connections", target, ins.RejectedConn.TitleRule).
+					SetEventStatus(types.EventStatusCritical).
+					SetDescription(fmt.Sprintf("failed to query redis stats info: %v", err)))
+			}
 			if ins.EvictedKeys.WarnGe > 0 || ins.EvictedKeys.CriticalGe > 0 {
 				q.PushFront(ins.newEvent("redis::evicted_keys", target, ins.EvictedKeys.TitleRule).
 					SetEventStatus(types.EventStatusCritical).
@@ -856,9 +855,9 @@ func (ins *Instance) checkResponseTime(q *safe.Queue[*types.Event], target strin
 	}
 }
 
-func (ins *Instance) checkRole(q *safe.Queue[*types.Event], target string, info string) {
+func (ins *Instance) checkRole(q *safe.Queue[*types.Event], target string, info map[string]string) {
 	event := ins.newEvent("redis::role", target, ins.Role.TitleRule)
-	actual, ok := parseInfoString(info, "role")
+	actual, ok := info["role"]
 	if !ok {
 		q.PushFront(event.SetEventStatus(types.EventStatusCritical).
 			SetDescription("redis info output missing role"))
@@ -878,13 +877,12 @@ func (ins *Instance) checkRole(q *safe.Queue[*types.Event], target string, info 
 		SetDescription(fmt.Sprintf("redis role is %s, expected %s", actual, ins.Role.Expect)))
 }
 
-func (ins *Instance) checkMasterLink(q *safe.Queue[*types.Event], target string, info string) {
+func (ins *Instance) checkMasterLink(q *safe.Queue[*types.Event], target string, info map[string]string) {
 	event := ins.newEvent("redis::master_link_status", target, ins.MasterLink.TitleRule)
-	role, ok := parseInfoString(info, "role")
-	if ok {
+	if role, ok := info["role"]; ok {
 		event.Labels[types.AttrPrefix+"role"] = role
 	}
-	actual, ok := parseInfoString(info, "master_link_status")
+	actual, ok := info["master_link_status"]
 	if !ok {
 		q.PushFront(event.SetEventStatus(ins.MasterLink.Severity).
 			SetDescription("redis replication info missing master_link_status"))
@@ -895,10 +893,10 @@ func (ins *Instance) checkMasterLink(q *safe.Queue[*types.Event], target string,
 	event.Labels[types.AttrPrefix+"actual"] = actual
 	event.Labels[types.AttrPrefix+"expect"] = ins.MasterLink.Expect
 
-	if v, ok := parseInfoString(info, "master_host"); ok && v != "" {
+	if v, ok := info["master_host"]; ok && v != "" {
 		event.Labels[types.AttrPrefix+"master_host"] = v
 	}
-	if v, ok := parseInfoString(info, "master_port"); ok && v != "" {
+	if v, ok := info["master_port"]; ok && v != "" {
 		event.Labels[types.AttrPrefix+"master_port"] = v
 	}
 
@@ -935,8 +933,8 @@ func (ins *Instance) checkCount(q *safe.Queue[*types.Event], target, check strin
 	}
 }
 
-func (ins *Instance) checkCountFromInfo(q *safe.Queue[*types.Event], target, check, info, key string, thresholds CountCheck, metricName string) {
-	value, ok, err := parseInfoInt(info, key)
+func (ins *Instance) checkCountFromInfo(q *safe.Queue[*types.Event], target, check string, info map[string]string, key string, thresholds CountCheck, metricName string) {
+	value, ok, err := infoGetInt(info, key)
 	if err != nil {
 		q.PushFront(ins.newEvent(check, target, thresholds.TitleRule).
 			SetEventStatus(types.EventStatusCritical).
@@ -952,8 +950,8 @@ func (ins *Instance) checkCountFromInfo(q *safe.Queue[*types.Event], target, che
 	ins.checkCount(q, target, check, value, thresholds, metricName)
 }
 
-func (ins *Instance) checkMinCountFromInfo(q *safe.Queue[*types.Event], target, check, info, key string, thresholds MinCountCheck, metricName string) {
-	value, ok, err := parseInfoInt(info, key)
+func (ins *Instance) checkMinCountFromInfo(q *safe.Queue[*types.Event], target, check string, info map[string]string, key string, thresholds MinCountCheck, metricName string) {
+	value, ok, err := infoGetInt(info, key)
 	if err != nil {
 		q.PushFront(ins.newEvent(check, target, thresholds.TitleRule).
 			SetEventStatus(types.EventStatusCritical).
@@ -993,14 +991,15 @@ func (ins *Instance) checkMinCount(q *safe.Queue[*types.Event], target, check st
 	q.PushFront(event.SetDescription(fmt.Sprintf("redis %s %d, everything is ok", metricName, value)))
 }
 
-func (ins *Instance) checkCounterDeltas(q *safe.Queue[*types.Event], target, info string) {
+func (ins *Instance) checkCounterDeltas(q *safe.Queue[*types.Event], target string, info map[string]string) {
 	var (
-		evicted uint64
-		expired uint64
+		evicted  uint64
+		expired  uint64
+		rejected uint64
 	)
 
 	if ins.EvictedKeys.WarnGe > 0 || ins.EvictedKeys.CriticalGe > 0 {
-		value, ok, err := parseInfoUint64(info, "evicted_keys")
+		value, ok, err := infoGetUint64(info, "evicted_keys")
 		if err != nil {
 			q.PushFront(ins.newEvent("redis::evicted_keys", target, ins.EvictedKeys.TitleRule).
 				SetEventStatus(types.EventStatusCritical).
@@ -1017,7 +1016,7 @@ func (ins *Instance) checkCounterDeltas(q *safe.Queue[*types.Event], target, inf
 	}
 
 	if ins.ExpiredKeys.WarnGe > 0 || ins.ExpiredKeys.CriticalGe > 0 {
-		value, ok, err := parseInfoUint64(info, "expired_keys")
+		value, ok, err := infoGetUint64(info, "expired_keys")
 		if err != nil {
 			q.PushFront(ins.newEvent("redis::expired_keys", target, ins.ExpiredKeys.TitleRule).
 				SetEventStatus(types.EventStatusCritical).
@@ -1033,12 +1032,30 @@ func (ins *Instance) checkCounterDeltas(q *safe.Queue[*types.Event], target, inf
 		expired = value
 	}
 
+	if ins.RejectedConn.WarnGe > 0 || ins.RejectedConn.CriticalGe > 0 {
+		value, ok, err := infoGetUint64(info, "rejected_connections")
+		if err != nil {
+			q.PushFront(ins.newEvent("redis::rejected_connections", target, ins.RejectedConn.TitleRule).
+				SetEventStatus(types.EventStatusCritical).
+				SetDescription(fmt.Sprintf("failed to parse redis rejected_connections: %v", err)))
+			return
+		}
+		if !ok {
+			q.PushFront(ins.newEvent("redis::rejected_connections", target, ins.RejectedConn.TitleRule).
+				SetEventStatus(types.EventStatusCritical).
+				SetDescription("redis info output missing rejected_connections"))
+			return
+		}
+		rejected = value
+	}
+
 	ins.statsMu.Lock()
 	prev := ins.prevStats[target]
 	initialized := ins.initialized[target]
 	ins.prevStats[target] = redisCounterSnapshot{
-		evictedKeys: evicted,
-		expiredKeys: expired,
+		evictedKeys:  evicted,
+		expiredKeys:  expired,
+		rejectedConn: rejected,
 	}
 	ins.initialized[target] = true
 	ins.statsMu.Unlock()
@@ -1055,6 +1072,12 @@ func (ins *Instance) checkCounterDeltas(q *safe.Queue[*types.Event], target, inf
 			event.Labels[types.AttrPrefix+"delta"] = "0"
 			event.Labels[types.AttrPrefix+"total"] = strconv.FormatUint(expired, 10)
 			q.PushFront(event.SetDescription(fmt.Sprintf("redis expired keys baseline established (total: %d)", expired)))
+		}
+		if ins.RejectedConn.WarnGe > 0 || ins.RejectedConn.CriticalGe > 0 {
+			event := ins.newEvent("redis::rejected_connections", target, ins.RejectedConn.TitleRule)
+			event.Labels[types.AttrPrefix+"delta"] = "0"
+			event.Labels[types.AttrPrefix+"total"] = strconv.FormatUint(rejected, 10)
+			q.PushFront(event.SetDescription(fmt.Sprintf("redis rejected connections baseline established (total: %d)", rejected)))
 		}
 		return
 	}
@@ -1073,6 +1096,14 @@ func (ins *Instance) checkCounterDeltas(q *safe.Queue[*types.Event], target, inf
 			delta = expired - prev.expiredKeys
 		}
 		ins.checkDeltaCount(q, target, "redis::expired_keys", delta, expired, ins.ExpiredKeys, "expired keys")
+	}
+
+	if ins.RejectedConn.WarnGe > 0 || ins.RejectedConn.CriticalGe > 0 {
+		delta := uint64(0)
+		if rejected >= prev.rejectedConn {
+			delta = rejected - prev.rejectedConn
+		}
+		ins.checkDeltaCount(q, target, "redis::rejected_connections", delta, rejected, ins.RejectedConn, "rejected connections")
 	}
 }
 
@@ -1100,9 +1131,9 @@ func (ins *Instance) checkDeltaCount(q *safe.Queue[*types.Event], target, check 
 	}
 }
 
-func (ins *Instance) checkUsedMemory(q *safe.Queue[*types.Event], target string, info string) {
+func (ins *Instance) checkUsedMemory(q *safe.Queue[*types.Event], target string, info map[string]string) {
 	event := ins.newEvent("redis::used_memory", target, ins.UsedMemory.TitleRule)
-	usedMemory, ok, err := parseInfoInt64(info, "used_memory")
+	usedMemory, ok, err := infoGetInt64(info, "used_memory")
 	if err != nil {
 		q.PushFront(event.SetEventStatus(types.EventStatusCritical).
 			SetDescription(fmt.Sprintf("failed to parse redis used_memory: %v", err)))
@@ -1122,7 +1153,7 @@ func (ins *Instance) checkUsedMemory(q *safe.Queue[*types.Event], target string,
 	if ins.UsedMemory.CriticalGe > 0 {
 		event.Labels[types.AttrPrefix+"critical_ge"] = ins.UsedMemory.CriticalGe.String()
 	}
-	if maxmemory, ok, err := parseInfoInt64(info, "maxmemory"); err == nil && ok && maxmemory > 0 {
+	if maxmemory, ok, err := infoGetInt64(info, "maxmemory"); err == nil && ok && maxmemory > 0 {
 		event.Labels[types.AttrPrefix+"maxmemory"] = conv.HumanBytes(uint64(maxmemory))
 		event.Labels[types.AttrPrefix+"maxmemory_bytes"] = strconv.FormatInt(maxmemory, 10)
 		event.Labels[types.AttrPrefix+"used_percent_of_maxmemory"] = fmt.Sprintf("%.1f%%", float64(usedMemory)*100/float64(maxmemory))
@@ -1143,10 +1174,10 @@ func (ins *Instance) checkUsedMemory(q *safe.Queue[*types.Event], target string,
 	}
 }
 
-func (ins *Instance) checkPersistence(q *safe.Queue[*types.Event], target string, info string) {
+func (ins *Instance) checkPersistence(q *safe.Queue[*types.Event], target string, info map[string]string) {
 	event := ins.newEvent("redis::persistence", target, ins.Persistence.TitleRule)
 
-	loading, ok, err := parseInfoInt(info, "loading")
+	loading, ok, err := infoGetInt(info, "loading")
 	if err != nil {
 		q.PushFront(event.SetEventStatus(types.EventStatusCritical).
 			SetDescription(fmt.Sprintf("failed to parse redis loading state: %v", err)))
@@ -1159,19 +1190,19 @@ func (ins *Instance) checkPersistence(q *safe.Queue[*types.Event], target string
 	}
 
 	event.Labels[types.AttrPrefix+"loading"] = strconv.Itoa(loading)
-	if v, ok := parseInfoString(info, "rdb_last_bgsave_status"); ok {
+	if v, ok := info["rdb_last_bgsave_status"]; ok {
 		event.Labels[types.AttrPrefix+"rdb_last_bgsave_status"] = v
 	}
-	if v, ok := parseInfoString(info, "aof_enabled"); ok {
+	if v, ok := info["aof_enabled"]; ok {
 		event.Labels[types.AttrPrefix+"aof_enabled"] = v
 	}
-	if v, ok := parseInfoString(info, "aof_last_write_status"); ok {
+	if v, ok := info["aof_last_write_status"]; ok {
 		event.Labels[types.AttrPrefix+"aof_last_write_status"] = v
 	}
-	if v, ok := parseInfoString(info, "rdb_bgsave_in_progress"); ok {
+	if v, ok := info["rdb_bgsave_in_progress"]; ok {
 		event.Labels[types.AttrPrefix+"rdb_bgsave_in_progress"] = v
 	}
-	if v, ok := parseInfoString(info, "aof_rewrite_in_progress"); ok {
+	if v, ok := info["aof_rewrite_in_progress"]; ok {
 		event.Labels[types.AttrPrefix+"aof_rewrite_in_progress"] = v
 	}
 
@@ -1181,15 +1212,14 @@ func (ins *Instance) checkPersistence(q *safe.Queue[*types.Event], target string
 		return
 	}
 
-	if status, ok := parseInfoString(info, "rdb_last_bgsave_status"); ok && status != "" && strings.ToLower(status) != "ok" {
+	if status, ok := info["rdb_last_bgsave_status"]; ok && status != "" && strings.ToLower(status) != "ok" {
 		q.PushFront(event.SetEventStatus(ins.Persistence.Severity).
 			SetDescription(fmt.Sprintf("redis RDB last bgsave status is %s", status)))
 		return
 	}
 
-	aofEnabled, ok := parseInfoString(info, "aof_enabled")
-	if ok && aofEnabled == "1" {
-		if status, ok := parseInfoString(info, "aof_last_write_status"); ok && status != "" && strings.ToLower(status) != "ok" {
+	if aofEnabled, ok := info["aof_enabled"]; ok && aofEnabled == "1" {
+		if status, ok := info["aof_last_write_status"]; ok && status != "" && strings.ToLower(status) != "ok" {
 			q.PushFront(event.SetEventStatus(ins.Persistence.Severity).
 				SetDescription(fmt.Sprintf("redis AOF last write status is %s", status)))
 			return
@@ -1313,6 +1343,9 @@ func (c *redisClient) readReply() (any, error) {
 		if size < 0 {
 			return nil, nil
 		}
+		if size > maxBulkSize {
+			return nil, fmt.Errorf("redis bulk string size %d exceeds limit %d", size, maxBulkSize)
+		}
 		buf := make([]byte, size+2)
 		if _, err := ioReadFull(c.reader, buf); err != nil {
 			return nil, err
@@ -1343,22 +1376,22 @@ func ioReadFull(r *bufio.Reader, buf []byte) (int, error) {
 	return read, nil
 }
 
-func parseInfoString(info, key string) (string, bool) {
-	prefix := key + ":"
-	for _, line := range strings.Split(info, "\n") {
+func parseInfoToMap(raw string) map[string]string {
+	fields := make(map[string]string)
+	for _, line := range strings.Split(raw, "\n") {
 		line = strings.TrimSpace(line)
 		if line == "" || strings.HasPrefix(line, "#") {
 			continue
 		}
-		if strings.HasPrefix(line, prefix) {
-			return strings.TrimSpace(strings.TrimPrefix(line, prefix)), true
+		if idx := strings.IndexByte(line, ':'); idx >= 0 {
+			fields[line[:idx]] = strings.TrimSpace(line[idx+1:])
 		}
 	}
-	return "", false
+	return fields
 }
 
-func parseInfoInt(info, key string) (int, bool, error) {
-	value, ok := parseInfoString(info, key)
+func infoGetInt(info map[string]string, key string) (int, bool, error) {
+	value, ok := info[key]
 	if !ok {
 		return 0, false, nil
 	}
@@ -1369,8 +1402,8 @@ func parseInfoInt(info, key string) (int, bool, error) {
 	return n, true, nil
 }
 
-func parseInfoInt64(info, key string) (int64, bool, error) {
-	value, ok := parseInfoString(info, key)
+func infoGetInt64(info map[string]string, key string) (int64, bool, error) {
+	value, ok := info[key]
 	if !ok {
 		return 0, false, nil
 	}
@@ -1381,8 +1414,8 @@ func parseInfoInt64(info, key string) (int64, bool, error) {
 	return n, true, nil
 }
 
-func parseInfoUint64(info, key string) (uint64, bool, error) {
-	value, ok := parseInfoString(info, key)
+func infoGetUint64(info map[string]string, key string) (uint64, bool, error) {
+	value, ok := info[key]
 	if !ok {
 		return 0, false, nil
 	}

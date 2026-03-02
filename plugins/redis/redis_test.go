@@ -406,7 +406,7 @@ func TestGatherSuccess(t *testing.T) {
 		connectedSlaves:  2,
 		connectedClients: 120,
 		blockedClients:   3,
-		rejectedConn:     12,
+		rejectedConn:     22,
 		evictedKeys:      107,
 		expiredKeys:      202,
 		opsPerSecond:     5000,
@@ -640,5 +640,258 @@ func TestInitTLSConfig(t *testing.T) {
 	}
 	if _, ok := any(ins.tlsConfig).(*tls.Config); !ok {
 		t.Fatal("expected stdlib tls.Config")
+	}
+}
+
+func TestNormalizeTarget(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   string
+		want    string
+		wantErr string
+	}{
+		{name: "host only", input: "redis.local", want: "redis.local:6379"},
+		{name: "host:port", input: "redis.local:6380", want: "redis.local:6380"},
+		{name: "ip only", input: "10.0.0.1", want: "10.0.0.1:6379"},
+		{name: "ip:port", input: "10.0.0.1:6380", want: "10.0.0.1:6380"},
+		{name: "localhost", input: "localhost", want: "localhost:6379"},
+		{name: "ipv6 bracket", input: "[::1]:6379", want: "[::1]:6379"},
+		{name: "empty host with port", input: ":6379", want: "localhost:6379"},
+		{name: "empty", input: "", wantErr: "must not be empty"},
+		{name: "whitespace only", input: "   ", wantErr: "must not be empty"},
+		{name: "ipv6 no bracket", input: "::1", wantErr: "failed to parse redis target"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := normalizeTarget(tt.input)
+			if tt.wantErr != "" {
+				if err == nil {
+					t.Fatalf("expected error containing %q, got nil", tt.wantErr)
+				}
+				if !strings.Contains(err.Error(), tt.wantErr) {
+					t.Fatalf("expected error containing %q, got %v", tt.wantErr, err)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if got != tt.want {
+				t.Fatalf("expected %q, got %q", tt.want, got)
+			}
+		})
+	}
+}
+
+func TestApplyPartials(t *testing.T) {
+	initTestConfig(t)
+
+	plugin := &RedisPlugin{
+		Partials: []Partial{
+			{
+				ID:          "base",
+				Concurrency: 5,
+				Timeout:     config.Duration(5 * time.Second),
+				ReadTimeout: config.Duration(3 * time.Second),
+				Password:    "shared-pass",
+				Connectivity: ConnectivityCheck{
+					Severity: types.EventStatusWarning,
+				},
+				ConnectedClients: CountCheck{
+					WarnGe:     100,
+					CriticalGe: 500,
+				},
+				UsedMemory: MemoryUsageCheck{
+					WarnGe:     config.Size(256 * 1024 * 1024),
+					CriticalGe: config.Size(1024 * 1024 * 1024),
+				},
+				Role: RoleCheck{
+					Expect:   "master",
+					Severity: types.EventStatusWarning,
+				},
+			},
+		},
+		Instances: []*Instance{
+			{
+				Partial: "base",
+				Targets: []string{"redis.local:6379"},
+				ConnectedClients: CountCheck{
+					WarnGe: 200,
+				},
+			},
+			{
+				Partial:  "base",
+				Targets:  []string{"redis2.local:6379"},
+				Password: "override-pass",
+			},
+			{
+				Targets: []string{"redis3.local:6379"},
+			},
+		},
+	}
+
+	if err := plugin.ApplyPartials(); err != nil {
+		t.Fatal(err)
+	}
+
+	ins0 := plugin.Instances[0]
+	if ins0.Concurrency != 5 {
+		t.Fatalf("ins0 concurrency: expected 5, got %d", ins0.Concurrency)
+	}
+	if ins0.Password != "shared-pass" {
+		t.Fatalf("ins0 password: expected shared-pass, got %s", ins0.Password)
+	}
+	if ins0.ConnectedClients.WarnGe != 200 {
+		t.Fatalf("ins0 connected_clients.warn_ge: expected 200 (not overwritten), got %d", ins0.ConnectedClients.WarnGe)
+	}
+	if ins0.ConnectedClients.CriticalGe != 500 {
+		t.Fatalf("ins0 connected_clients.critical_ge: expected 500 (from partial), got %d", ins0.ConnectedClients.CriticalGe)
+	}
+	if ins0.Role.Expect != "master" {
+		t.Fatalf("ins0 role.expect: expected master, got %s", ins0.Role.Expect)
+	}
+	if ins0.Connectivity.Severity != types.EventStatusWarning {
+		t.Fatalf("ins0 connectivity.severity: expected Warning, got %s", ins0.Connectivity.Severity)
+	}
+
+	ins1 := plugin.Instances[1]
+	if ins1.Password != "override-pass" {
+		t.Fatalf("ins1 password: expected override-pass (not overwritten), got %s", ins1.Password)
+	}
+	if ins1.Concurrency != 5 {
+		t.Fatalf("ins1 concurrency: expected 5, got %d", ins1.Concurrency)
+	}
+
+	ins2 := plugin.Instances[2]
+	if ins2.Concurrency != 0 {
+		t.Fatalf("ins2 concurrency: expected 0 (no partial), got %d", ins2.Concurrency)
+	}
+	if ins2.Password != "" {
+		t.Fatalf("ins2 password: expected empty (no partial), got %s", ins2.Password)
+	}
+}
+
+func TestParseInfoToMap(t *testing.T) {
+	raw := "# Server\r\nredis_version:7.0.0\r\nuptime_in_seconds:12345\r\n\r\n# Clients\r\nconnected_clients:42\r\n"
+	m := parseInfoToMap(raw)
+
+	if v, ok := m["redis_version"]; !ok || v != "7.0.0" {
+		t.Fatalf("expected redis_version=7.0.0, got %q ok=%v", v, ok)
+	}
+	if v, ok := m["uptime_in_seconds"]; !ok || v != "12345" {
+		t.Fatalf("expected uptime_in_seconds=12345, got %q ok=%v", v, ok)
+	}
+	if v, ok := m["connected_clients"]; !ok || v != "42" {
+		t.Fatalf("expected connected_clients=42, got %q ok=%v", v, ok)
+	}
+	if _, ok := m["# Server"]; ok {
+		t.Fatal("comment lines should not be in map")
+	}
+}
+
+func TestGatherRejectedConnectionsDelta(t *testing.T) {
+	initTestConfig(t)
+
+	srv := startFakeRedisServer(t, fakeRedisConfig{
+		role:         "master",
+		rejectedConn: 100,
+	})
+	defer srv.Close()
+
+	ins := &Instance{
+		Targets: []string{"redis.local:6379"},
+		RejectedConn: CountCheck{
+			WarnGe:     5,
+			CriticalGe: 20,
+		},
+		dialFunc: srv.Dial,
+	}
+	if err := ins.Init(); err != nil {
+		t.Fatal(err)
+	}
+
+	q := safe.NewQueue[*types.Event]()
+	ins.Gather(q)
+	events := q.PopBackAll()
+	byCheck := collectByCheck(events)
+	if byCheck["redis::rejected_connections"].EventStatus != types.EventStatusOk {
+		t.Fatalf("rejected_connections baseline: expected Ok, got %s", byCheck["redis::rejected_connections"].EventStatus)
+	}
+
+	srv.SetConfig(fakeRedisConfig{
+		role:         "master",
+		rejectedConn: 110,
+	})
+	q = safe.NewQueue[*types.Event]()
+	ins.Gather(q)
+	events = q.PopBackAll()
+	byCheck = collectByCheck(events)
+	if byCheck["redis::rejected_connections"].EventStatus != types.EventStatusWarning {
+		t.Fatalf("rejected_connections delta 10: expected Warning, got %s", byCheck["redis::rejected_connections"].EventStatus)
+	}
+
+	srv.SetConfig(fakeRedisConfig{
+		role:         "master",
+		rejectedConn: 135,
+	})
+	q = safe.NewQueue[*types.Event]()
+	ins.Gather(q)
+	events = q.PopBackAll()
+	byCheck = collectByCheck(events)
+	if byCheck["redis::rejected_connections"].EventStatus != types.EventStatusCritical {
+		t.Fatalf("rejected_connections delta 25: expected Critical, got %s", byCheck["redis::rejected_connections"].EventStatus)
+	}
+}
+
+func TestGatherClientsErrorDoesNotBlockOtherChecks(t *testing.T) {
+	initTestConfig(t)
+
+	srv := startFakeRedisServer(t, fakeRedisConfig{
+		role:          "master",
+		loading:       0,
+		rdbLastBgsave: "ok",
+		aofEnabled:    0,
+		usedMemory:    100 * 1024 * 1024,
+		maxMemory:     512 * 1024 * 1024,
+	})
+	defer srv.Close()
+
+	ins := &Instance{
+		Targets: []string{"redis.local:6379"},
+		ConnectedClients: CountCheck{
+			WarnGe:     100,
+			CriticalGe: 200,
+		},
+		UsedMemory: MemoryUsageCheck{
+			WarnGe:     config.Size(512 * 1024 * 1024),
+			CriticalGe: config.Size(1024 * 1024 * 1024),
+		},
+		Persistence: PersistenceCheck{
+			Enabled:  true,
+			Severity: types.EventStatusCritical,
+		},
+		dialFunc: srv.Dial,
+	}
+	if err := ins.Init(); err != nil {
+		t.Fatal(err)
+	}
+
+	q := safe.NewQueue[*types.Event]()
+	ins.Gather(q)
+	events := q.PopBackAll()
+
+	byCheck := collectByCheck(events)
+	if _, ok := byCheck["redis::connectivity"]; !ok {
+		t.Fatal("expected connectivity event")
+	}
+	if _, ok := byCheck["redis::connected_clients"]; !ok {
+		t.Fatal("expected connected_clients event even if clients info may fail")
+	}
+	if _, ok := byCheck["redis::used_memory"]; !ok {
+		t.Fatal("expected used_memory event (should not be blocked by clients check)")
+	}
+	if _, ok := byCheck["redis::persistence"]; !ok {
+		t.Fatal("expected persistence event (should not be blocked by clients check)")
 	}
 }

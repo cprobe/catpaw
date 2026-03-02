@@ -130,7 +130,7 @@ type Instance struct {
 
 ### 增量计数器检查规则
 
-- `evicted_keys` 和 `expired_keys` 使用两个采集周期之间的 delta，不直接使用 Redis 启动以来累计值
+- `evicted_keys`、`expired_keys` 和 `rejected_connections` 使用两个采集周期之间的 delta，不直接使用 Redis 启动以来累计值
 - 首次采集只建立 baseline，产出 Ok 事件，delta=0
 - 如果计数器回绕或 Redis 重启导致值变小，本周期按 delta=0 处理
 
