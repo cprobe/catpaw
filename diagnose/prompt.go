@@ -115,7 +115,11 @@ catpaw 监控系统检测到以下告警：
 - 不要输出原始数据的完整内容，只引用关键数值
 {{- end}}
 
-请只使用工具获取信息，不要假设或编造数据。`
+请只使用工具获取信息，不要假设或编造数据。
+{{- if ne .Language "zh"}}
+
+IMPORTANT: You MUST respond in {{.Language}}. All output including section headers, analysis, and recommendations must be in {{.Language}}.
+{{- end}}`
 
 type promptData struct {
 	Mode           string
@@ -125,17 +129,18 @@ type promptData struct {
 	DirectTools    string
 	IsRemoteTarget bool
 	LocalHost      string
+	Language       string
 }
 
-func buildSystemPrompt(req *DiagnoseRequest, directTools string, localHost string, isRemote bool) string {
-	return renderPrompt(ModeAlert, req, directTools, localHost, isRemote)
+func buildSystemPrompt(req *DiagnoseRequest, directTools string, localHost string, isRemote bool, language string) string {
+	return renderPrompt(ModeAlert, req, directTools, localHost, isRemote, language)
 }
 
-func buildInspectPrompt(req *DiagnoseRequest, directTools string, localHost string, isRemote bool) string {
-	return renderPrompt(ModeInspect, req, directTools, localHost, isRemote)
+func buildInspectPrompt(req *DiagnoseRequest, directTools string, localHost string, isRemote bool, language string) string {
+	return renderPrompt(ModeInspect, req, directTools, localHost, isRemote, language)
 }
 
-func renderPrompt(mode string, req *DiagnoseRequest, directTools string, localHost string, isRemote bool) string {
+func renderPrompt(mode string, req *DiagnoseRequest, directTools string, localHost string, isRemote bool, language string) string {
 	data := promptData{
 		Mode:           mode,
 		Plugin:         req.Plugin,
@@ -144,6 +149,7 @@ func renderPrompt(mode string, req *DiagnoseRequest, directTools string, localHo
 		DirectTools:    directTools,
 		IsRemoteTarget: isRemote,
 		LocalHost:      localHost,
+		Language:       language,
 	}
 
 	var buf bytes.Buffer

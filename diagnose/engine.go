@@ -178,9 +178,9 @@ func (e *DiagnoseEngine) diagnose(ctx context.Context, req *DiagnoseRequest) (st
 	isRemote := isRemoteTarget(req.Target)
 	var prompt string
 	if req.Mode == ModeInspect {
-		prompt = buildInspectPrompt(req, formatDirectTools(directTools), hostname, isRemote)
+		prompt = buildInspectPrompt(req, formatDirectTools(directTools), hostname, isRemote, e.cfg.Language)
 	} else {
-		prompt = buildSystemPrompt(req, formatDirectTools(directTools), hostname, isRemote)
+		prompt = buildSystemPrompt(req, formatDirectTools(directTools), hostname, isRemote, e.cfg.Language)
 	}
 
 	messages := []aiclient.Message{

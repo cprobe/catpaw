@@ -36,10 +36,10 @@ type Flashduty struct {
 }
 
 type AIConfig struct {
-	Enabled  bool   `toml:"enabled"`
-	BaseURL  string `toml:"base_url"`
-	APIKey   string `toml:"api_key"`
-	Model    string `toml:"model"`
+	Enabled bool   `toml:"enabled"`
+	BaseURL string `toml:"base_url"`
+	APIKey  string `toml:"api_key"`
+	Model   string `toml:"model"`
 
 	MaxTokens      int      `toml:"max_tokens"`
 	MaxRounds      int      `toml:"max_rounds"`
@@ -57,6 +57,8 @@ type AIConfig struct {
 
 	DiagnoseRetention Duration `toml:"diagnose_retention"`
 	DiagnoseMaxCount  int      `toml:"diagnose_max_count"`
+
+	Language string `toml:"language"` // output language: "zh", "en", etc. Default: "zh"
 }
 
 type ConfigType struct {
@@ -241,6 +243,9 @@ func (c *AIConfig) applyDefaults() {
 	}
 	if c.DiagnoseMaxCount <= 0 {
 		c.DiagnoseMaxCount = 1000
+	}
+	if c.Language == "" {
+		c.Language = "zh"
 	}
 }
 
