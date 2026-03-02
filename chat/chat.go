@@ -207,7 +207,9 @@ func runConversationTurn(
 	const maxRounds = 20
 
 	for round := 0; round < maxRounds; round++ {
+		sp := startSpinner("thinking...")
 		resp, err := aiclient.ChatWithRetry(ctx, client, retryCfg, messages, aiTools)
+		sp.stop()
 		if err != nil {
 			return "", messages, fmt.Errorf("AI API call failed: %w", err)
 		}
@@ -235,12 +237,24 @@ func runConversationTurn(
 		})
 
 		for _, tc := range toolCalls {
-			result := executeChatTool(ctx, registry, tc.Function.Name, tc.Function.Arguments, toolTimeout, rl)
-			messages = append(messages, aiclient.Message{
-				Role:       "tool",
-				ToolCallID: tc.ID,
-				Content:    result,
-			})
+			name := tc.Function.Name
+			if name == "exec_shell" {
+				result := executeChatTool(ctx, registry, name, tc.Function.Arguments, toolTimeout, rl)
+				messages = append(messages, aiclient.Message{
+					Role:       "tool",
+					ToolCallID: tc.ID,
+					Content:    result,
+				})
+			} else {
+				sp = startSpinner(fmt.Sprintf("calling %s...", name))
+				result := executeChatTool(ctx, registry, name, tc.Function.Arguments, toolTimeout, rl)
+				sp.stop()
+				messages = append(messages, aiclient.Message{
+					Role:       "tool",
+					ToolCallID: tc.ID,
+					Content:    result,
+				})
+			}
 		}
 	}
 
