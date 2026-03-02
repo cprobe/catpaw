@@ -5,11 +5,11 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/BurntSushi/toml"
 	"github.com/cprobe/catpaw/config"
 	"github.com/cprobe/catpaw/logger"
 	"github.com/cprobe/catpaw/pkg/choice"
 	"github.com/cprobe/catpaw/plugins"
-	"github.com/BurntSushi/toml"
 	"github.com/toolkits/pkg/file"
 
 	// auto registry
@@ -28,12 +28,13 @@ import (
 	_ "github.com/cprobe/catpaw/plugins/mem"
 	_ "github.com/cprobe/catpaw/plugins/mount"
 	_ "github.com/cprobe/catpaw/plugins/neigh"
-	_ "github.com/cprobe/catpaw/plugins/netif"
 	_ "github.com/cprobe/catpaw/plugins/net"
+	_ "github.com/cprobe/catpaw/plugins/netif"
 	_ "github.com/cprobe/catpaw/plugins/ntp"
 	_ "github.com/cprobe/catpaw/plugins/ping"
 	_ "github.com/cprobe/catpaw/plugins/procfd"
 	_ "github.com/cprobe/catpaw/plugins/procnum"
+	_ "github.com/cprobe/catpaw/plugins/redis"
 	_ "github.com/cprobe/catpaw/plugins/scriptfilter"
 	_ "github.com/cprobe/catpaw/plugins/secmod"
 	_ "github.com/cprobe/catpaw/plugins/sockstat"
