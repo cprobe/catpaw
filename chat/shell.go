@@ -1,7 +1,6 @@
 package chat
 
 import (
-	"bufio"
 	"bytes"
 	"context"
 	"fmt"
@@ -9,12 +8,13 @@ import (
 	"strings"
 	"time"
 
+	"github.com/chzyer/readline"
 	"github.com/cprobe/catpaw/pkg/cmdx"
 )
 
 const (
-	maxShellOutputBytes   = 4 * 1024       // 4KB sent to AI
-	maxShellCaptureBytes  = 256 * 1024     // 256KB captured from process
+	maxShellOutputBytes  = 4 * 1024   // 4KB sent to AI
+	maxShellCaptureBytes = 256 * 1024 // 256KB captured from process
 )
 
 // cappedWriter drops writes after the internal buffer reaches its cap.
@@ -40,21 +40,26 @@ func (w *cappedWriter) String() string { return w.buf.String() }
 
 // execShellInteractive prompts the user for confirmation, then executes
 // the command via /bin/sh -c. Returns the output or a rejection message.
-// The reader must be the same buffered reader used by the REPL loop to
-// avoid data loss from competing buffered readers on stdin.
-func execShellInteractive(ctx context.Context, reader *bufio.Reader, command string, timeout time.Duration) (string, error) {
-	fmt.Printf("\n\033[33m! AI requests command:\033[0m %s\n", command)
-	fmt.Print("\033[33mConfirm? [y/n/e(edit)]:\033[0m ")
+func execShellInteractive(ctx context.Context, rl *readline.Instance, command string, timeout time.Duration) (string, error) {
+	defer rl.SetPrompt(chatPrompt)
 
-	line, _ := reader.ReadString('\n')
+	fmt.Printf("\n\033[33m! AI requests command:\033[0m %s\n", command)
+	rl.SetPrompt("\033[33mConfirm? [y/n/e(edit)]:\033[0m ")
+	line, err := rl.Readline()
+	if err != nil {
+		return "user rejected command execution", nil
+	}
 	answer := strings.TrimSpace(strings.ToLower(line))
 
 	switch answer {
 	case "y", "yes":
 		// proceed
 	case "e", "edit":
-		fmt.Print("\033[33mEnter modified command:\033[0m ")
-		edited, _ := reader.ReadString('\n')
+		rl.SetPrompt("\033[33mEnter modified command:\033[0m ")
+		edited, err := rl.Readline()
+		if err != nil {
+			return "user cancelled command execution", nil
+		}
 		command = strings.TrimSpace(edited)
 		if command == "" {
 			return "user cancelled command execution", nil

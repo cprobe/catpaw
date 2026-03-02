@@ -1,7 +1,6 @@
 package chat
 
 import (
-	"bufio"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -11,13 +10,17 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/chzyer/readline"
 	"github.com/cprobe/catpaw/config"
 	"github.com/cprobe/catpaw/diagnose"
 	"github.com/cprobe/catpaw/diagnose/aiclient"
 	"github.com/cprobe/catpaw/plugins"
 )
 
-const maxHistoryMessages = 40
+const (
+	maxHistoryMessages = 40
+	chatPrompt         = "\033[32m> \033[0m"
+)
 
 // Run starts the interactive chat REPL.
 func Run() error {
@@ -55,6 +58,15 @@ func Run() error {
 		{Role: "system", Content: systemPrompt},
 	}
 
+	rl, err := readline.NewEx(&readline.Config{
+		Prompt:          chatPrompt,
+		InterruptPrompt: "^C",
+	})
+	if err != nil {
+		return fmt.Errorf("init readline: %w", err)
+	}
+	defer rl.Close()
+
 	fmt.Println("catpaw chat - type your question to start, type exit or Ctrl+C to quit")
 	fmt.Println()
 
@@ -62,7 +74,7 @@ func Run() error {
 	defer cancel()
 
 	sigCh := make(chan os.Signal, 1)
-	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+	signal.Notify(sigCh, syscall.SIGTERM)
 	done := make(chan struct{})
 	defer close(done)
 	go func() {
@@ -70,6 +82,7 @@ func Run() error {
 		case <-sigCh:
 			fmt.Println("\nbye!")
 			cancel()
+			rl.Close()
 			os.Exit(0)
 		case <-done:
 			return
@@ -77,16 +90,22 @@ func Run() error {
 	}()
 	defer signal.Stop(sigCh)
 
-	reader := bufio.NewReaderSize(os.Stdin, 256*1024)
-
 	for {
-		fmt.Print("\033[32m> \033[0m")
-		line, readErr := reader.ReadString('\n')
-		input := strings.TrimSpace(line)
-		if input == "" {
-			if readErr != nil {
+		line, readErr := rl.Readline()
+		if readErr == readline.ErrInterrupt {
+			if line == "" {
+				fmt.Println("bye!")
 				break
 			}
+			continue
+		}
+		if readErr != nil {
+			fmt.Println("bye!")
+			break
+		}
+
+		input := strings.TrimSpace(line)
+		if input == "" {
 			continue
 		}
 		if input == "exit" || input == "quit" {
@@ -104,24 +123,16 @@ func Run() error {
 		snapshot := len(messages)
 
 		var reply string
-		var err error
-		reply, messages, err = runConversationTurn(ctx, client, retryCfg, registry, aiTools, messages, toolTimeout, reader)
+		reply, messages, err = runConversationTurn(ctx, client, retryCfg, registry, aiTools, messages, toolTimeout, rl)
 		if err != nil {
 			fmt.Printf("\033[31merror: %v\033[0m\n\n", err)
 			messages = messages[:snapshot-1]
-			if readErr != nil {
-				break
-			}
 			continue
 		}
 
 		fmt.Println()
 		fmt.Println(reply)
 		fmt.Println()
-
-		if readErr != nil {
-			break
-		}
 	}
 	return nil
 }
@@ -183,8 +194,6 @@ func buildChatToolSet() []aiclient.Tool {
 
 // runConversationTurn handles one user message and all subsequent tool-calling
 // rounds until the AI produces a final text response.
-// It returns the AI's reply, the updated messages slice (including all
-// intermediate tool-call messages), and any error.
 func runConversationTurn(
 	ctx context.Context,
 	client *aiclient.Client,
@@ -193,7 +202,7 @@ func runConversationTurn(
 	aiTools []aiclient.Tool,
 	messages []aiclient.Message,
 	toolTimeout time.Duration,
-	reader *bufio.Reader,
+	rl *readline.Instance,
 ) (string, []aiclient.Message, error) {
 	const maxRounds = 20
 
@@ -226,7 +235,7 @@ func runConversationTurn(
 		})
 
 		for _, tc := range toolCalls {
-			result := executeChatTool(ctx, registry, tc.Function.Name, tc.Function.Arguments, toolTimeout, reader)
+			result := executeChatTool(ctx, registry, tc.Function.Name, tc.Function.Arguments, toolTimeout, rl)
 			messages = append(messages, aiclient.Message{
 				Role:       "tool",
 				ToolCallID: tc.ID,
@@ -238,7 +247,7 @@ func runConversationTurn(
 	return "[incomplete] max tool-calling rounds reached", messages, nil
 }
 
-func executeChatTool(ctx context.Context, registry *diagnose.ToolRegistry, name, rawArgs string, toolTimeout time.Duration, reader *bufio.Reader) string {
+func executeChatTool(ctx context.Context, registry *diagnose.ToolRegistry, name, rawArgs string, toolTimeout time.Duration, rl *readline.Instance) string {
 	args := parseArgs(rawArgs)
 
 	switch name {
@@ -275,7 +284,7 @@ func executeChatTool(ctx context.Context, registry *diagnose.ToolRegistry, name,
 		if command == "" {
 			return "error: exec_shell requires 'command' parameter"
 		}
-		result, err := execShellInteractive(ctx, reader, command, toolTimeout)
+		result, err := execShellInteractive(ctx, rl, command, toolTimeout)
 		if err != nil {
 			return "error: " + err.Error()
 		}
