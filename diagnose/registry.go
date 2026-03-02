@@ -161,3 +161,11 @@ func (r *ToolRegistry) ToolCount() int {
 	defer r.mu.RUnlock()
 	return len(r.toolIndex)
 }
+
+// HasAccessorFactory reports whether a plugin has a registered accessor factory.
+func (r *ToolRegistry) HasAccessorFactory(plugin string) bool {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	_, ok := r.accessorFactory[plugin]
+	return ok
+}

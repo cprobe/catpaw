@@ -12,7 +12,10 @@ func TestRegisterDiagnoseTools(t *testing.T) {
 	p := &RedisPlugin{}
 	p.RegisterDiagnoseTools(registry)
 
-	expectedTools := []string{"redis_info", "redis_slowlog", "redis_client_list", "redis_config_get", "redis_dbsize"}
+	expectedTools := []string{
+		"redis_info", "redis_slowlog", "redis_client_list", "redis_config_get",
+		"redis_dbsize", "redis_latency", "redis_memory_doctor", "redis_memory_stats",
+	}
 	for _, name := range expectedTools {
 		tool, ok := registry.Get(name)
 		if !ok {
@@ -26,8 +29,8 @@ func TestRegisterDiagnoseTools(t *testing.T) {
 		}
 	}
 
-	if registry.ToolCount() != 5 {
-		t.Fatalf("expected 5 tools, got %d", registry.ToolCount())
+	if registry.ToolCount() != len(expectedTools) {
+		t.Fatalf("expected %d tools, got %d", len(expectedTools), registry.ToolCount())
 	}
 
 	cats := registry.Categories()

@@ -3,6 +3,8 @@ package redis
 import (
 	"context"
 	"fmt"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/cprobe/catpaw/diagnose"
@@ -14,7 +16,7 @@ var _ plugins.Diagnosable = (*RedisPlugin)(nil)
 // RegisterDiagnoseTools implements plugins.Diagnosable for RedisPlugin.
 // It registers read-only diagnostic tools and the accessor factory.
 func (p *RedisPlugin) RegisterDiagnoseTools(registry *diagnose.ToolRegistry) {
-	registry.RegisterCategory("redis", "redis", "Redis diagnostic tools (INFO, SLOWLOG, CLIENT LIST, CONFIG GET, DBSIZE)", diagnose.ToolScopeRemote)
+	registry.RegisterCategory("redis", "redis", "Redis diagnostic tools (INFO, SLOWLOG, CLIENT LIST, CONFIG GET, DBSIZE, LATENCY, MEMORY DOCTOR/STATS)", diagnose.ToolScopeRemote)
 
 	registry.Register("redis", diagnose.DiagnoseTool{
 		Name:        "redis_info",
@@ -66,13 +68,24 @@ func (p *RedisPlugin) RegisterDiagnoseTools(registry *diagnose.ToolRegistry) {
 
 	registry.Register("redis", diagnose.DiagnoseTool{
 		Name:        "redis_client_list",
-		Description: "List all connected Redis clients (CLIENT LIST)",
+		Description: "List connected Redis clients (CLIENT LIST). When client count exceeds 5000, returns a summary instead of full list to avoid blocking Redis.",
 		Scope:       diagnose.ToolScopeRemote,
 		RemoteExecute: func(ctx context.Context, session *diagnose.DiagnoseSession, args map[string]string) (string, error) {
 			acc, err := getAccessor(session)
 			if err != nil {
 				return "", err
 			}
+
+			const safeThreshold = 5000
+			info, infoErr := acc.Info("clients")
+			if infoErr == nil {
+				if countStr, ok := info["connected_clients"]; ok {
+					if count, parseErr := strconv.Atoi(countStr); parseErr == nil && count > safeThreshold {
+						return clientSummaryFromInfo(acc, count)
+					}
+				}
+			}
+
 			result, clErr := acc.ClientList()
 			if clErr != nil {
 				return "", fmt.Errorf("redis CLIENT LIST: %w", clErr)
@@ -119,6 +132,60 @@ func (p *RedisPlugin) RegisterDiagnoseTools(registry *diagnose.ToolRegistry) {
 		},
 	})
 
+	registry.Register("redis", diagnose.DiagnoseTool{
+		Name:        "redis_latency",
+		Description: "Show latest latency events by event type (LATENCY LATEST). Requires latency-monitor-threshold to be set (e.g. CONFIG SET latency-monitor-threshold 100). Returns event name, timestamp, latest latency ms, max latency ms.",
+		Scope:       diagnose.ToolScopeRemote,
+		RemoteExecute: func(ctx context.Context, session *diagnose.DiagnoseSession, args map[string]string) (string, error) {
+			acc, err := getAccessor(session)
+			if err != nil {
+				return "", err
+			}
+			result, latErr := acc.Command("LATENCY", "LATEST")
+			if latErr != nil {
+				return "", fmt.Errorf("redis LATENCY LATEST: %w", latErr)
+			}
+			if result == "" || result == "(nil)" {
+				return "No latency events recorded. Note: latency-monitor-threshold may be 0 (disabled). Use redis_config_get with pattern 'latency-monitor-threshold' to check.", nil
+			}
+			return result, nil
+		},
+	})
+
+	registry.Register("redis", diagnose.DiagnoseTool{
+		Name:        "redis_memory_doctor",
+		Description: "Run Redis built-in memory health check (MEMORY DOCTOR). Returns diagnostic advice about memory issues: fragmentation, peak usage, RSS overhead, etc.",
+		Scope:       diagnose.ToolScopeRemote,
+		RemoteExecute: func(ctx context.Context, session *diagnose.DiagnoseSession, args map[string]string) (string, error) {
+			acc, err := getAccessor(session)
+			if err != nil {
+				return "", err
+			}
+			result, memErr := acc.Command("MEMORY", "DOCTOR")
+			if memErr != nil {
+				return "", fmt.Errorf("redis MEMORY DOCTOR: %w", memErr)
+			}
+			return result, nil
+		},
+	})
+
+	registry.Register("redis", diagnose.DiagnoseTool{
+		Name:        "redis_memory_stats",
+		Description: "Show detailed memory breakdown (MEMORY STATS): dataset size, overhead, fragmentation ratio, allocator stats, replication/AOF buffers. More granular than INFO memory.",
+		Scope:       diagnose.ToolScopeRemote,
+		RemoteExecute: func(ctx context.Context, session *diagnose.DiagnoseSession, args map[string]string) (string, error) {
+			acc, err := getAccessor(session)
+			if err != nil {
+				return "", err
+			}
+			result, memErr := acc.Command("MEMORY", "STATS")
+			if memErr != nil {
+				return "", fmt.Errorf("redis MEMORY STATS: %w", memErr)
+			}
+			return result, nil
+		},
+	})
+
 	registry.RegisterAccessorFactory("redis", func(ctx context.Context, instanceRef any) (any, error) {
 		ins, ok := instanceRef.(*Instance)
 		if !ok {
@@ -146,4 +213,31 @@ func getAccessor(session *diagnose.DiagnoseSession) (*RedisAccessor, error) {
 		return nil, fmt.Errorf("session accessor is %T, expected *RedisAccessor", session.Accessor)
 	}
 	return acc, nil
+}
+
+func clientSummaryFromInfo(acc *RedisAccessor, clientCount int) (string, error) {
+	info, err := acc.Info("clients")
+	if err != nil {
+		return "", fmt.Errorf("INFO clients: %w", err)
+	}
+
+	var b strings.Builder
+	fmt.Fprintf(&b, "⚠ CLIENT LIST skipped: %d connected clients exceeds safe threshold (5000).\n", clientCount)
+	fmt.Fprintf(&b, "Running CLIENT LIST with this many clients would block Redis for ~%dms.\n\n", clientCount/500)
+	fmt.Fprintf(&b, "Client summary from INFO clients:\n")
+
+	keys := []string{
+		"connected_clients", "cluster_connections", "maxclients",
+		"client_recent_max_input_buffer", "client_recent_max_output_buffer",
+		"blocked_clients", "tracking_clients", "clients_in_timeout_table",
+		"total_blocking_clients",
+	}
+	for _, k := range keys {
+		if v, ok := info[k]; ok {
+			fmt.Fprintf(&b, "  %-40s %s\n", k, v)
+		}
+	}
+
+	fmt.Fprintf(&b, "\nTip: Use redis_info with section=clients for full client statistics.\n")
+	return b.String(), nil
 }

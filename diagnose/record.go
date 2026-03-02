@@ -13,8 +13,14 @@ import (
 // NewDiagnoseRecord creates a DiagnoseRecord from a DiagnoseRequest,
 // pre-populating the alert context and timestamp.
 func NewDiagnoseRecord(req *DiagnoseRequest) *DiagnoseRecord {
+	mode := req.Mode
+	if mode == "" {
+		mode = ModeAlert
+	}
+	prefix := mode
 	return &DiagnoseRecord{
-		ID:        fmt.Sprintf("%s_%s_%d", req.Plugin, sanitizeTarget(req.Target), time.Now().UnixMilli()),
+		ID:        fmt.Sprintf("%s_%s_%s_%d", prefix, req.Plugin, sanitizeTarget(req.Target), time.Now().UnixMilli()),
+		Mode:      mode,
 		Status:    "running",
 		CreatedAt: time.Now(),
 		Alert: AlertRecord{

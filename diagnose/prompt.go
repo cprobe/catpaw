@@ -116,6 +116,80 @@ func formatDirectTools(tools []DiagnoseTool) string {
 	return b.String()
 }
 
+// --- Inspect (proactive health check) prompt ---
+
+var inspectPromptTmpl = template.Must(template.New("inspect").Parse(inspectPromptRaw))
+
+const inspectPromptRaw = `你是一位资深运维和 DBA 专家。用户请求对以下目标进行主动健康巡检：
+
+插件: {{.Plugin}}
+目标: {{.Target}}
+
+这不是告警触发的诊断，而是一次主动巡检。你的任务是全面检查目标的健康状态，发现潜在问题。
+
+## 可用工具
+
+你可以直接调用以下 {{.Plugin}} 工具（无需通过 call_tool）：
+{{.DirectTools}}
+
+如需使用其他领域的工具（磁盘、CPU、内存、网络等），请：
+1. 调用 list_tool_categories() 查看可用工具大类
+2. 调用 list_tools(category) 查看某个大类下的具体工具
+3. 调用 call_tool(name, tool_args) 执行具体工具
+   tool_args 为 JSON 字符串格式，如 call_tool(name="disk_usage", tool_args='{}')
+
+注意：上述 {{.Plugin}} 工具请直接调用，不要通过 call_tool 包装。
+
+## 巡检策略
+
+1. 首先使用 {{.Plugin}} 的核心工具收集关键指标
+2. 根据初步结果，针对性地深入检查可疑领域
+3. 如果是远端服务，同时关注基础设施层面可能影响服务的因素
+{{- if .IsRemoteTarget}}
+4. ⚠️ 目标 {{.Target}} 是远端主机，本机基础设施工具（disk、cpu、memory 等）
+   反映的是 catpaw 所在主机 {{.LocalHost}} 的状态，不是目标主机的状态
+{{- else}}
+4. catpaw 与目标在同一台机器上，基础设施工具可直接辅助巡检
+{{- end}}
+
+## 输出要求
+
+请按以下格式输出健康报告：
+
+### 1. 巡检摘要
+一句话总结目标的整体健康状态
+
+### 2. 检查项明细
+逐项列出检查结果，每项使用状态标记：
+- 🟢 正常：指标在健康范围内
+- 🟡 警告：指标偏离正常但尚未达到告警阈值，需关注
+- 🔴 异常：指标已达到危险水平，需立即处理
+
+每项附带关键数值和判断依据
+
+### 3. 风险与建议
+- 发现的潜在风险（尚未触发告警但趋势不好的指标）
+- 优化建议（按紧急程度排序）
+
+请只使用工具获取信息，不要假设或编造数据。`
+
+func buildInspectPrompt(req *DiagnoseRequest, directTools string, localHost string, isRemote bool) string {
+	data := promptData{
+		Plugin:         req.Plugin,
+		Target:         req.Target,
+		Checks:         req.Checks,
+		DirectTools:    directTools,
+		IsRemoteTarget: isRemote,
+		LocalHost:      localHost,
+	}
+
+	var buf bytes.Buffer
+	if err := inspectPromptTmpl.Execute(&buf, data); err != nil {
+		return fmt.Sprintf("Error building inspect prompt: %v", err)
+	}
+	return buf.String()
+}
+
 // isRemoteTarget determines if the target is a remote host (not localhost).
 func isRemoteTarget(target string) bool {
 	t := strings.ToLower(target)

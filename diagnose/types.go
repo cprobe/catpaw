@@ -67,9 +67,16 @@ type CheckSnapshot struct {
 	Description       string `json:"description"`
 }
 
+const (
+	ModeAlert   = "alert"
+	ModeInspect = "inspect"
+)
+
 // DiagnoseRequest is produced by the DiagnoseAggregator after collecting
 // alerts for the same target within the aggregation window.
+// For inspect mode, Events and Checks are nil.
 type DiagnoseRequest struct {
+	Mode        string // "alert" (default) or "inspect"
 	Events      []*types.Event
 	Plugin      string
 	Target      string
@@ -113,15 +120,16 @@ func (s *DiagnoseSession) Close() {
 // DiagnoseRecord stores the full trace of a single diagnosis run,
 // written as a JSON file under state.d/diagnoses/.
 type DiagnoseRecord struct {
-	ID         string       `json:"id"`
-	Status     string       `json:"status"` // success, failed, cancelled, timeout
-	Error      string       `json:"error,omitempty"`
-	CreatedAt  time.Time    `json:"created_at"`
-	DurationMs int64        `json:"duration_ms"`
-	Alert      AlertRecord  `json:"alert"`
-	AI         AIRecord     `json:"ai"`
+	ID         string        `json:"id"`
+	Mode       string        `json:"mode"` // "alert" or "inspect"
+	Status     string        `json:"status"` // success, failed, cancelled, timeout
+	Error      string        `json:"error,omitempty"`
+	CreatedAt  time.Time     `json:"created_at"`
+	DurationMs int64         `json:"duration_ms"`
+	Alert      AlertRecord   `json:"alert"`
+	AI         AIRecord      `json:"ai"`
 	Rounds     []RoundRecord `json:"rounds"`
-	Report     string       `json:"report,omitempty"`
+	Report     string        `json:"report,omitempty"`
 }
 
 // AlertRecord stores the alert context that triggered the diagnosis.

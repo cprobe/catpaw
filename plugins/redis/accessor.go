@@ -237,13 +237,38 @@ func (c *redisClient) command(args ...string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	switch v := reply.(type) {
+	return formatReply(reply), nil
+}
+
+func formatReply(v any) string {
+	switch val := v.(type) {
 	case string:
-		return v, nil
+		return val
 	case nil:
-		return "", nil
+		return "(nil)"
+	case []any:
+		var b strings.Builder
+		formatArray(&b, val, 0)
+		return b.String()
 	default:
-		return "", fmt.Errorf("unsupported redis reply type %T", reply)
+		return fmt.Sprintf("%v", val)
+	}
+}
+
+func formatArray(b *strings.Builder, arr []any, depth int) {
+	indent := strings.Repeat("  ", depth)
+	for i, elem := range arr {
+		switch v := elem.(type) {
+		case []any:
+			fmt.Fprintf(b, "%s%d)\n", indent, i+1)
+			formatArray(b, v, depth+1)
+		case string:
+			fmt.Fprintf(b, "%s%d) %s\n", indent, i+1, v)
+		case nil:
+			fmt.Fprintf(b, "%s%d) (nil)\n", indent, i+1)
+		default:
+			fmt.Fprintf(b, "%s%d) %v\n", indent, i+1, v)
+		}
 	}
 }
 
@@ -270,6 +295,10 @@ func (c *redisClient) readReply() (any, error) {
 	if err := c.conn.SetReadDeadline(time.Now().Add(c.readTimeout)); err != nil {
 		return nil, err
 	}
+	return c.readReplyValue()
+}
+
+func (c *redisClient) readReplyValue() (any, error) {
 	prefix, err := c.reader.ReadByte()
 	if err != nil {
 		return nil, err
@@ -317,6 +346,26 @@ func (c *redisClient) readReply() (any, error) {
 			return nil, err
 		}
 		return string(buf[:size]), nil
+	case '*':
+		line, err := c.readLine()
+		if err != nil {
+			return nil, err
+		}
+		count, err := strconv.Atoi(line)
+		if err != nil {
+			return nil, err
+		}
+		if count < 0 {
+			return nil, nil
+		}
+		elems := make([]any, count)
+		for i := 0; i < count; i++ {
+			elems[i], err = c.readReplyValue()
+			if err != nil {
+				return nil, err
+			}
+		}
+		return elems, nil
 	default:
 		return nil, fmt.Errorf("unsupported redis reply prefix %q", prefix)
 	}

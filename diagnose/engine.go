@@ -161,7 +161,9 @@ func (e *DiagnoseEngine) RunDiagnose(req *DiagnoseRequest) {
 	}
 
 	e.state.AddTokens(req.Session.Record.AI.InputTokens, req.Session.Record.AI.OutputTokens)
-	e.state.UpdateCooldown(req.Plugin, req.Target, req.Cooldown)
+	if req.Mode != ModeInspect {
+		e.state.UpdateCooldown(req.Plugin, req.Target, req.Cooldown)
+	}
 	e.state.Save()
 }
 
@@ -174,7 +176,12 @@ func (e *DiagnoseEngine) diagnose(ctx context.Context, req *DiagnoseRequest) (st
 
 	hostname, _ := os.Hostname()
 	isRemote := isRemoteTarget(req.Target)
-	prompt := buildSystemPrompt(req, formatDirectTools(directTools), hostname, isRemote)
+	var prompt string
+	if req.Mode == ModeInspect {
+		prompt = buildInspectPrompt(req, formatDirectTools(directTools), hostname, isRemote)
+	} else {
+		prompt = buildSystemPrompt(req, formatDirectTools(directTools), hostname, isRemote)
+	}
 
 	messages := []aiclient.Message{
 		{Role: "system", Content: prompt},
