@@ -15,7 +15,6 @@
 interval = "60s"
 warn_gt = 0
 critical_gt = 20
-# title_rule = "[TPL]${check} ${from_hostip} ${target}"
 
 [instances.alerting]
 for_duration = 0

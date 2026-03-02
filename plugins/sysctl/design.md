@@ -17,7 +17,6 @@
 | 参数基线比对 | `sysctl::param_check` | 逐个参数检查，不匹配的参数产出告警 |
 
 - **target label** 为被检查的参数 key（如 `"net.core.somaxconn"`）
-- **默认 title_rule** 为 `"[TPL]${check} ${from_hostip} ${target}"`
 - **每个参数独立产出事件**——参数之间互不干扰，一个参数读取失败不影响其他参数的检查（原则 13）
 
 ### 为什么每个参数独立一个事件
@@ -99,8 +98,7 @@ type ParamSpec struct {
 }
 
 type ParamCheck struct {
-    Params    []ParamSpec `toml:"params"`
-    TitleRule string      `toml:"title_rule"`
+    Params []ParamSpec `toml:"params"`
 }
 
 type Instance struct {
@@ -120,15 +118,15 @@ type SysctlPlugin struct {
 - `inFlight` — 同理，不涉及阻塞操作（原则 9：适用于可能 hang 的场景）
 - `Concurrency` — 参数数量有限（通常 < 50），串行遍历即可
 
-## _attr_ 标签
+## Attrs（SetAttrs 设置）
 
-| 标签 | 示例值 | 说明 |
+| 属性 | 示例值 | 说明 |
 | --- | --- | --- |
-| `_attr_actual` | `128` | 参数的实际值 |
-| `_attr_expect` | `65535` | 配置的期望值 |
-| `_attr_op` | `ge` | 比较操作 |
+| `actual` | `128` | 参数的实际值 |
+| `expect` | `65535` | 配置的期望值 |
+| `op` | `ge` | 比较操作 |
 
-Ok 事件也携带完整 `_attr_`，便于巡检确认参数值。
+Ok 事件也携带完整 attrs，便于巡检确认参数值。
 
 ## Init() 校验
 
@@ -303,7 +301,6 @@ conf.d/p.sysctl/
 interval = "60s"
 
 [instances.param_check]
-# title_rule = "[TPL]${check} ${from_hostip} ${target}"
 params = [
   { key = "net.core.somaxconn", expect = "65535", op = "ge" },
   { key = "vm.swappiness", expect = "10", op = "le" },

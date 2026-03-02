@@ -10,8 +10,8 @@ import (
 
 	"github.com/cprobe/catpaw/config"
 	"github.com/cprobe/catpaw/diagnose"
-	"github.com/cprobe/catpaw/flashduty"
 	"github.com/cprobe/catpaw/logger"
+	"github.com/cprobe/catpaw/notify"
 	"github.com/cprobe/catpaw/pkg/safe"
 	"github.com/cprobe/catpaw/plugins"
 	"github.com/cprobe/catpaw/types"
@@ -22,6 +22,8 @@ var (
 	cachedHostname string
 	hostnameExpiry time.Time
 	hostnameMu     sync.Mutex
+
+	diagnosedKeys sync.Map // AlertKey → struct{}: tracks alerts that already triggered a diagnosis
 )
 
 func getCachedHostname() (string, error) {
@@ -87,13 +89,19 @@ func mayTriggerDiagnose(event *types.Event, pluginName string, ins plugins.Insta
 	if agg == nil {
 		return
 	}
+	if _, already := diagnosedKeys.Load(event.AlertKey); already {
+		return
+	}
 	snapshot := diagnose.ExtractCheckSnapshot(event)
 	diagCfg := ins.GetDiagnoseConfig()
 	agg.Submit(event, snapshot, pluginName, ins, diagCfg)
+	diagnosedKeys.Store(event.AlertKey, struct{}{})
 }
 
 // 处理恢复事件
 func handleRecoveryEvent(ins plugins.Instance, event *types.Event) {
+	diagnosedKeys.Delete(event.AlertKey)
+
 	old := Events.Get(event.AlertKey)
 	if old == nil {
 		// 之前没有产生Event，当下的情况也是正常的，这是大多数场景，忽略即可，无需做任何处理
@@ -105,7 +113,7 @@ func handleRecoveryEvent(ins plugins.Instance, event *types.Event) {
 
 	// 不过，也得看具体 alerting 的配置，如果不需要发送恢复通知，则忽略
 	if !ins.GetAlerting().DisableRecoveryNotification && old.LastSent > 0 {
-		flashduty.Forward(event)
+		notify.Forward(event)
 	}
 }
 
@@ -122,7 +130,7 @@ func handleAlertEvent(ins plugins.Instance, event *types.Event) {
 
 		// 要不要发？分两种情况。ForDuration 是 0 则立马发，否则等待 ForDuration 时间后再发
 		if alerting.ForDuration == 0 {
-			if flashduty.Forward(event) {
+			if notify.Forward(event) {
 				event.LastSent = event.EventTime
 				event.NotifyCount++
 			}
@@ -152,7 +160,7 @@ func handleAlertEvent(ins plugins.Instance, event *types.Event) {
 	// 最后，可以发了
 	event.FirstFireTime = old.FirstFireTime
 	event.NotifyCount = old.NotifyCount + 1
-	if flashduty.Forward(event) {
+	if notify.Forward(event) {
 		event.LastSent = event.EventTime
 		Events.Set(event)
 	}
@@ -204,8 +212,7 @@ func clean(event *types.Event, now int64, pluginName string, pluginObj plugins.P
 		}
 	}
 
-	count := len(event.Labels)
-	keys := make([]string, 0, count)
+	keys := make([]string, 0, len(event.Labels))
 	for k := range event.Labels {
 		keys = append(keys, k)
 	}
@@ -214,9 +221,6 @@ func clean(event *types.Event, now int64, pluginName string, pluginObj plugins.P
 
 	var sb strings.Builder
 	for _, k := range keys {
-		if strings.HasPrefix(k, types.AttrPrefix) {
-			continue
-		}
 		sb.WriteString(k)
 		sb.WriteString(":")
 		sb.WriteString(event.Labels[k])

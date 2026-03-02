@@ -20,7 +20,6 @@ var fileNrPath = "/proc/sys/fs/file-nr"
 type FilefdUsageCheck struct {
 	WarnGe     float64 `toml:"warn_ge"`
 	CriticalGe float64 `toml:"critical_ge"`
-	TitleRule  string  `toml:"title_rule"`
 }
 
 type Instance struct {
@@ -72,18 +71,12 @@ func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
 		return
 	}
 
-	tr := ins.FilefdUsage.TitleRule
-	if tr == "" {
-		tr = "[TPL]${check} ${from_hostip}"
-	}
-
 	allocated, max, err := readFileNr()
 	if err != nil {
 		q.PushFront(types.BuildEvent(map[string]string{
 			"check":  "filefd::filefd_usage",
 			"target": "system",
-		}).SetTitleRule(tr).
-			SetEventStatus(types.EventStatusCritical).
+		}).SetEventStatus(types.EventStatusCritical).
 			SetDescription(fmt.Sprintf("failed to read file-nr: %v", err)))
 		return
 	}
@@ -92,8 +85,7 @@ func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
 		q.PushFront(types.BuildEvent(map[string]string{
 			"check":  "filefd::filefd_usage",
 			"target": "system",
-		}).SetTitleRule(tr).
-			SetEventStatus(types.EventStatusCritical).
+		}).SetEventStatus(types.EventStatusCritical).
 			SetDescription("file-max is 0, cannot calculate usage"))
 		return
 	}
@@ -103,12 +95,13 @@ func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
 	maxStr := strconv.FormatUint(max, 10)
 
 	event := types.BuildEvent(map[string]string{
-		"check":                            "filefd::filefd_usage",
-		"target":                           "system",
-		types.AttrPrefix + "allocated":     allocatedStr,
-		types.AttrPrefix + "max":           maxStr,
-		types.AttrPrefix + "usage_percent": fmt.Sprintf("%.1f%%", usagePercent),
-	}).SetTitleRule(tr)
+		"check":  "filefd::filefd_usage",
+		"target": "system",
+	}).SetAttrs(map[string]string{
+		"allocated":     allocatedStr,
+		"max":           maxStr,
+		"usage_percent": fmt.Sprintf("%.1f%%", usagePercent),
+	})
 
 	status := types.EvaluateGeThreshold(usagePercent, ins.FilefdUsage.WarnGe, ins.FilefdUsage.CriticalGe)
 	event.SetEventStatus(status)

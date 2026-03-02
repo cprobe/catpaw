@@ -387,8 +387,8 @@ func TestCheckMountNotMounted(t *testing.T) {
 	if !strings.Contains(ev.Description, "not mounted") {
 		t.Errorf("description should mention 'not mounted', got %q", ev.Description)
 	}
-	if ev.Labels[types.AttrPrefix+"actual"] != "not mounted" {
-		t.Errorf("_attr_actual should be 'not mounted', got %q", ev.Labels[types.AttrPrefix+"actual"])
+	if ev.Attrs["actual"] != "not mounted" {
+		t.Errorf("attrs.actual should be 'not mounted', got %q", ev.Attrs["actual"])
 	}
 }
 
@@ -470,8 +470,8 @@ func TestCheckMountPathOnlyOk(t *testing.T) {
 	if ev.EventStatus != "Ok" {
 		t.Errorf("expected Ok, got %s", ev.EventStatus)
 	}
-	if ev.Labels[types.AttrPrefix+"expect"] != "mounted" {
-		t.Errorf("_attr_expect should be 'mounted', got %q", ev.Labels[types.AttrPrefix+"expect"])
+	if ev.Attrs["expect"] != "mounted" {
+		t.Errorf("attrs.expect should be 'mounted', got %q", ev.Attrs["expect"])
 	}
 }
 

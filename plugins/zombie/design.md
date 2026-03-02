@@ -32,7 +32,6 @@ type Instance struct {
     config.InternalConfig
     WarnGt     *int   // 数量 > 此值 → Warning
     CriticalGt *int   // 数量 > 此值 → Critical
-    TitleRule  string
 }
 ```
 

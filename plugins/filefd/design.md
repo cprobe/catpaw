@@ -17,7 +17,6 @@
 | 文件描述符使用率 | `filefd::filefd_usage` | allocated/max 百分比超阈值告警 |
 
 - **target label** 为 `"system"`（文件描述符是系统级共享资源）
-- **默认 title_rule** 为 `"[TPL]${check} ${from_hostip}"`
 
 ## 数据来源
 
@@ -85,7 +84,6 @@ conntrack 使用 75% Warning 是因为连接跟踪表可以在秒级被突发流
 type FilefdUsageCheck struct {
     WarnGe     float64 `toml:"warn_ge"`
     CriticalGe float64 `toml:"critical_ge"`
-    TitleRule  string  `toml:"title_rule"`
 }
 
 type Instance struct {
@@ -105,15 +103,15 @@ type FilefdPlugin struct {
 - `Concurrency` — 仅读一个文件，无并发需求
 - `Targets` — 文件描述符是系统级唯一资源
 
-## _attr_ 标签
+## Attrs（SetAttrs 设置）
 
-| 标签 | 示例值 | 说明 |
+| 属性 | 示例值 | 说明 |
 | --- | --- | --- |
-| `_attr_allocated` | `9344` | 当前已分配 fd 数 |
-| `_attr_max` | `393164` | 系统上限（file-max） |
-| `_attr_usage_percent` | `2.4%` | 格式化的使用率 |
+| `allocated` | `9344` | 当前已分配 fd 数 |
+| `max` | `393164` | 系统上限（file-max） |
+| `usage_percent` | `2.4%` | 格式化的使用率 |
 
-Ok 事件也携带完整 `_attr_` 标签，便于巡检时确认 fd 使用水位。
+Ok 事件也携带完整 attrs，便于巡检时确认 fd 使用水位。
 
 ## Init() 校验
 
@@ -158,9 +156,11 @@ Gather(q):
     maxStr = strconv.FormatUint(max, 10)
 
     event = buildEvent("filefd::filefd_usage", "system")
-    event._attr_allocated = allocatedStr
-    event._attr_max = maxStr
-    event._attr_usage_percent = fmt.Sprintf("%.1f%%", usagePercent)
+    event.SetAttrs(map[string]string{
+        "allocated": allocatedStr,
+        "max": maxStr,
+        "usage_percent": fmt.Sprintf("%.1f%%", usagePercent),
+    })
 
     status = EvaluateGeThreshold(usagePercent, warn_ge, critical_ge)
     event.SetEventStatus(status)
@@ -279,7 +279,6 @@ conf.d/p.filefd/
 [instances.filefd_usage]
 warn_ge = 80.0
 critical_ge = 90.0
-# title_rule = "[TPL]${check} ${from_hostip}"
 
 ## 采集间隔
 interval = "30s"

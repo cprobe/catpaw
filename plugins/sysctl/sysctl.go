@@ -30,8 +30,7 @@ type ParamSpec struct {
 }
 
 type ParamCheck struct {
-	Params    []ParamSpec `toml:"params"`
-	TitleRule string      `toml:"title_rule"`
+	Params []ParamSpec `toml:"params"`
 }
 
 type Instance struct {
@@ -136,23 +135,18 @@ func isAlertSeverity(s string) bool {
 }
 
 func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
-	tr := ins.ParamCheck.TitleRule
-	if tr == "" {
-		tr = "[TPL]${check} ${from_hostip} ${target}"
-	}
-
 	for i := range ins.ParamCheck.Params {
 		p := &ins.ParamCheck.Params[i]
-		ins.checkParam(q, p, tr)
+		ins.checkParam(q, p)
 	}
 }
 
-func (ins *Instance) checkParam(q *safe.Queue[*types.Event], p *ParamSpec, titleRule string) {
+func (ins *Instance) checkParam(q *safe.Queue[*types.Event], p *ParamSpec) {
 	path := keyToPath(p.Key)
 
 	data, err := os.ReadFile(path)
 	if err != nil {
-		event := buildEvent(p, titleRule)
+		event := buildEvent(p)
 		if errors.Is(err, os.ErrNotExist) {
 			event.SetEventStatus(p.Severity).
 				SetDescription(fmt.Sprintf("%s: parameter not found (file %s does not exist)", p.Key, path))
@@ -168,16 +162,14 @@ func (ins *Instance) checkParam(q *safe.Queue[*types.Event], p *ParamSpec, title
 
 	matched, err := compareValues(actual, p.Value, p.Op)
 	if err != nil {
-		event := buildEvent(p, titleRule)
-		event.Labels[types.AttrPrefix+"actual"] = actual
+		event := buildEvent(p).SetAttrs(map[string]string{"actual": actual})
 		event.SetEventStatus(types.EventStatusCritical).
 			SetDescription(fmt.Sprintf("%s: comparison error: %v", p.Key, err))
 		q.PushFront(event)
 		return
 	}
 
-	event := buildEvent(p, titleRule)
-	event.Labels[types.AttrPrefix+"actual"] = actual
+	event := buildEvent(p).SetAttrs(map[string]string{"actual": actual})
 
 	if matched {
 		event.SetEventStatus(types.EventStatusOk).
@@ -190,12 +182,11 @@ func (ins *Instance) checkParam(q *safe.Queue[*types.Event], p *ParamSpec, title
 	q.PushFront(event)
 }
 
-func buildEvent(p *ParamSpec, titleRule string) *types.Event {
+func buildEvent(p *ParamSpec) *types.Event {
 	return types.BuildEvent(map[string]string{
-		"check":                     "sysctl::param_check",
-		"target":                    p.Key,
-		types.AttrPrefix + "expect": p.Op + " " + p.Value,
-	}).SetTitleRule(titleRule)
+		"check":  "sysctl::param_check",
+		"target": p.Key,
+	}).SetAttrs(map[string]string{"expect": p.Op + " " + p.Value})
 }
 
 func keyToPath(key string) string {

@@ -15,7 +15,6 @@ const pluginName = "tcpstate"
 type StateCheck struct {
 	WarnGe     float64 `toml:"warn_ge"`
 	CriticalGe float64 `toml:"critical_ge"`
-	TitleRule  string  `toml:"title_rule"`
 }
 
 type stateCounts struct {
@@ -135,21 +134,15 @@ func (ins *Instance) gatherViaSockstat(q *safe.Queue[*types.Event]) {
 func (ins *Instance) emitStateEvent(q *safe.Queue[*types.Event], check, stateName string,
 	count uint64, sc StateCheck, establishedCount int64) {
 
-	tr := sc.TitleRule
-	if tr == "" {
-		tr = "[TPL]${check} ${from_hostip}"
-	}
-
-	labels := map[string]string{
-		"check":                    check,
-		"target":                   "system",
-		types.AttrPrefix + "count": fmt.Sprintf("%d", count),
-	}
+	attrs := map[string]string{"count": fmt.Sprintf("%d", count)}
 	if establishedCount >= 0 {
-		labels[types.AttrPrefix+"established"] = fmt.Sprintf("%d", establishedCount)
+		attrs["established"] = fmt.Sprintf("%d", establishedCount)
 	}
 
-	event := types.BuildEvent(labels).SetTitleRule(tr)
+	event := types.BuildEvent(map[string]string{
+		"check":  check,
+		"target": "system",
+	}).SetAttrs(attrs)
 	fcount := float64(count)
 
 	status := types.EvaluateGeThreshold(fcount, sc.WarnGe, sc.CriticalGe)
@@ -178,7 +171,7 @@ func (ins *Instance) buildErrorEvent(errMsg string) *types.Event {
 	return types.BuildEvent(map[string]string{
 		"check":  check,
 		"target": "system",
-	}).SetTitleRule("[TPL]${check} ${from_hostip}").
+	}).
 		SetEventStatus(types.EventStatusCritical).
 		SetDescription(errMsg)
 }

@@ -41,7 +41,7 @@ type Instance struct {
     ExpectedActiveState string          // 期望的 ActiveState，默认 "active"
     Timeout             config.Duration // systemctl 超时，默认 5s
     Concurrency         int             // 并发数，默认 5
-    State               StateCheck      // severity 和 title_rule
+    State               StateCheck      // severity
 }
 ```
 
@@ -67,7 +67,7 @@ type Instance struct {
    - 不等于预期值 → severity 告警（附带 SubState、Result、最后活跃时间等信息）
 5. oneshot/timer 类型 unit 在 expected_active_state = "active" 时记录 warn 日志（这类 unit 执行完会变 inactive）
 
-### 事件 `_attr_` 标签
+### 事件 attrs（SetAttrs 设置）
 
 - `active_state`、`sub_state`、`load_state`
 - `canonical_unit`（规范化后的名字）

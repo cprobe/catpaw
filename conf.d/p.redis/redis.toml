@@ -43,14 +43,12 @@ id = "default"
 ## check 标签固定为 "redis::connectivity"
 [partials.connectivity]
 severity = "Critical"
-# title_rule = "[TPL]${check} ${from_hostip} ${target}"
 
 ## 响应时间检测（warn_ge 和 critical_ge 都为 0 则关闭）
 ## check 标签固定为 "redis::response_time"
 # [partials.response_time]
 # warn_ge = "20ms"
 # critical_ge = "100ms"
-# title_rule = "[TPL]${check} ${from_hostip} ${target}"
 
 ## 角色检测（expect 为空则关闭）
 ## 可选值：master / slave / replica
@@ -58,21 +56,18 @@ severity = "Critical"
 # [partials.role]
 # expect = "master"
 # severity = "Warning"
-# title_rule = "[TPL]${check} ${from_hostip} ${target}"
 
 ## 客户端连接数检测（两个阈值都为 0 则关闭）
 ## check 标签固定为 "redis::connected_clients"
 # [partials.connected_clients]
 # warn_ge = 500
 # critical_ge = 1000
-# title_rule = "[TPL]${check} ${from_hostip} ${target}"
 
 ## 阻塞客户端数检测（两个阈值都为 0 则关闭）
 ## check 标签固定为 "redis::blocked_clients"
 # [partials.blocked_clients]
 # warn_ge = 1
 # critical_ge = 5
-# title_rule = "[TPL]${check} ${from_hostip} ${target}"
 
 ## 内存使用量检测（两个阈值都为 0 则关闭）
 ## 支持 B / KB / MB / GB / TB
@@ -80,7 +75,6 @@ severity = "Critical"
 # [partials.used_memory]
 # warn_ge = "512MB"
 # critical_ge = "1GB"
-# title_rule = "[TPL]${check} ${from_hostip} ${target}"
 
 ## 每周期被拒绝连接数检测（两个阈值都为 0 则关闭）
 ## 注意：这是采集周期内 delta，不是 Redis 启动以来累计值
@@ -89,7 +83,6 @@ severity = "Critical"
 # [partials.rejected_connections]
 # warn_ge = 1
 # critical_ge = 10
-# title_rule = "[TPL]${check} ${from_hostip} ${target}"
 
 ## 已连接副本数下限检测（两个阈值都为 0 则关闭）
 ## 适用于 master，指标来自 INFO replication 的 connected_slaves
@@ -97,7 +90,6 @@ severity = "Critical"
 # [partials.connected_slaves]
 # warn_lt = 2
 # critical_lt = 1
-# title_rule = "[TPL]${check} ${from_hostip} ${target}"
 
 ## 每周期淘汰键数量检测（两个阈值都为 0 则关闭）
 ## 注意：这是采集周期内 delta，不是 Redis 启动以来累计值
@@ -105,7 +97,6 @@ severity = "Critical"
 # [partials.evicted_keys]
 # warn_ge = 1
 # critical_ge = 10
-# title_rule = "[TPL]${check} ${from_hostip} ${target}"
 
 ## 每周期过期键数量检测（两个阈值都为 0 则关闭）
 ## 注意：这是采集周期内 delta，不是 Redis 启动以来累计值
@@ -113,7 +104,6 @@ severity = "Critical"
 # [partials.expired_keys]
 # warn_ge = 100
 # critical_ge = 1000
-# title_rule = "[TPL]${check} ${from_hostip} ${target}"
 
 ## 瞬时 QPS 检测（两个阈值都为 0 则关闭）
 ## 指标来自 INFO stats 的 instantaneous_ops_per_sec
@@ -121,7 +111,6 @@ severity = "Critical"
 # [partials.instantaneous_ops_per_sec]
 # warn_ge = 5000
 # critical_ge = 20000
-# title_rule = "[TPL]${check} ${from_hostip} ${target}"
 
 ## 主从链路状态检测（expect 为空则关闭）
 ## 适用于 replica 节点，期望值通常为 up
@@ -129,7 +118,6 @@ severity = "Critical"
 # [partials.master_link_status]
 # expect = "up"
 # severity = "Warning"
-# title_rule = "[TPL]${check} ${from_hostip} ${target}"
 
 ## 持久化状态检测（enabled = true 时启用）
 ## 检查 loading / rdb_last_bgsave_status / aof_last_write_status
@@ -137,7 +125,6 @@ severity = "Critical"
 # [partials.persistence]
 # enabled = true
 # severity = "Critical"
-# title_rule = "[TPL]${check} ${from_hostip} ${target}"
 
 
 [[instances]]

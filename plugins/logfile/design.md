@@ -17,7 +17,6 @@
 | 日志行匹配 | `logfile::match` | 新增日志行匹配 filter_include 规则时告警 |
 
 - **target label** 为日志文件路径（如 `/var/log/myapp/error.log`），每个文件独立告警/恢复
-- **默认 title_rule** 为 `"[TPL]${check} ${from_hostip} ${target}"`（多 target，标题中需区分）
 
 ## 数据来源
 
@@ -321,8 +320,7 @@ matched 3 lines:
 
 ```go
 type MatchCheck struct {
-    Severity  string `toml:"severity"`
-    TitleRule string `toml:"title_rule"`
+    Severity string `toml:"severity"`
 }
 
 type Instance struct {
@@ -359,18 +357,18 @@ type Instance struct {
 
 需要：`mu sync.Mutex` — 保护 `Gather()` 和 `Drop()` 对 `fileStates` / `stateDirty` 的并发访问。框架在停止插件时可能从不同 goroutine 调用 `Drop()`。
 
-## _attr_ 标签
+## Attrs（SetAttrs 设置）
 
 ### match 事件（有匹配行时）
 
-| 标签 | 示例值 | 说明 |
+| 属性 | 示例值 | 说明 |
 | --- | --- | --- |
-| `_attr_matched_count` | `5` | 本次采集匹配的行数 |
-| `_attr_bytes_read` | `23.4 KiB` | 本次采集读取的字节数 |
+| `matched_count` | `5` | 本次采集匹配的行数 |
+| `bytes_read` | `23.4 KiB` | 本次采集读取的字节数 |
 
 ### match 事件（无匹配行时 / OK）
 
-基础 labels（check、target）即可，不需要额外 attr。
+基础 labels（check、target）即可，不需要额外 attrs。
 
 ## Init() 校验
 
@@ -639,7 +637,6 @@ interval = "30s"
 ## 匹配到内容后的事件级别
 [instances.match]
 severity = "Warning"
-# title_rule = "[TPL]${check} ${from_hostip} ${target}"
 
 [instances.alerting]
 for_duration = 0

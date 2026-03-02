@@ -17,7 +17,6 @@
 | 进程 fd 使用率 | `procfd::fd_usage` | 匹配到的所有进程中，fd 使用率最高的那个超阈值告警 |
 
 - **target label** 为进程匹配条件的描述（与 procnum 一致，如 `"nginx"`、`"java && user:app"`）
-- **默认 title_rule** 为 `"[TPL]${check} ${from_hostip} ${target}"`
 
 ## 进程匹配
 
@@ -37,7 +36,7 @@
 
 一个 filter 可能匹配到多个进程（如 `search_exec_name = "nginx"` 命中 master + 多个 worker）。
 
-**每轮 Gather 只产出 1 个事件**，取所有匹配进程中 **fd 使用率最高** 的那个作为本轮事件状态。具体 PID 放在 `_attr_pid` 中辅助诊断，不参与 AlertKey 计算。
+**每轮 Gather 只产出 1 个事件**，取所有匹配进程中 **fd 使用率最高** 的那个作为本轮事件状态。具体 PID 放在 attrs 的 `pid` 中辅助诊断，不参与 AlertKey 计算。
 
 这个设计解决了一个关键问题：**进程重启后告警能自然恢复**。
 
@@ -121,7 +120,6 @@ Max open files            1024                 1048576              files
 type FdUsageCheck struct {
     WarnGe     float64 `toml:"warn_ge"`
     CriticalGe float64 `toml:"critical_ge"`
-    TitleRule  string  `toml:"title_rule"`
 }
 
 type Instance struct {
@@ -152,20 +150,20 @@ type ProcfdPlugin struct {
 - `Timeout` — 读取 `/proc/{pid}/*` 是本地操作，不会 hang（procfs 不涉及磁盘 I/O 或网络）
 - `inFlight` — 同理，procfs 读取不会 hang，无需防重入（原则 9：适用于可能 hang 的场景）
 
-## _attr_ 标签
+## Attrs（SetAttrs 设置）
 
-| 标签 | 示例值 | 说明 |
+| 属性 | 示例值 | 说明 |
 | --- | --- | --- |
-| `_attr_pid` | `1234` | fd 使用率最高的进程 PID |
-| `_attr_open_fds` | `892` | 该进程当前已打开 fd 数 |
-| `_attr_nofile_soft` | `1024` | 该进程 nofile soft limit |
-| `_attr_nofile_hard` | `1048576` | 该进程 nofile hard limit（辅助诊断） |
-| `_attr_usage_percent` | `87.1%` | 格式化的使用率 |
-| `_attr_exec_name` | `nginx` | 进程可执行文件名（若可获取） |
-| `_attr_matched_count` | `5` | 匹配到的进程总数（含 unlimited 的） |
-| `_attr_checked_count` | `4` | 实际参与检查的进程数（排除 unlimited 的） |
+| `pid` | `1234` | fd 使用率最高的进程 PID |
+| `open_fds` | `892` | 该进程当前已打开 fd 数 |
+| `nofile_soft` | `1024` | 该进程 nofile soft limit |
+| `nofile_hard` | `1048576` | 该进程 nofile hard limit（辅助诊断） |
+| `usage_percent` | `87.1%` | 格式化的使用率 |
+| `exec_name` | `nginx` | 进程可执行文件名（若可获取） |
+| `matched_count` | `5` | 匹配到的进程总数（含 unlimited 的） |
+| `checked_count` | `4` | 实际参与检查的进程数（排除 unlimited 的） |
 
-Ok 事件也携带完整 `_attr_`，便于巡检时确认各进程 fd 水位。
+Ok 事件也携带完整 attrs，便于巡检时确认各进程 fd 水位。
 
 ## Init() 校验
 
@@ -310,7 +308,7 @@ countOpenFds(pid) (int, error):
 ### 关键行为
 
 1. **每轮 Gather 只产出 0 或 1 个事件**——取所有匹配进程中 fd 使用率最高的，避免事件爆炸。
-2. **target 不含 PID**——确保进程重启后告警能自然恢复。PID 放在 `_attr_pid` 中辅助诊断。
+2. **target 不含 PID**——确保进程重启后告警能自然恢复。PID 放在 attrs 的 `pid` 中辅助诊断。
 3. **匹配不到进程时静默跳过**——进程不存在不是 procfd 的职责，那是 procnum 的事。两个插件互补使用。
 4. **所有进程 unlimited 时静默跳过**——无使用率概念，不浪费噪音。
 5. **所有进程读取失败时产出 Critical**——如权限不足等（原则 7）。部分失败时忽略失败的，取成功的最差值。
@@ -402,7 +400,6 @@ interval = "30s"
 [instances.fd_usage]
 warn_ge = 80.0
 critical_ge = 90.0
-# title_rule = "[TPL]${check} ${from_hostip} ${target}"
 
 [instances.alerting]
 for_duration = 0

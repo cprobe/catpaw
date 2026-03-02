@@ -54,13 +54,11 @@ interval = "1h"
 [instances.remote_expiry]
 warn_within = "720h"
 critical_within = "168h"
-# title_rule = "[TPL]${check} ${from_hostip} ${target}"
 
 ## 文件证书过期检测（阈值含义同上）
 [instances.file_expiry]
 warn_within = "720h"
 critical_within = "168h"
-# title_rule = "[TPL]${check} ${from_hostip} ${target}"
 
 [instances.alerting]
 for_duration = 0

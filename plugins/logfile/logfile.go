@@ -42,8 +42,7 @@ type fileState struct {
 }
 
 type MatchCheck struct {
-	Severity  string `toml:"severity"`
-	TitleRule string `toml:"title_rule"`
+	Severity string `toml:"severity"`
 }
 
 type Instance struct {
@@ -213,7 +212,7 @@ func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
 		q.PushFront(types.BuildEvent(map[string]string{
 			"check":  "logfile::match",
 			"target": "glob",
-		}).SetTitleRule("[TPL]${check} ${from_hostip}").
+		}).
 			SetEventStatus(types.EventStatusWarning).
 			SetDescription(fmt.Sprintf("targets resolved to %d files, exceeding max_targets(%d), only monitoring the first %d",
 				len(resolvedFiles), ins.MaxTargets, ins.MaxTargets)))
@@ -222,7 +221,7 @@ func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
 		q.PushFront(types.BuildEvent(map[string]string{
 			"check":  "logfile::match",
 			"target": "glob",
-		}).SetTitleRule("[TPL]${check} ${from_hostip}").
+		}).
 			SetDescription(fmt.Sprintf("target count back to normal (%d files)", len(resolvedFiles))))
 	}
 
@@ -273,7 +272,7 @@ func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
 			q.PushFront(types.BuildEvent(map[string]string{
 				"check":  "logfile::match",
 				"target": "gather_timeout",
-			}).SetTitleRule("[TPL]${check} ${from_hostip}").
+			}).
 				SetEventStatus(types.EventStatusCritical).
 				SetDescription(fmt.Sprintf("gather_timeout (%s) exceeded, skipped remaining files", time.Duration(ins.GatherTimeout))))
 			break
@@ -286,7 +285,7 @@ func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
 		q.PushFront(types.BuildEvent(map[string]string{
 			"check":  "logfile::match",
 			"target": "gather_timeout",
-		}).SetTitleRule("[TPL]${check} ${from_hostip}").
+		}).
 			SetDescription("gather completed within timeout"))
 	}
 
@@ -462,11 +461,11 @@ func (ins *Instance) processFile(q *safe.Queue[*types.Event], filePath string) {
 		return
 	}
 
-	event.Labels[types.AttrPrefix+"matched_count"] = fmt.Sprintf("%d", len(matchedIndices))
-	event.Labels[types.AttrPrefix+"bytes_read"] = conv.HumanBytes(uint64(bytesRead))
-
 	desc := ins.buildDescription(lines, matchedIndices)
-	q.PushFront(event.SetEventStatus(ins.Match.Severity).SetDescription(desc))
+	q.PushFront(event.SetAttrs(map[string]string{
+		"matched_count": fmt.Sprintf("%d", len(matchedIndices)),
+		"bytes_read":    conv.HumanBytes(uint64(bytesRead)),
+	}).SetEventStatus(ins.Match.Severity).SetDescription(desc))
 }
 
 func (ins *Instance) buildDescription(lines []string, matchedIndices []int) string {
@@ -546,14 +545,10 @@ func (ins *Instance) buildDescription(lines []string, matchedIndices []int) stri
 }
 
 func (ins *Instance) buildEvent(filePath string) *types.Event {
-	tr := ins.Match.TitleRule
-	if tr == "" {
-		tr = "[TPL]${check} ${from_hostip} ${target}"
-	}
 	return types.BuildEvent(map[string]string{
 		"check":  "logfile::match",
 		"target": filePath,
-	}).SetTitleRule(tr)
+	})
 }
 
 func (ins *Instance) resolveTargets() []string {

@@ -251,11 +251,11 @@ func TestGather_WithMockedFiles(t *testing.T) {
 			if event.Labels["target"] != "system" {
 				t.Errorf("unexpected target label: %s", event.Labels["target"])
 			}
-			if event.Labels[types.AttrPrefix+"count"] == "" {
-				t.Error("missing _attr_count")
+			if event.Attrs["count"] == "" {
+				t.Error("missing count attr")
 			}
-			if event.Labels[types.AttrPrefix+"max"] == "" {
-				t.Error("missing _attr_max")
+			if event.Attrs["max"] == "" {
+				t.Error("missing max attr")
 			}
 		})
 	}

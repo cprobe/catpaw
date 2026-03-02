@@ -22,31 +22,24 @@ import (
 
 const pluginName = "docker"
 
-type ContainerRunningCheck struct {
-	TitleRule string `toml:"title_rule"`
-}
+type ContainerRunningCheck struct{}
 
 type RestartDetectedCheck struct {
 	Window     config.Duration `toml:"window"`
 	WarnGe     int             `toml:"warn_ge"`
 	CriticalGe int             `toml:"critical_ge"`
-	TitleRule  string          `toml:"title_rule"`
 }
 
-type HealthStatusCheck struct {
-	TitleRule string `toml:"title_rule"`
-}
+type HealthStatusCheck struct{}
 
 type CpuUsageCheck struct {
 	WarnGe     float64 `toml:"warn_ge"`
 	CriticalGe float64 `toml:"critical_ge"`
-	TitleRule  string  `toml:"title_rule"`
 }
 
 type MemoryUsageCheck struct {
 	WarnGe     float64 `toml:"warn_ge"`
 	CriticalGe float64 `toml:"critical_ge"`
-	TitleRule  string  `toml:"title_rule"`
 }
 
 type restartRecord struct {
@@ -191,19 +184,19 @@ func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
 
 	containers, err := ins.listContainers()
 	if err != nil {
-		q.PushFront(ins.buildEvent("docker::container_running", "docker-engine", ins.ContainerRunning.TitleRule).
+		q.PushFront(ins.buildEvent("docker::container_running", "docker-engine").
 			SetEventStatus(types.EventStatusCritical).
 			SetDescription(fmt.Sprintf("failed to list containers: %v", err)))
 		return
 	}
 
-	q.PushFront(ins.buildEvent("docker::container_running", "docker-engine", ins.ContainerRunning.TitleRule).
+	q.PushFront(ins.buildEvent("docker::container_running", "docker-engine").
 		SetDescription(fmt.Sprintf("Docker Engine is reachable, %d containers found", len(containers))))
 
 	matched := ins.matchTargets(containers)
 
 	if len(matched) > ins.MaxContainers {
-		q.PushFront(ins.buildEvent("docker::container_running", "docker-engine", ins.ContainerRunning.TitleRule).
+		q.PushFront(ins.buildEvent("docker::container_running", "docker-engine").
 			SetEventStatus(types.EventStatusWarning).
 			SetDescription(fmt.Sprintf("matched %d containers, exceeding max_containers %d, only checking first %d",
 				len(matched), ins.MaxContainers, ins.MaxContainers)))
@@ -217,7 +210,7 @@ func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
 	}
 	for name := range ins.explicitNames {
 		if _, ok := matchedNames[name]; !ok {
-			q.PushFront(ins.buildEvent("docker::container_running", name, ins.ContainerRunning.TitleRule).
+			q.PushFront(ins.buildEvent("docker::container_running", name).
 				SetEventStatus(types.EventStatusCritical).
 				SetDescription(fmt.Sprintf("container %q not found", name)))
 		}
@@ -251,7 +244,7 @@ func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
 				if r := recover(); r != nil {
 					name := containerName(c)
 					logger.Logger.Errorw("panic in docker gather goroutine", "container", name, "recover", r)
-					q.PushFront(ins.buildEvent("docker::panic", name, "[TPL]${check} ${from_hostip} ${target}").
+					q.PushFront(ins.buildEvent("docker::panic", name).
 						SetEventStatus(types.EventStatusCritical).
 						SetDescription(fmt.Sprintf("panic during check: %v", r)))
 				}
@@ -267,7 +260,7 @@ func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
 
 			detail, err := ins.inspectContainer(c.Id)
 			if err != nil {
-				q.PushFront(ins.buildContainerEvent("docker::container_running", name, shortID, image, ins.ContainerRunning.TitleRule).
+				q.PushFront(ins.buildContainerEvent("docker::container_running", name, shortID, image).
 					SetEventStatus(types.EventStatusCritical).
 					SetDescription(fmt.Sprintf("failed to inspect container %q: %v", name, err)))
 				return
@@ -285,12 +278,12 @@ func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
 				stats, err := ins.getContainerStats(c.Id)
 				if err != nil {
 					if ins.CpuUsage.WarnGe > 0 || ins.CpuUsage.CriticalGe > 0 {
-						q.PushFront(ins.buildContainerEvent("docker::cpu_usage", name, shortID, image, ins.CpuUsage.TitleRule).
+						q.PushFront(ins.buildContainerEvent("docker::cpu_usage", name, shortID, image).
 							SetEventStatus(types.EventStatusCritical).
 							SetDescription(fmt.Sprintf("failed to get container stats for %q: %v", name, err)))
 					}
 					if ins.MemoryUsage.WarnGe > 0 || ins.MemoryUsage.CriticalGe > 0 {
-						q.PushFront(ins.buildContainerEvent("docker::memory_usage", name, shortID, image, ins.MemoryUsage.TitleRule).
+						q.PushFront(ins.buildContainerEvent("docker::memory_usage", name, shortID, image).
 							SetEventStatus(types.EventStatusCritical).
 							SetDescription(fmt.Sprintf("failed to get container stats for %q: %v", name, err)))
 					}
@@ -355,9 +348,8 @@ func isActiveState(state string) bool {
 // --- Check functions ---
 
 func (ins *Instance) checkContainerRunning(q *safe.Queue[*types.Event], c containerListEntry, name, shortID string) {
-	event := ins.buildContainerEvent("docker::container_running", name, shortID, c.Image, ins.ContainerRunning.TitleRule)
-	event.Labels[types.AttrPrefix+"state"] = c.State
-	event.Labels[types.AttrPrefix+"status"] = c.Status
+	event := ins.buildContainerEvent("docker::container_running", name, shortID, c.Image).
+		SetAttrs(map[string]string{"state": c.State, "status": c.Status})
 
 	switch c.State {
 	case "running":
@@ -423,22 +415,22 @@ func (ins *Instance) checkRestartDetected(q *safe.Queue[*types.Event], detail *c
 		restartsInWindow += r.count
 	}
 
-	event := ins.buildContainerEvent("docker::restart_detected", name, shortID, image, ins.RestartDetected.TitleRule)
-	event.Labels[types.AttrPrefix+"restarts_in_window"] = strconv.Itoa(restartsInWindow)
-	event.Labels[types.AttrPrefix+"window"] = humanDuration(window)
-	event.Labels[types.AttrPrefix+"restart_count"] = strconv.Itoa(currentCount)
-
-	if detail.State.OOMKilled {
-		event.Labels[types.AttrPrefix+"oom_killed"] = "true"
+	attrs := map[string]string{
+		"restarts_in_window": strconv.Itoa(restartsInWindow),
+		"window":            humanDuration(window),
+		"restart_count":   strconv.Itoa(currentCount),
+		"exit_code":       strconv.Itoa(detail.State.ExitCode),
 	}
-	event.Labels[types.AttrPrefix+"exit_code"] = strconv.Itoa(detail.State.ExitCode)
-
+	if detail.State.OOMKilled {
+		attrs["oom_killed"] = "true"
+	}
 	if t := parseDockerTime(detail.State.StartedAt); !t.IsZero() {
-		event.Labels[types.AttrPrefix+"started_at"] = t.Local().Format("2006-01-02 15:04:05 MST")
+		attrs["started_at"] = t.Local().Format("2006-01-02 15:04:05 MST")
 	}
 	if t := parseDockerTime(detail.State.FinishedAt); !t.IsZero() {
-		event.Labels[types.AttrPrefix+"finished_at"] = t.Local().Format("2006-01-02 15:04:05 MST")
+		attrs["finished_at"] = t.Local().Format("2006-01-02 15:04:05 MST")
 	}
+	event := ins.buildContainerEvent("docker::restart_detected", name, shortID, image).SetAttrs(attrs)
 
 	if criticalGe > 0 && restartsInWindow >= criticalGe {
 		desc := fmt.Sprintf("container %q restarted %d times in last %s, above critical threshold %d",
@@ -467,10 +459,16 @@ func (ins *Instance) checkHealthStatus(q *safe.Queue[*types.Event], detail *cont
 		return
 	}
 
-	event := ins.buildContainerEvent("docker::health_status", name, shortID, image, ins.HealthStatus.TitleRule)
 	health := detail.State.Health
-
-	event.Labels[types.AttrPrefix+"health_status"] = health.Status
+	attrs := map[string]string{"health_status": health.Status}
+	if health.Status == "unhealthy" {
+		attrs["health_failing_streak"] = strconv.Itoa(health.FailingStreak)
+		if len(health.Log) > 0 {
+			lastOutput := health.Log[len(health.Log)-1].Output
+			attrs["health_last_output"] = truncate(strings.TrimSpace(lastOutput), 200)
+		}
+	}
+	event := ins.buildContainerEvent("docker::health_status", name, shortID, image).SetAttrs(attrs)
 
 	switch health.Status {
 	case "healthy":
@@ -478,11 +476,6 @@ func (ins *Instance) checkHealthStatus(q *safe.Queue[*types.Event], detail *cont
 	case "starting":
 		event.SetDescription(fmt.Sprintf("container %q health check: starting", name))
 	case "unhealthy":
-		event.Labels[types.AttrPrefix+"health_failing_streak"] = strconv.Itoa(health.FailingStreak)
-		if len(health.Log) > 0 {
-			lastOutput := health.Log[len(health.Log)-1].Output
-			event.Labels[types.AttrPrefix+"health_last_output"] = truncate(strings.TrimSpace(lastOutput), 200)
-		}
 		event.SetEventStatus(types.EventStatusCritical).
 			SetDescription(fmt.Sprintf("container %q health check: unhealthy (failing streak: %d)", name, health.FailingStreak))
 	default:
@@ -523,17 +516,18 @@ func (ins *Instance) checkCpuUsage(q *safe.Queue[*types.Event], stats *container
 		cpuLimitStr = fmt.Sprintf("%d cores (unlimited)", onlineCPUs)
 	}
 
-	event := ins.buildContainerEvent("docker::cpu_usage", name, shortID, image, ins.CpuUsage.TitleRule)
-	event.Labels[types.AttrPrefix+"cpu_percent"] = fmt.Sprintf("%.1f%%", cpuPercent)
-	event.Labels[types.AttrPrefix+"cpu_limit"] = cpuLimitStr
-	event.Labels[types.AttrPrefix+"online_cpus"] = strconv.FormatUint(uint64(onlineCPUs), 10)
-
+	attrs := map[string]string{
+		"cpu_percent":  fmt.Sprintf("%.1f%%", cpuPercent),
+		"cpu_limit":    cpuLimitStr,
+		"online_cpus": strconv.FormatUint(uint64(onlineCPUs), 10),
+	}
 	td := stats.CPUStats.ThrottlingData
 	if td.ThrottledPeriods > 0 || td.ThrottledTime > 0 {
-		event.Labels[types.AttrPrefix+"cpu_throttled_periods"] = strconv.FormatUint(td.ThrottledPeriods, 10)
+		attrs["cpu_throttled_periods"] = strconv.FormatUint(td.ThrottledPeriods, 10)
 		throttledSec := float64(td.ThrottledTime) / 1e9
-		event.Labels[types.AttrPrefix+"cpu_throttled_time"] = fmt.Sprintf("%.1fs", throttledSec)
+		attrs["cpu_throttled_time"] = fmt.Sprintf("%.1fs", throttledSec)
 	}
+	event := ins.buildContainerEvent("docker::cpu_usage", name, shortID, image).SetAttrs(attrs)
 
 	status := types.EvaluateGeThreshold(cpuPercent, ins.CpuUsage.WarnGe, ins.CpuUsage.CriticalGe)
 	event.SetEventStatus(status)
@@ -576,10 +570,11 @@ func (ins *Instance) checkMemoryUsage(q *safe.Queue[*types.Event], stats *contai
 	usedStr := humanBytes(actualUsage)
 	limitStr := humanBytes(limit)
 
-	event := ins.buildContainerEvent("docker::memory_usage", name, shortID, image, ins.MemoryUsage.TitleRule)
-	event.Labels[types.AttrPrefix+"memory_percent"] = fmt.Sprintf("%.1f%%", memPercent)
-	event.Labels[types.AttrPrefix+"memory_used"] = usedStr
-	event.Labels[types.AttrPrefix+"memory_limit"] = limitStr
+	event := ins.buildContainerEvent("docker::memory_usage", name, shortID, image).SetAttrs(map[string]string{
+		"memory_percent": fmt.Sprintf("%.1f%%", memPercent),
+		"memory_used":    usedStr,
+		"memory_limit":  limitStr,
+	})
 
 	status := types.EvaluateGeThreshold(memPercent, ins.MemoryUsage.WarnGe, ins.MemoryUsage.CriticalGe)
 	event.SetEventStatus(status)
@@ -601,31 +596,26 @@ func (ins *Instance) checkMemoryUsage(q *safe.Queue[*types.Event], stats *contai
 
 // --- Event builders ---
 
-func (ins *Instance) buildEvent(check, target, titleRule string) *types.Event {
-	if titleRule == "" {
-		titleRule = "[TPL]${check} ${from_hostip} ${target}"
-	}
+func (ins *Instance) buildEvent(check, target string) *types.Event {
 	return types.BuildEvent(map[string]string{
 		"check":  check,
 		"target": target,
-	}).SetTitleRule(titleRule)
+	})
 }
 
-func (ins *Instance) buildContainerEvent(check, name, shortID, image, titleRule string) *types.Event {
-	if titleRule == "" {
-		titleRule = "[TPL]${check} ${from_hostip} ${target}"
-	}
+func (ins *Instance) buildContainerEvent(check, name, shortID, image string) *types.Event {
 	labels := map[string]string{
 		"check":  check,
 		"target": name,
 	}
+	attrs := make(map[string]string)
 	if shortID != "" {
-		labels[types.AttrPrefix+"container_id"] = shortID
+		attrs["container_id"] = shortID
 	}
 	if image != "" {
-		labels[types.AttrPrefix+"container_image"] = image
+		attrs["container_image"] = image
 	}
-	return types.BuildEvent(labels).SetTitleRule(titleRule)
+	return types.BuildEvent(labels).SetAttrs(attrs)
 }
 
 // --- Helpers ---

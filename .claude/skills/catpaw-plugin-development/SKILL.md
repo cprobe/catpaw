@@ -91,9 +91,9 @@ func (ins *Instance) Gather(q *safe.Queue[*types.Event]) { ... }
 
 - `check` label 必填，格式为 `<plugin>::<dimension>`
 - `target` label 必填，值要稳定、可读
-- 动态附加字段放进 `types.AttrPrefix + "..."` 对应的 label
+- 动态附加字段放进 `event.SetAttrs(map[string]string{...})`，不参与 AlertKey 计算
 - `Description` 只写纯文本，不写 Markdown
-- `TitleRule` 未特殊要求时优先用 `"[TPL]${check} ${from_hostip} ${target}"`
+- 告警标题由 FlashDuty 输出层根据事件自动生成（有 target 时用 `[TPL]${check} ${from_hostip} ${target}`，否则用 `[TPL]${check} ${from_hostip}`）
 - 正常态要显式产出 `types.EventStatusOk` 或默认 OK event，以支持恢复
 
 如果某个检查维度有独立阈值、标题规则或属性，就给它独立 event 和独立 builder，避免在 `Gather()` 里堆大量分支。

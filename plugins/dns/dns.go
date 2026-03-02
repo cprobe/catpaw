@@ -22,14 +22,12 @@ import (
 const pluginName = "dns"
 
 type ResolutionCheck struct {
-	Severity  string `toml:"severity"`
-	TitleRule string `toml:"title_rule"`
+	Severity string `toml:"severity"`
 }
 
 type ResponseTimeCheck struct {
 	WarnGe     config.Duration `toml:"warn_ge"`
 	CriticalGe config.Duration `toml:"critical_ge"`
-	TitleRule  string          `toml:"title_rule"`
 }
 
 type Instance struct {
@@ -180,8 +178,7 @@ func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
 					q.PushFront(types.BuildEvent(map[string]string{
 						"check":  "dns::resolution",
 						"target": target,
-					}).SetTitleRule("[TPL]${check} ${from_hostip} ${target}").
-						SetEventStatus(types.EventStatusCritical).
+					}).SetEventStatus(types.EventStatusCritical).
 						SetDescription(fmt.Sprintf("panic during check: %v", r)))
 				}
 				se.Release()
@@ -218,11 +215,11 @@ func (ins *Instance) gatherTarget(q *safe.Queue[*types.Event], target string) {
 	}
 
 	attrLabels := map[string]string{
-		types.AttrPrefix + "server":        ins.serverLabel,
-		types.AttrPrefix + "response_time": responseTime.String(),
+		"server":        ins.serverLabel,
+		"response_time": responseTime.String(),
 	}
 	if resolvedStr != "" {
-		attrLabels[types.AttrPrefix+"resolved_ips"] = resolvedStr
+		attrLabels["resolved_ips"] = resolvedStr
 	}
 
 	// --- resolution check ---
@@ -242,14 +239,9 @@ func (ins *Instance) gatherTarget(q *safe.Queue[*types.Event], target string) {
 }
 
 func (ins *Instance) checkResolution(q *safe.Queue[*types.Event], target string, ips []string, err error, rt time.Duration, baseLabels, attrLabels map[string]string) {
-	tr := ins.Resolution.TitleRule
-	if tr == "" {
-		tr = "[TPL]${check} ${from_hostip} ${target}"
-	}
-
 	event := types.BuildEvent(mergeMaps(map[string]string{
 		"check": "dns::resolution",
-	}, baseLabels), attrLabels).SetTitleRule(tr)
+	}, baseLabels)).SetAttrs(attrLabels)
 
 	if err != nil {
 		event.SetEventStatus(ins.Resolution.Severity)
@@ -263,18 +255,13 @@ func (ins *Instance) checkResolution(q *safe.Queue[*types.Event], target string,
 }
 
 func (ins *Instance) checkExpectedIPs(q *safe.Queue[*types.Event], target string, ips []string, baseLabels, attrLabels map[string]string) {
-	tr := ins.Resolution.TitleRule
-	if tr == "" {
-		tr = "[TPL]${check} ${from_hostip} ${target}"
-	}
-
-	extraAttrs := map[string]string{
-		types.AttrPrefix + "expected_ips": strings.Join(ins.ExpectedIPs, ","),
-	}
+	extraAttrs := mergeMaps(attrLabels, map[string]string{
+		"expected_ips": strings.Join(ins.ExpectedIPs, ","),
+	})
 
 	event := types.BuildEvent(mergeMaps(map[string]string{
 		"check": "dns::expected_ips",
-	}, baseLabels), attrLabels, extraAttrs).SetTitleRule(tr)
+	}, baseLabels)).SetAttrs(extraAttrs)
 
 	found := false
 	for _, ip := range ips {
@@ -301,22 +288,17 @@ func (ins *Instance) checkResponseTime(q *safe.Queue[*types.Event], target strin
 		return
 	}
 
-	tr := ins.ResponseTime.TitleRule
-	if tr == "" {
-		tr = "[TPL]${check} ${from_hostip} ${target}"
-	}
-
-	extraAttrs := map[string]string{}
+	extraAttrs := mergeMaps(attrLabels)
 	if ins.ResponseTime.WarnGe > 0 {
-		extraAttrs[types.AttrPrefix+"warn_threshold"] = time.Duration(ins.ResponseTime.WarnGe).String()
+		extraAttrs["warn_threshold"] = time.Duration(ins.ResponseTime.WarnGe).String()
 	}
 	if ins.ResponseTime.CriticalGe > 0 {
-		extraAttrs[types.AttrPrefix+"critical_threshold"] = time.Duration(ins.ResponseTime.CriticalGe).String()
+		extraAttrs["critical_threshold"] = time.Duration(ins.ResponseTime.CriticalGe).String()
 	}
 
 	event := types.BuildEvent(mergeMaps(map[string]string{
 		"check": "dns::response_time",
-	}, baseLabels), attrLabels, extraAttrs).SetTitleRule(tr)
+	}, baseLabels)).SetAttrs(extraAttrs)
 
 	if ins.ResponseTime.CriticalGe > 0 && responseTime >= time.Duration(ins.ResponseTime.CriticalGe) {
 		event.SetEventStatus(types.EventStatusCritical)

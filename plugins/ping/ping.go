@@ -23,20 +23,17 @@ const (
 )
 
 type ConnectivityCheck struct {
-	Severity  string `toml:"severity"`
-	TitleRule string `toml:"title_rule"`
+	Severity string `toml:"severity"`
 }
 
 type PacketLossCheck struct {
 	WarnGe     float64 `toml:"warn_ge"`
 	CriticalGe float64 `toml:"critical_ge"`
-	TitleRule  string  `toml:"title_rule"`
 }
 
 type RttCheck struct {
 	WarnGe     config.Duration `toml:"warn_ge"`
 	CriticalGe config.Duration `toml:"critical_ge"`
-	TitleRule  string          `toml:"title_rule"`
 }
 
 type Partial struct {
@@ -252,8 +249,7 @@ func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
 					q.PushFront(types.BuildEvent(map[string]string{
 						"check":  "ping::connectivity",
 						"target": target,
-					}).SetTitleRule("[TPL]${check} ${from_hostip} ${target}").
-						SetEventStatus(types.EventStatusCritical).
+					}).SetEventStatus(types.EventStatusCritical).
 						SetDescription(fmt.Sprintf("panic during check: %v", r)))
 				}
 				se.Release()
@@ -272,14 +268,9 @@ func (ins *Instance) gather(q *safe.Queue[*types.Event], target string) {
 		"target": target,
 	}
 
-	connTR := ins.Connectivity.TitleRule
-	if connTR == "" {
-		connTR = "[TPL]${check} ${from_hostip} ${target}"
-	}
-
 	connEvent := types.BuildEvent(map[string]string{
 		"check": "ping::connectivity",
-	}, labels).SetTitleRule(connTR)
+	}, labels)
 
 	stats, err := ins.ping(target)
 	if err != nil {
@@ -309,17 +300,13 @@ func (ins *Instance) gather(q *safe.Queue[*types.Event], target string) {
 	q.PushFront(connEvent)
 
 	if ins.PacketLoss.WarnGe > 0 || ins.PacketLoss.CriticalGe > 0 {
-		plTR := ins.PacketLoss.TitleRule
-		if plTR == "" {
-			plTR = "[TPL]${check} ${from_hostip} ${target}"
-		}
-
 		plEvent := types.BuildEvent(map[string]string{
-			"check":                                 "ping::packet_loss",
-			types.AttrPrefix + "packet_loss":        fmt.Sprintf("%.2f%%", stats.PacketLoss),
-			types.AttrPrefix + "warn_threshold":     fmt.Sprintf("%.1f%%", ins.PacketLoss.WarnGe),
-			types.AttrPrefix + "critical_threshold": fmt.Sprintf("%.1f%%", ins.PacketLoss.CriticalGe),
-		}, labels).SetTitleRule(plTR)
+			"check": "ping::packet_loss",
+		}, labels).SetAttrs(map[string]string{
+			"packet_loss":        fmt.Sprintf("%.2f%%", stats.PacketLoss),
+			"warn_threshold":     fmt.Sprintf("%.1f%%", ins.PacketLoss.WarnGe),
+			"critical_threshold": fmt.Sprintf("%.1f%%", ins.PacketLoss.CriticalGe),
+		})
 
 		if ins.PacketLoss.CriticalGe > 0 && stats.PacketLoss >= ins.PacketLoss.CriticalGe {
 			plEvent.SetEventStatus(types.EventStatusCritical)
@@ -335,19 +322,15 @@ func (ins *Instance) gather(q *safe.Queue[*types.Event], target string) {
 	}
 
 	if ins.Rtt.WarnGe > 0 || ins.Rtt.CriticalGe > 0 {
-		rttTR := ins.Rtt.TitleRule
-		if rttTR == "" {
-			rttTR = "[TPL]${check} ${from_hostip} ${target}"
-		}
-
 		rttEvent := types.BuildEvent(map[string]string{
-			"check":                                 "ping::rtt",
-			types.AttrPrefix + "avg_rtt":            stats.AvgRtt.String(),
-			types.AttrPrefix + "min_rtt":            stats.MinRtt.String(),
-			types.AttrPrefix + "max_rtt":            stats.MaxRtt.String(),
-			types.AttrPrefix + "warn_threshold":     ins.Rtt.WarnGe.HumanString(),
-			types.AttrPrefix + "critical_threshold": ins.Rtt.CriticalGe.HumanString(),
-		}, labels).SetTitleRule(rttTR)
+			"check": "ping::rtt",
+		}, labels).SetAttrs(map[string]string{
+			"avg_rtt":            stats.AvgRtt.String(),
+			"min_rtt":            stats.MinRtt.String(),
+			"max_rtt":            stats.MaxRtt.String(),
+			"warn_threshold":     ins.Rtt.WarnGe.HumanString(),
+			"critical_threshold": ins.Rtt.CriticalGe.HumanString(),
+		})
 
 		if ins.Rtt.CriticalGe > 0 && stats.AvgRtt >= time.Duration(ins.Rtt.CriticalGe) {
 			rttEvent.SetEventStatus(types.EventStatusCritical)
@@ -364,15 +347,18 @@ func (ins *Instance) gather(q *safe.Queue[*types.Event], target string) {
 }
 
 func (ins *Instance) setStatsLabels(event *types.Event, stats *pingStats) {
-	event.Labels[types.AttrPrefix+"packets_sent"] = fmt.Sprintf("%d", stats.PacketsSent)
-	event.Labels[types.AttrPrefix+"packets_recv"] = fmt.Sprintf("%d", stats.PacketsRecv)
-	event.Labels[types.AttrPrefix+"packet_loss"] = fmt.Sprintf("%.2f%%", stats.PacketLoss)
-	if stats.PacketsRecv > 0 {
-		event.Labels[types.AttrPrefix+"min_rtt"] = stats.MinRtt.String()
-		event.Labels[types.AttrPrefix+"avg_rtt"] = stats.AvgRtt.String()
-		event.Labels[types.AttrPrefix+"max_rtt"] = stats.MaxRtt.String()
-		event.Labels[types.AttrPrefix+"std_dev_rtt"] = stats.StdDevRtt.String()
+	attrs := map[string]string{
+		"packets_sent": fmt.Sprintf("%d", stats.PacketsSent),
+		"packets_recv": fmt.Sprintf("%d", stats.PacketsRecv),
+		"packet_loss":  fmt.Sprintf("%.2f%%", stats.PacketLoss),
 	}
+	if stats.PacketsRecv > 0 {
+		attrs["min_rtt"] = stats.MinRtt.String()
+		attrs["avg_rtt"] = stats.AvgRtt.String()
+		attrs["max_rtt"] = stats.MaxRtt.String()
+		attrs["std_dev_rtt"] = stats.StdDevRtt.String()
+	}
+	event.SetAttrs(attrs)
 }
 
 type pingStats struct {

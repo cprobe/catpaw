@@ -25,13 +25,11 @@ var (
 type DeltaCheck struct {
 	WarnGe     float64 `toml:"warn_ge"`
 	CriticalGe float64 `toml:"critical_ge"`
-	TitleRule  string  `toml:"title_rule"`
 }
 
 type LinkSpec struct {
 	Interface string `toml:"interface"`
 	Severity  string `toml:"severity"`
-	TitleRule string `toml:"title_rule"`
 }
 
 type Instance struct {
@@ -219,19 +217,15 @@ func emitDeltaEvent(q *safe.Queue[*types.Event], checkLabel, kind, iface string,
 	delta := rxDelta + txDelta
 	total := currRx + currTx
 
-	tr := dc.TitleRule
-	if tr == "" {
-		tr = "[TPL]${check} ${from_hostip} ${target}"
-	}
-
 	event := types.BuildEvent(map[string]string{
-		"check":                    checkLabel,
-		"target":                   iface,
-		types.AttrPrefix + "delta": strconv.FormatUint(delta, 10),
-		types.AttrPrefix + "rx":    strconv.FormatUint(rxDelta, 10),
-		types.AttrPrefix + "tx":    strconv.FormatUint(txDelta, 10),
-		types.AttrPrefix + "total": strconv.FormatUint(total, 10),
-	}).SetTitleRule(tr)
+		"check":  checkLabel,
+		"target": iface,
+	}).SetAttrs(map[string]string{
+		"delta": strconv.FormatUint(delta, 10),
+		"rx":    strconv.FormatUint(rxDelta, 10),
+		"tx":    strconv.FormatUint(txDelta, 10),
+		"total": strconv.FormatUint(total, 10),
+	})
 
 	status := types.EvaluateGeThreshold(float64(delta), dc.WarnGe, dc.CriticalGe)
 	event.SetEventStatus(status)
@@ -251,28 +245,24 @@ func emitDeltaEvent(q *safe.Queue[*types.Event], checkLabel, kind, iface string,
 }
 
 func (ins *Instance) gatherLink(q *safe.Queue[*types.Event], spec *LinkSpec) {
-	tr := spec.TitleRule
-	if tr == "" {
-		tr = "[TPL]${check} ${from_hostip} ${target}"
-	}
-
 	operstate, err := readOperstate(spec.Interface)
 	if err != nil {
 		q.PushFront(types.BuildEvent(map[string]string{
 			"check":  "netif::link",
 			"target": spec.Interface,
-		}).SetTitleRule(tr).
+		}).
 			SetEventStatus(types.EventStatusCritical).
 			SetDescription(fmt.Sprintf("failed to read %s operstate: %v", spec.Interface, err)))
 		return
 	}
 
 	event := types.BuildEvent(map[string]string{
-		"check":                        "netif::link",
-		"target":                       spec.Interface,
-		types.AttrPrefix + "operstate": operstate,
-		types.AttrPrefix + "expect":    "up",
-	}).SetTitleRule(tr)
+		"check":  "netif::link",
+		"target": spec.Interface,
+	}).SetAttrs(map[string]string{
+		"operstate": operstate,
+		"expect":    "up",
+	})
 
 	if operstate == "not_found" {
 		q.PushFront(event.SetEventStatus(spec.Severity).

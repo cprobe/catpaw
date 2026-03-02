@@ -26,7 +26,6 @@
 - **尚未生效**（NotBefore 在未来）→ 无条件 Critical
 
 - **target label** 为检查对象标识：远程模式为 `host:port`（含 per-target SNI 时仍为 `host:port`），文件模式为文件路径
-- **默认 title_rule** 为 `"[TPL]${check} ${from_hostip} ${target}"`
 
 ### 未来扩展维度（本版本不实现）
 
@@ -170,7 +169,7 @@ remote_targets = [
 ]
 ```
 
-target label 中不包含 `@sni` 部分（事件的 target 始终为 `host:port`），SNI 信息记录在 `_attr_cert_sni` 标签中。
+target label 中不包含 `@sni` 部分（事件的 target 始终为 `host:port`），SNI 信息记录在 attrs 的 `cert_sni` 中。
 
 **为什么需要 per-target SNI**：instance 级 `server_name` 是全局单一值，当一个 instance 中多个 IP 需要不同 SNI 时，只能拆成多个 instance——违背配置简洁原则。per-target SNI 在不增加 instance 的前提下解决此问题。
 
@@ -208,7 +207,7 @@ file_targets = [
 
 **Leaf vs Intermediate 区分**：如果最早过期的不是链中第一张（通常是 leaf），Description 中会注明 `"intermediate cert <subject> expires in ..."`，提示用户这不是他直接管理的证书，可能需要联系 CA 或更新 chain bundle。
 
-`_attr_cert_chain_count` 标签记录链中证书总数，让用户一眼区分单证书和 bundle。
+attrs 的 `cert_chain_count` 记录链中证书总数，让用户一眼区分单证书和 bundle。
 
 ### 文件大小限制
 
@@ -257,7 +256,6 @@ file_targets = [
 type ExpiryCheck struct {
     WarnWithin     config.Duration `toml:"warn_within"`
     CriticalWithin config.Duration `toml:"critical_within"`
-    TitleRule      string          `toml:"title_rule"`
 }
 
 type Instance struct {
@@ -286,33 +284,33 @@ type Instance struct {
 - `mu sync.Mutex` — Gather 内部并发由 WaitGroup 管理，实例无共享可变状态
 - `encoding` — 证书是二进制/Base64 格式，不涉及文本编码
 
-## _attr_ 标签
+## Attrs（SetAttrs 设置）
 
 ### remote_expiry / file_expiry 事件
 
-| 标签 | 示例值 | 说明 |
+| 属性 | 示例值 | 说明 |
 | --- | --- | --- |
-| `_attr_cert_subject` | `CN=*.example.com` | 证书 Subject |
-| `_attr_cert_issuer` | `CN=Let's Encrypt Authority X3` | 证书颁发者 |
-| `_attr_cert_serial` | `03:A1:45:9B:...` | 证书序列号（唯一标识） |
-| `_attr_cert_sha256` | `2F:3C:8A:...` | 证书 SHA-256 指纹 |
-| `_attr_cert_not_before` | `2026-01-01 00:00:00` | 证书生效时间 |
-| `_attr_cert_expires_at` | `2026-06-15 23:59:59` | 过期时间 |
-| `_attr_time_until_expiry` | `106d 12h` / `-2d 6h` | 距过期剩余时间（已过期为负值绝对值加 `-` 前缀） |
-| `_attr_cert_dns_names` | `*.example.com, example.com` | 证书 SAN DNS 名称 |
-| `_attr_cert_chain_count` | `3` | 链中证书总数（仅 bundle 文件和远程链有意义） |
-| `_attr_cert_sni` | `api.example.com` | 实际使用的 SNI（仅远程模式） |
-| `_attr_warn_within` | `30 days` | 配置的 warn 阈值 |
-| `_attr_critical_within` | `7 days` | 配置的 critical 阈值 |
+| `cert_subject` | `CN=*.example.com` | 证书 Subject |
+| `cert_issuer` | `CN=Let's Encrypt Authority X3` | 证书颁发者 |
+| `cert_serial` | `03:A1:45:9B:...` | 证书序列号（唯一标识） |
+| `cert_sha256` | `2F:3C:8A:...` | 证书 SHA-256 指纹 |
+| `cert_not_before` | `2026-01-01 00:00:00` | 证书生效时间 |
+| `cert_expires_at` | `2026-06-15 23:59:59` | 过期时间 |
+| `time_until_expiry` | `106d 12h` / `-2d 6h` | 距过期剩余时间（已过期为负值绝对值加 `-` 前缀） |
+| `cert_dns_names` | `*.example.com, example.com` | 证书 SAN DNS 名称 |
+| `cert_chain_count` | `3` | 链中证书总数（仅 bundle 文件和远程链有意义） |
+| `cert_sni` | `api.example.com` | 实际使用的 SNI（仅远程模式） |
+| `warn_within` | `30 days` | 配置的 warn 阈值 |
+| `critical_within` | `7 days` | 配置的 critical 阈值 |
 
-**`_attr_cert_serial` + `_attr_cert_sha256`** 的价值：
+**`cert_serial` + `cert_sha256`** 的价值：
 - 确认证书是否被正确替换（对比 serial）
 - 与 CDN、WAF 等其他系统核对证书一致性（对比 SHA-256 fingerprint）
 - 跟踪证书轮换历史
 
 ### OK 事件
 
-OK 事件也携带完整 `_attr_` 标签（与 Warning/Critical 一致），便于巡检时一眼看到健康证书的到期时间、subject、issuer 等信息，无需额外查询。
+OK 事件也携带完整 attrs（与 Warning/Critical 一致），便于巡检时一眼看到健康证书的到期时间、subject、issuer 等信息，无需额外查询。
 
 ## Init() 校验
 
@@ -394,7 +392,7 @@ checkRemote(q, target):
     sni = targetSNI[target] || ins.ServerName || hostname(target)
     tlsCfg = ins.tlsConfig.Clone()
     tlsCfg.ServerName = sni
-    event._attr_cert_sni = sni
+    event.SetAttrs(map[string]string{"cert_sni": sni})
 
     // 建立连接
     conn = net.DialTimeout("tcp", target, timeout)
@@ -469,21 +467,21 @@ evaluateExpiry(event, cert, certIdx, chainLen, check):
     expiry = cert.NotAfter
     timeUntil = time.Until(expiry)
 
-    // 附加 _attr_ 标签
-    event._attr_cert_subject = cert.Subject.String()
-    event._attr_cert_issuer = cert.Issuer.String()
-    event._attr_cert_serial = formatSerial(cert.SerialNumber)
-    event._attr_cert_sha256 = sha256Fingerprint(cert.Raw)
-    event._attr_cert_not_before = cert.NotBefore.Format("2006-01-02 15:04:05")
-    event._attr_cert_expires_at = expiry.Format("2006-01-02 15:04:05")
-    if timeUntil >= 0:
-        event._attr_time_until_expiry = humanDuration(timeUntil)       // "106d 12h"
-    else:
-        event._attr_time_until_expiry = "-" + humanDuration(-timeUntil) // "-2d 6h"
-    event._attr_cert_dns_names = join(cert.DNSNames, ", ")
-    event._attr_cert_chain_count = strconv.Itoa(chainLen)
-    event._attr_warn_within = check.WarnWithin.HumanString()
-    event._attr_critical_within = check.CriticalWithin.HumanString()
+    // 附加 attrs（通过 SetAttrs）
+    timeUntilStr = timeUntil >= 0 ? humanDuration(timeUntil) : "-" + humanDuration(-timeUntil)
+    event.SetAttrs(map[string]string{
+        "cert_subject": cert.Subject.String(),
+        "cert_issuer": cert.Issuer.String(),
+        "cert_serial": formatSerial(cert.SerialNumber),
+        "cert_sha256": sha256Fingerprint(cert.Raw),
+        "cert_not_before": cert.NotBefore.Format("2006-01-02 15:04:05"),
+        "cert_expires_at": expiry.Format("2006-01-02 15:04:05"),
+        "time_until_expiry": timeUntilStr,
+        "cert_dns_names": join(cert.DNSNames, ", "),
+        "cert_chain_count": strconv.Itoa(chainLen),
+        "warn_within": check.WarnWithin.HumanString(),
+        "critical_within": check.CriticalWithin.HumanString(),
+    })
 
     // 判断是否为中间证书（非链中第一张）
     isIntermediate = certIdx > 0
@@ -663,13 +661,11 @@ interval = "1h"
 [instances.remote_expiry]
 warn_within = "720h"
 critical_within = "168h"
-# title_rule = "[TPL]${check} ${from_hostip} ${target}"
 
 ## 文件证书过期检测（阈值含义同上）
 [instances.file_expiry]
 warn_within = "720h"
 critical_within = "168h"
-# title_rule = "[TPL]${check} ${from_hostip} ${target}"
 
 [instances.alerting]
 for_duration = 0

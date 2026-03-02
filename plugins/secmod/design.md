@@ -22,7 +22,6 @@
 两个维度独立配置、独立产出事件。用户可以只配一个、也可以两个都配、也可以两个都不配（expect 留空则跳过该检查）。
 
 - **target label** 固定为 `"selinux"` / `"apparmor"`
-- **默认 title_rule** 为 `"[TPL]${check} ${from_hostip} ${target}"`
 
 ## 数据来源
 
@@ -63,15 +62,13 @@
 
 ```go
 type EnforceModeCheck struct {
-    Expect    string `toml:"expect"`
-    Severity  string `toml:"severity"`
-    TitleRule string `toml:"title_rule"`
+    Expect   string `toml:"expect"`
+    Severity string `toml:"severity"`
 }
 
 type AppArmorCheck struct {
-    Expect    string `toml:"expect"`
-    Severity  string `toml:"severity"`
-    TitleRule string `toml:"title_rule"`
+    Expect   string `toml:"expect"`
+    Severity string `toml:"severity"`
 }
 
 type Instance struct {
@@ -92,21 +89,21 @@ type SecmodPlugin struct {
 - `inFlight` — 同理
 - `Concurrency` — 最多两项检查，串行即可
 
-## _attr_ 标签
+## Attrs（SetAttrs 设置）
 
 ### enforce_mode
 
-| 标签 | 示例值 | 说明 |
+| 属性 | 示例值 | 说明 |
 | --- | --- | --- |
-| `_attr_actual` | `permissive` | 实际 SELinux 模式 |
-| `_attr_expect` | `enforcing` | 期望的模式 |
+| `actual` | `permissive` | 实际 SELinux 模式 |
+| `expect` | `enforcing` | 期望的模式 |
 
 ### apparmor_enabled
 
-| 标签 | 示例值 | 说明 |
+| 属性 | 示例值 | 说明 |
 | --- | --- | --- |
-| `_attr_actual` | `no` | AppArmor 实际状态 |
-| `_attr_expect` | `yes` | 期望的状态 |
+| `actual` | `no` | AppArmor 实际状态 |
+| `expect` | `yes` | 期望的状态 |
 
 ## Init() 校验
 
@@ -154,8 +151,7 @@ checkEnforceMode(q):
         return
 
     event = buildEvent("selinux", enforce_mode)
-    event._attr_actual = actual
-    event._attr_expect = enforce_mode.expect
+    event.SetAttrs(map[string]string{"actual": actual, "expect": enforce_mode.expect})
 
     if actual == enforce_mode.expect:
         event.Ok "SELinux mode is enforcing, matches expectation"
@@ -185,8 +181,7 @@ checkAppArmor(q):
         return
 
     event = buildEvent("apparmor", apparmor)
-    event._attr_actual = actual
-    event._attr_expect = apparmor.expect
+    event.SetAttrs(map[string]string{"actual": actual, "expect": apparmor.expect})
 
     if actual == apparmor.expect:
         event.Ok "AppArmor is yes, matches expectation"
@@ -288,7 +283,6 @@ interval = "60s"
 [instances.enforce_mode]
 # expect = "enforcing"
 # severity = "Warning"
-# title_rule = "[TPL]${check} ${from_hostip} ${target}"
 
 ## AppArmor 状态检查
 ## expect 可选值：yes / no
@@ -296,7 +290,6 @@ interval = "60s"
 [instances.apparmor_enabled]
 # expect = "yes"
 # severity = "Warning"
-# title_rule = "[TPL]${check} ${from_hostip} ${target}"
 
 [instances.alerting]
 for_duration = 0

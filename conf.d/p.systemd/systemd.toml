@@ -23,7 +23,6 @@ units = ["sshd"]
 ## 状态检查维度
 [instances.state]
 severity = "Critical"
-# title_rule = "[TPL]${check} ${from_hostip} ${target}"
 
 [instances.alerting]
 for_duration = 0

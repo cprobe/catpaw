@@ -25,11 +25,10 @@ const (
 )
 
 type ProcessCountCheck struct {
-	WarnLt     *int   `toml:"warn_lt"`
-	CriticalLt *int   `toml:"critical_lt"`
-	WarnGt     *int   `toml:"warn_gt"`
-	CriticalGt *int   `toml:"critical_gt"`
-	TitleRule  string `toml:"title_rule"`
+	WarnLt     *int `toml:"warn_lt"`
+	CriticalLt *int `toml:"critical_lt"`
+	WarnGt     *int `toml:"warn_gt"`
+	CriticalGt *int `toml:"critical_gt"`
 }
 
 type Instance struct {
@@ -194,20 +193,20 @@ func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
 	logger.Logger.Debugw("search result", "target", ins.searchLabel, "count", count)
 
 	pc := ins.ProcessCount
-	event := ins.newEvent()
-	event.Labels[types.AttrPrefix+"process_count"] = fmt.Sprintf("%d", count)
+	attrs := map[string]string{"process_count": fmt.Sprintf("%d", count)}
 	if pc.WarnLt != nil {
-		event.Labels[types.AttrPrefix+"warn_lt"] = fmt.Sprintf("%d", *pc.WarnLt)
+		attrs["warn_lt"] = fmt.Sprintf("%d", *pc.WarnLt)
 	}
 	if pc.CriticalLt != nil {
-		event.Labels[types.AttrPrefix+"critical_lt"] = fmt.Sprintf("%d", *pc.CriticalLt)
+		attrs["critical_lt"] = fmt.Sprintf("%d", *pc.CriticalLt)
 	}
 	if pc.WarnGt != nil {
-		event.Labels[types.AttrPrefix+"warn_gt"] = fmt.Sprintf("%d", *pc.WarnGt)
+		attrs["warn_gt"] = fmt.Sprintf("%d", *pc.WarnGt)
 	}
 	if pc.CriticalGt != nil {
-		event.Labels[types.AttrPrefix+"critical_gt"] = fmt.Sprintf("%d", *pc.CriticalGt)
+		attrs["critical_gt"] = fmt.Sprintf("%d", *pc.CriticalGt)
 	}
+	event := ins.newEvent().SetAttrs(attrs)
 
 	if pc.CriticalLt != nil && count < *pc.CriticalLt {
 		q.PushFront(event.SetEventStatus(types.EventStatusCritical).
@@ -318,30 +317,25 @@ func (ins *Instance) winServicePIDs() ([]procutil.PID, error) {
 }
 
 func (ins *Instance) newEvent() *types.Event {
-	tr := ins.ProcessCount.TitleRule
-	if tr == "" {
-		tr = "[TPL]${check} ${from_hostip} ${target}"
-	}
-
-	labels := map[string]string{
-		"check":  "procnum::process_count",
-		"target": ins.searchLabel,
-	}
+	attrs := map[string]string{}
 	if ins.SearchExecName != "" {
-		labels[types.AttrPrefix+"search_exec_name"] = ins.SearchExecName
+		attrs["search_exec_name"] = ins.SearchExecName
 	}
 	if ins.SearchCmdline != "" {
-		labels[types.AttrPrefix+"search_cmdline"] = ins.SearchCmdline
+		attrs["search_cmdline"] = ins.SearchCmdline
 	}
 	if ins.SearchUser != "" {
-		labels[types.AttrPrefix+"search_user"] = ins.SearchUser
+		attrs["search_user"] = ins.SearchUser
 	}
 	if ins.SearchPidFile != "" {
-		labels[types.AttrPrefix+"search_pid_file"] = ins.SearchPidFile
+		attrs["search_pid_file"] = ins.SearchPidFile
 	}
 	if ins.SearchWinService != "" {
-		labels[types.AttrPrefix+"search_win_service"] = ins.SearchWinService
+		attrs["search_win_service"] = ins.SearchWinService
 	}
 
-	return types.BuildEvent(labels).SetTitleRule(tr)
+	return types.BuildEvent(map[string]string{
+		"check":  "procnum::process_count",
+		"target": ins.searchLabel,
+	}).SetAttrs(attrs)
 }

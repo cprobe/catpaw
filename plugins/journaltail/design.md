@@ -55,7 +55,7 @@ type Instance struct {
     FilterExclude []string        // 可选：行级 exclude 规则
     MaxLines      int             // 告警描述中最多展示的匹配行数，默认 10
     Timeout       config.Duration // journalctl 执行超时，默认 30s
-    Match         MatchCheck      // severity 和 title_rule
+    Match         MatchCheck      // severity
 }
 ```
 

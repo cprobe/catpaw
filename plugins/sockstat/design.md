@@ -35,7 +35,6 @@ listen 队列（accept backlog）满时，内核静默丢弃新到达的 SYN 包
 | TCP listen 队列溢出 | `sockstat::listen_overflow` | ListenOverflows 增量超阈值告警 |
 
 - **target label** 为 `"system"`（ListenOverflows 是系统级全局计数器）
-- **默认 title_rule** 为 `"[TPL]${check} ${from_hostip}"`
 
 ## 数据来源
 
@@ -59,7 +58,7 @@ TcpExt: 0 0 ... 789 790 ...
 - `ListenDrops`：包含 ListenOverflows + 其他 listen 相关丢弃（如半连接队列满）
 - `ListenDrops >= ListenOverflows` 恒成立
 
-本插件以 `ListenOverflows` 为阈值判断依据（更精确），同时将 `ListenDrops` 作为 `_attr_` 标签提供上下文。
+本插件以 `ListenOverflows` 为阈值判断依据（更精确），同时将 `ListenDrops` 作为 attrs 提供上下文。
 
 ### 解析方式
 
@@ -123,7 +122,6 @@ TcpExt: 0 0 ... 789 790 ...
 type ListenOverflowCheck struct {
     WarnGe     float64 `toml:"warn_ge"`
     CriticalGe float64 `toml:"critical_ge"`
-    TitleRule  string  `toml:"title_rule"`
 }
 
 type Instance struct {
@@ -145,7 +143,7 @@ type SockstatPlugin struct {
 
 状态字段说明：
 - `prevOverflows`：上次 Gather 时的 ListenOverflows 累计值
-- `prevDrops`：上次 Gather 时的 ListenDrops 累计值（仅用于 _attr_）
+- `prevDrops`：上次 Gather 时的 ListenDrops 累计值（仅用于 attrs）
 - `initialized`：是否已建立基线（首次 Gather 后设为 true）
 
 不需要：
@@ -153,15 +151,15 @@ type SockstatPlugin struct {
 - `Concurrency` — 仅读一个文件
 - `Targets` — ListenOverflows 是系统级计数器
 
-## _attr_ 标签
+## Attrs（SetAttrs 设置）
 
-| 标签 | 示例值 | 说明 |
+| 属性 | 示例值 | 说明 |
 | --- | --- | --- |
-| `_attr_delta` | `5` | 本次采集间隔内的新增溢出次数（阈值判断依据） |
-| `_attr_total_overflows` | `789` | ListenOverflows 累计值（自系统启动） |
-| `_attr_total_drops` | `790` | ListenDrops 累计值（⊇ overflows，上下文参考） |
+| `delta` | `5` | 本次采集间隔内的新增溢出次数（阈值判断依据） |
+| `total_overflows` | `789` | ListenOverflows 累计值（自系统启动） |
+| `total_drops` | `790` | ListenDrops 累计值（⊇ overflows，上下文参考） |
 
-Ok 事件也携带完整 `_attr_` 标签，便于巡检时确认 listen 溢出的历史规模。
+Ok 事件也携带完整 attrs，便于巡检时确认 listen 溢出的历史规模。
 
 ## Init() 校验
 
@@ -202,9 +200,11 @@ Gather(q):
         ins.initialized = true
         // 产出 Ok 事件（delta=0），附带当前累计值供参考
         event = buildEvent(...)
-        event._attr_delta = "0"
-        event._attr_total_overflows = overflows
-        event._attr_total_drops = drops
+        event.SetAttrs(map[string]string{
+            "delta": "0",
+            "total_overflows": strconv.FormatUint(overflows, 10),
+            "total_drops": strconv.FormatUint(drops, 10),
+        })
         event → Ok: "listen overflow baseline established (total overflows: 789)"
         q.PushFront(event)
         return
@@ -223,11 +223,12 @@ Gather(q):
     ins.prevOverflows = overflows
     ins.prevDrops = drops
 
-    deltaStr = strconv.FormatUint(delta, 10)
     event = buildEvent("sockstat::listen_overflow", "system")
-    event._attr_delta = deltaStr
-    event._attr_total_overflows = strconv.FormatUint(overflows, 10)
-    event._attr_total_drops = strconv.FormatUint(drops, 10)
+    event.SetAttrs(map[string]string{
+        "delta": strconv.FormatUint(delta, 10),
+        "total_overflows": strconv.FormatUint(overflows, 10),
+        "total_drops": strconv.FormatUint(drops, 10),
+    })
 
     status = EvaluateGeThreshold(float64(delta), warn_ge, critical_ge)
     event.SetEventStatus(status)
@@ -293,9 +294,9 @@ readListenStats() (overflows uint64, drops uint64, err error):
 1. **按 header 名查找列索引**，不硬编码列位置——内核版本间字段顺序可能不同
 2. **首次 Gather 建立基线**，产出 Ok 事件（delta=0），不产生误报
 3. **计数器回绕保护**：若当前值 < 上次值（极罕见，如系统重启后 catpaw 未重启），delta 设为 0 并重置基线
-4. **ListenDrops 仅作为 _attr_ 参考**，不参与阈值判断（它是 ListenOverflows 的超集，缺乏精确性）
+4. **ListenDrops 仅作为 attrs 参考**，不参与阈值判断（它是 ListenOverflows 的超集，缺乏精确性）
 5. **`ListenOverflows` 不存在时产出 Critical 事件**——极老内核可能没有此字段
-6. **`ListenDrops` 不存在时静默忽略**（仅影响 _attr_，不影响核心逻辑）
+6. **`ListenDrops` 不存在时静默忽略**（仅影响 attrs，不影响核心逻辑）
 7. **单次 Gather 产出 0 或 1 个事件**
 8. **无需并发、无需 goroutine** — 同步读一个文件
 
@@ -387,7 +388,6 @@ conf.d/p.sockstat/
 [instances.listen_overflow]
 warn_ge = 1
 critical_ge = 100
-# title_rule = "[TPL]${check} ${from_hostip}"
 
 ## 采集间隔
 interval = "30s"

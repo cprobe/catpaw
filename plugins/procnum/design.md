@@ -58,7 +58,6 @@ type ProcessCountCheck struct {
     CriticalLt *int   // 数量 < 此值 → Critical
     WarnGt     *int   // 数量 > 此值 → Warning
     CriticalGt *int   // 数量 > 此值 → Critical
-    TitleRule  string
 }
 ```
 

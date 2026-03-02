@@ -12,7 +12,6 @@
 | Swap 使用率 | `mem::swap_usage` | Swap 使用率，Swap 总量为 0 时自动跳过 |
 
 - **target label** 统一为 `"memory"`（本机唯一资源，无需区分多 target）
-- **默认 title_rule** 为 `"[TPL]${check} ${from_hostip}"`（target 固定，标题中无需再显示）
 
 ## 数据来源
 
@@ -31,7 +30,7 @@
 | macOS | 完整支持 | 完整支持 | `sysctl` |
 | Windows | 完整支持 | 完整支持 | WMI |
 
-`Buffers` 和 `Cached` 在非 Linux 平台上为 0，`_attr_` 标签会显示 `0 B`，不影响使用。
+`Buffers` 和 `Cached` 在非 Linux 平台上为 0，attrs 会显示 `0 B`，不影响使用。
 
 ## 结构体设计
 
@@ -39,13 +38,11 @@
 type MemoryUsageCheck struct {
     WarnGe     float64 `toml:"warn_ge"`
     CriticalGe float64 `toml:"critical_ge"`
-    TitleRule  string  `toml:"title_rule"`
 }
 
 type SwapUsageCheck struct {
     WarnGe     float64 `toml:"warn_ge"`
     CriticalGe float64 `toml:"critical_ge"`
-    TitleRule  string  `toml:"title_rule"`
 }
 
 type Instance struct {
@@ -57,27 +54,27 @@ type Instance struct {
 
 不需要：`Concurrency`、`GatherTimeout`、`inFlight`、`Targets` — 纯内存操作，本机单一资源。
 
-## _attr_ 标签
+## Attrs（SetAttrs 设置）
 
 ### memory_usage
 
-| 标签 | 示例值 | 说明 |
+| 属性 | 示例值 | 说明 |
 | --- | --- | --- |
-| `_attr_total` | `15.6 GiB` | 物理内存总量 |
-| `_attr_used` | `12.3 GiB` | 已使用内存 |
-| `_attr_available` | `3.3 GiB` | 可用内存（含可回收缓存） |
-| `_attr_used_percent` | `78.8%` | 使用率 |
-| `_attr_buffers` | `256.0 MiB` | Buffers（Linux） |
-| `_attr_cached` | `2.1 GiB` | Cached（Linux） |
+| `total` | `15.6 GiB` | 物理内存总量 |
+| `used` | `12.3 GiB` | 已使用内存 |
+| `available` | `3.3 GiB` | 可用内存（含可回收缓存） |
+| `used_percent` | `78.8%` | 使用率 |
+| `buffers` | `256.0 MiB` | Buffers（Linux） |
+| `cached` | `2.1 GiB` | Cached（Linux） |
 
 ### swap_usage
 
-| 标签 | 示例值 | 说明 |
+| 属性 | 示例值 | 说明 |
 | --- | --- | --- |
-| `_attr_swap_total` | `4.0 GiB` | Swap 总量 |
-| `_attr_swap_used` | `1.2 GiB` | Swap 已使用 |
-| `_attr_swap_free` | `2.8 GiB` | Swap 可用 |
-| `_attr_swap_used_percent` | `30.0%` | Swap 使用率 |
+| `swap_total` | `4.0 GiB` | Swap 总量 |
+| `swap_used` | `1.2 GiB` | Swap 已使用 |
+| `swap_free` | `2.8 GiB` | Swap 可用 |
+| `swap_used_percent` | `30.0%` | Swap 使用率 |
 
 ## Init() 校验
 

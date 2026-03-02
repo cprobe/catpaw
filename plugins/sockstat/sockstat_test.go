@@ -266,8 +266,8 @@ func TestGather_Baseline(t *testing.T) {
 	if event.EventStatus != types.EventStatusOk {
 		t.Errorf("expected Ok for baseline, got %s: %s", event.EventStatus, event.Description)
 	}
-	if event.Labels[types.AttrPrefix+"delta"] != "0" {
-		t.Errorf("expected delta=0 for baseline, got %s", event.Labels[types.AttrPrefix+"delta"])
+	if event.Attrs["delta"] != "0" {
+		t.Errorf("expected delta=0 for baseline, got %s", event.Attrs["delta"])
 	}
 	if !ins.initialized {
 		t.Error("expected initialized=true after baseline")
@@ -319,8 +319,8 @@ TcpExt: %d %d
 	if all[0].EventStatus != types.EventStatusOk {
 		t.Errorf("no-change: expected Ok, got %s: %s", all[0].EventStatus, all[0].Description)
 	}
-	if all[0].Labels[types.AttrPrefix+"delta"] != "0" {
-		t.Errorf("no-change: expected delta=0, got %s", all[0].Labels[types.AttrPrefix+"delta"])
+	if all[0].Attrs["delta"] != "0" {
+		t.Errorf("no-change: expected delta=0, got %s", all[0].Attrs["delta"])
 	}
 
 	// Third gather: small delta → Warning
@@ -333,8 +333,8 @@ TcpExt: %d %d
 	if all[0].EventStatus != types.EventStatusWarning {
 		t.Errorf("warning: expected Warning, got %s: %s", all[0].EventStatus, all[0].Description)
 	}
-	if all[0].Labels[types.AttrPrefix+"delta"] != "5" {
-		t.Errorf("warning: expected delta=5, got %s", all[0].Labels[types.AttrPrefix+"delta"])
+	if all[0].Attrs["delta"] != "5" {
+		t.Errorf("warning: expected delta=5, got %s", all[0].Attrs["delta"])
 	}
 
 	// Fourth gather: large delta → Critical
@@ -347,8 +347,8 @@ TcpExt: %d %d
 	if all[0].EventStatus != types.EventStatusCritical {
 		t.Errorf("critical: expected Critical, got %s: %s", all[0].EventStatus, all[0].Description)
 	}
-	if all[0].Labels[types.AttrPrefix+"delta"] != "200" {
-		t.Errorf("critical: expected delta=200, got %s", all[0].Labels[types.AttrPrefix+"delta"])
+	if all[0].Attrs["delta"] != "200" {
+		t.Errorf("critical: expected delta=200, got %s", all[0].Attrs["delta"])
 	}
 }
 
@@ -391,8 +391,8 @@ TcpExt: %d %d
 	if all[0].EventStatus != types.EventStatusOk {
 		t.Errorf("wraparound: expected Ok (delta=0), got %s: %s", all[0].EventStatus, all[0].Description)
 	}
-	if all[0].Labels[types.AttrPrefix+"delta"] != "0" {
-		t.Errorf("wraparound: expected delta=0, got %s", all[0].Labels[types.AttrPrefix+"delta"])
+	if all[0].Attrs["delta"] != "0" {
+		t.Errorf("wraparound: expected delta=0, got %s", all[0].Attrs["delta"])
 	}
 }
 

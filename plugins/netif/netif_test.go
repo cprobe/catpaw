@@ -329,14 +329,14 @@ func TestGatherErrorsDelta(t *testing.T) {
 	if event.EventStatus != types.EventStatusWarning {
 		t.Fatalf("expected Warning (delta 15 >= warn 1), got %s", event.EventStatus)
 	}
-	if event.Labels[types.AttrPrefix+"delta"] != "15" {
-		t.Fatalf("expected delta 15, got %s", event.Labels[types.AttrPrefix+"delta"])
+	if event.Attrs["delta"] != "15" {
+		t.Fatalf("expected delta 15, got %s", event.Attrs["delta"])
 	}
-	if event.Labels[types.AttrPrefix+"rx"] != "12" {
-		t.Fatalf("expected rx 12, got %s", event.Labels[types.AttrPrefix+"rx"])
+	if event.Attrs["rx"] != "12" {
+		t.Fatalf("expected rx 12, got %s", event.Attrs["rx"])
 	}
-	if event.Labels[types.AttrPrefix+"tx"] != "3" {
-		t.Fatalf("expected tx 3, got %s", event.Labels[types.AttrPrefix+"tx"])
+	if event.Attrs["tx"] != "3" {
+		t.Fatalf("expected tx 3, got %s", event.Attrs["tx"])
 	}
 }
 
@@ -433,8 +433,8 @@ func TestGatherLinkDown(t *testing.T) {
 	if event.EventStatus != types.EventStatusCritical {
 		t.Fatalf("expected Critical, got %s", event.EventStatus)
 	}
-	if event.Labels[types.AttrPrefix+"operstate"] != "down" {
-		t.Fatalf("expected operstate down, got %s", event.Labels[types.AttrPrefix+"operstate"])
+	if event.Attrs["operstate"] != "down" {
+		t.Fatalf("expected operstate down, got %s", event.Attrs["operstate"])
 	}
 }
 
@@ -454,8 +454,8 @@ func TestGatherLinkNotFound(t *testing.T) {
 	if event.EventStatus != types.EventStatusCritical {
 		t.Fatalf("expected Critical for not found, got %s", event.EventStatus)
 	}
-	if event.Labels[types.AttrPrefix+"operstate"] != "not_found" {
-		t.Fatalf("expected operstate not_found, got %s", event.Labels[types.AttrPrefix+"operstate"])
+	if event.Attrs["operstate"] != "not_found" {
+		t.Fatalf("expected operstate not_found, got %s", event.Attrs["operstate"])
 	}
 }
 

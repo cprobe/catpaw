@@ -14,7 +14,6 @@
 [instances.cpu_usage]
 warn_ge     = 80.0
 critical_ge = 90.0
-# title_rule = "[TPL]${check} ${from_hostip}"
 
 ## Load Average 阈值（归一化为每核负载）
 ## check label 自动设为 "cpu::load_average"
@@ -23,7 +22,6 @@ warn_ge     = 3.0
 critical_ge = 5.0
 ## 使用哪个周期的负载值："1m", "5m"(默认), "15m"
 # period = "5m"
-# title_rule = "[TPL]${check} ${from_hostip}"
 
 ## 采集间隔，不配则继承全局 interval
 # interval = "30s"

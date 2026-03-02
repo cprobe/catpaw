@@ -26,56 +26,47 @@ const (
 )
 
 type ConnectivityCheck struct {
-	Severity  string `toml:"severity"`
-	TitleRule string `toml:"title_rule"`
+	Severity string `toml:"severity"`
 }
 
 type ResponseTimeCheck struct {
 	WarnGe     config.Duration `toml:"warn_ge"`
 	CriticalGe config.Duration `toml:"critical_ge"`
-	TitleRule  string          `toml:"title_rule"`
 }
 
 type RoleCheck struct {
-	Expect    string `toml:"expect"`
-	Severity  string `toml:"severity"`
-	TitleRule string `toml:"title_rule"`
+	Expect   string `toml:"expect"`
+	Severity string `toml:"severity"`
 }
 
 type CountCheck struct {
-	WarnGe     int    `toml:"warn_ge"`
-	CriticalGe int    `toml:"critical_ge"`
-	TitleRule  string `toml:"title_rule"`
+	WarnGe     int `toml:"warn_ge"`
+	CriticalGe int `toml:"critical_ge"`
 }
 
 type MinCountCheck struct {
-	WarnLt     int    `toml:"warn_lt"`
-	CriticalLt int    `toml:"critical_lt"`
-	TitleRule  string `toml:"title_rule"`
+	WarnLt     int `toml:"warn_lt"`
+	CriticalLt int `toml:"critical_lt"`
 }
 
 type MemoryUsageCheck struct {
 	WarnGe     config.Size `toml:"warn_ge"`
 	CriticalGe config.Size `toml:"critical_ge"`
-	TitleRule  string      `toml:"title_rule"`
 }
 
 type MasterLinkCheck struct {
-	Expect    string `toml:"expect"`
-	Severity  string `toml:"severity"`
-	TitleRule string `toml:"title_rule"`
+	Expect   string `toml:"expect"`
+	Severity string `toml:"severity"`
 }
 
 type PersistenceCheck struct {
-	Enabled   bool   `toml:"enabled"`
-	Severity  string `toml:"severity"`
-	TitleRule string `toml:"title_rule"`
+	Enabled  bool   `toml:"enabled"`
+	Severity string `toml:"severity"`
 }
 
 type OpsPerSecondCheck struct {
-	WarnGe     int    `toml:"warn_ge"`
-	CriticalGe int    `toml:"critical_ge"`
-	TitleRule  string `toml:"title_rule"`
+	WarnGe     int `toml:"warn_ge"`
+	CriticalGe int `toml:"critical_ge"`
 }
 
 type Partial struct {
@@ -207,9 +198,6 @@ func mergeConnectivityCheck(dst *ConnectivityCheck, src ConnectivityCheck) {
 	if dst.Severity == "" {
 		dst.Severity = src.Severity
 	}
-	if dst.TitleRule == "" {
-		dst.TitleRule = src.TitleRule
-	}
 }
 
 func mergeResponseTimeCheck(dst *ResponseTimeCheck, src ResponseTimeCheck) {
@@ -218,9 +206,6 @@ func mergeResponseTimeCheck(dst *ResponseTimeCheck, src ResponseTimeCheck) {
 	}
 	if dst.CriticalGe == 0 {
 		dst.CriticalGe = src.CriticalGe
-	}
-	if dst.TitleRule == "" {
-		dst.TitleRule = src.TitleRule
 	}
 }
 
@@ -231,9 +216,6 @@ func mergeRoleCheck(dst *RoleCheck, src RoleCheck) {
 	if dst.Severity == "" {
 		dst.Severity = src.Severity
 	}
-	if dst.TitleRule == "" {
-		dst.TitleRule = src.TitleRule
-	}
 }
 
 func mergeCountCheck(dst *CountCheck, src CountCheck) {
@@ -242,9 +224,6 @@ func mergeCountCheck(dst *CountCheck, src CountCheck) {
 	}
 	if dst.CriticalGe == 0 {
 		dst.CriticalGe = src.CriticalGe
-	}
-	if dst.TitleRule == "" {
-		dst.TitleRule = src.TitleRule
 	}
 }
 
@@ -255,9 +234,6 @@ func mergeMinCountCheck(dst *MinCountCheck, src MinCountCheck) {
 	if dst.CriticalLt == 0 {
 		dst.CriticalLt = src.CriticalLt
 	}
-	if dst.TitleRule == "" {
-		dst.TitleRule = src.TitleRule
-	}
 }
 
 func mergeMemoryUsageCheck(dst *MemoryUsageCheck, src MemoryUsageCheck) {
@@ -266,9 +242,6 @@ func mergeMemoryUsageCheck(dst *MemoryUsageCheck, src MemoryUsageCheck) {
 	}
 	if dst.CriticalGe == 0 {
 		dst.CriticalGe = src.CriticalGe
-	}
-	if dst.TitleRule == "" {
-		dst.TitleRule = src.TitleRule
 	}
 }
 
@@ -279,9 +252,6 @@ func mergeMasterLinkCheck(dst *MasterLinkCheck, src MasterLinkCheck) {
 	if dst.Severity == "" {
 		dst.Severity = src.Severity
 	}
-	if dst.TitleRule == "" {
-		dst.TitleRule = src.TitleRule
-	}
 }
 
 func mergeOpsPerSecondCheck(dst *OpsPerSecondCheck, src OpsPerSecondCheck) {
@@ -291,9 +261,6 @@ func mergeOpsPerSecondCheck(dst *OpsPerSecondCheck, src OpsPerSecondCheck) {
 	if dst.CriticalGe == 0 {
 		dst.CriticalGe = src.CriticalGe
 	}
-	if dst.TitleRule == "" {
-		dst.TitleRule = src.TitleRule
-	}
 }
 
 func mergePersistenceCheck(dst *PersistenceCheck, src PersistenceCheck) {
@@ -302,9 +269,6 @@ func mergePersistenceCheck(dst *PersistenceCheck, src PersistenceCheck) {
 	}
 	if dst.Severity == "" {
 		dst.Severity = src.Severity
-	}
-	if dst.TitleRule == "" {
-		dst.TitleRule = src.TitleRule
 	}
 }
 
@@ -370,7 +334,6 @@ func (ins *Instance) Init() error {
 	if err := validateCountCheck("instantaneous_ops_per_sec", CountCheck{
 		WarnGe:     ins.OpsPerSecond.WarnGe,
 		CriticalGe: ins.OpsPerSecond.CriticalGe,
-		TitleRule:  ins.OpsPerSecond.TitleRule,
 	}); err != nil {
 		return err
 	}
@@ -552,8 +515,7 @@ func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
 					q.PushFront(types.BuildEvent(map[string]string{
 						"check":  "redis::connectivity",
 						"target": target,
-					}).SetTitleRule("[TPL]${check} ${from_hostip} ${target}").
-						SetEventStatus(types.EventStatusCritical).
+					}).SetEventStatus(types.EventStatusCritical).
 						SetDescription(fmt.Sprintf("panic during check: %v", r)))
 				}
 				se.Release()
@@ -594,12 +556,12 @@ func (ins *Instance) newAccessor(target string) (*RedisAccessor, error) {
 }
 
 func (ins *Instance) gatherTarget(q *safe.Queue[*types.Event], target string) {
-	connEvent := ins.newEvent("redis::connectivity", target, ins.Connectivity.TitleRule)
+	connEvent := ins.newEvent("redis::connectivity", target)
 	start := time.Now()
 
 	acc, err := ins.newAccessor(target)
 	if err != nil {
-		connEvent.Labels[types.AttrPrefix+"response_time"] = time.Since(start).String()
+		connEvent.SetAttrs(map[string]string{"response_time": time.Since(start).String()})
 		q.PushFront(connEvent.SetEventStatus(ins.Connectivity.Severity).
 			SetDescription(fmt.Sprintf("redis ping failed: %v", err)))
 		return
@@ -607,14 +569,14 @@ func (ins *Instance) gatherTarget(q *safe.Queue[*types.Event], target string) {
 	defer acc.Close()
 
 	if err := acc.Ping(); err != nil {
-		connEvent.Labels[types.AttrPrefix+"response_time"] = time.Since(start).String()
+		connEvent.SetAttrs(map[string]string{"response_time": time.Since(start).String()})
 		q.PushFront(connEvent.SetEventStatus(ins.Connectivity.Severity).
 			SetDescription(fmt.Sprintf("redis ping failed: %v", err)))
 		return
 	}
 
 	responseTime := time.Since(start)
-	connEvent.Labels[types.AttrPrefix+"response_time"] = responseTime.String()
+	connEvent.SetAttrs(map[string]string{"response_time": responseTime.String()})
 	q.PushFront(connEvent.SetDescription("redis ping ok"))
 
 	ins.checkResponseTime(q, target, responseTime)
@@ -635,7 +597,7 @@ func (ins *Instance) gatherTarget(q *safe.Queue[*types.Event], target string) {
 	if ins.Role.Expect != "" {
 		info, err := infoSection("replication")
 		if err != nil {
-			q.PushFront(ins.newEvent("redis::role", target, ins.Role.TitleRule).
+			q.PushFront(ins.newEvent("redis::role", target).
 				SetEventStatus(types.EventStatusCritical).
 				SetDescription(fmt.Sprintf("failed to query redis replication info: %v", err)))
 		} else {
@@ -646,7 +608,7 @@ func (ins *Instance) gatherTarget(q *safe.Queue[*types.Event], target string) {
 	if ins.MasterLink.Expect != "" {
 		info, err := infoSection("replication")
 		if err != nil {
-			q.PushFront(ins.newEvent("redis::master_link_status", target, ins.MasterLink.TitleRule).
+			q.PushFront(ins.newEvent("redis::master_link_status", target).
 				SetEventStatus(types.EventStatusCritical).
 				SetDescription(fmt.Sprintf("failed to query redis replication info: %v", err)))
 		} else {
@@ -657,7 +619,7 @@ func (ins *Instance) gatherTarget(q *safe.Queue[*types.Event], target string) {
 	if ins.ConnectedSlaves.WarnLt > 0 || ins.ConnectedSlaves.CriticalLt > 0 {
 		info, err := infoSection("replication")
 		if err != nil {
-			q.PushFront(ins.newEvent("redis::connected_slaves", target, ins.ConnectedSlaves.TitleRule).
+			q.PushFront(ins.newEvent("redis::connected_slaves", target).
 				SetEventStatus(types.EventStatusCritical).
 				SetDescription(fmt.Sprintf("failed to query redis replication info: %v", err)))
 		} else {
@@ -670,12 +632,12 @@ func (ins *Instance) gatherTarget(q *safe.Queue[*types.Event], target string) {
 		info, err := infoSection("clients")
 		if err != nil {
 			if ins.ConnectedClients.WarnGe > 0 || ins.ConnectedClients.CriticalGe > 0 {
-				q.PushFront(ins.newEvent("redis::connected_clients", target, ins.ConnectedClients.TitleRule).
+				q.PushFront(ins.newEvent("redis::connected_clients", target).
 					SetEventStatus(types.EventStatusCritical).
 					SetDescription(fmt.Sprintf("failed to query redis client info: %v", err)))
 			}
 			if ins.BlockedClients.WarnGe > 0 || ins.BlockedClients.CriticalGe > 0 {
-				q.PushFront(ins.newEvent("redis::blocked_clients", target, ins.BlockedClients.TitleRule).
+				q.PushFront(ins.newEvent("redis::blocked_clients", target).
 					SetEventStatus(types.EventStatusCritical).
 					SetDescription(fmt.Sprintf("failed to query redis client info: %v", err)))
 			}
@@ -694,7 +656,7 @@ func (ins *Instance) gatherTarget(q *safe.Queue[*types.Event], target string) {
 	if ins.UsedMemory.WarnGe > 0 || ins.UsedMemory.CriticalGe > 0 {
 		info, err := infoSection("memory")
 		if err != nil {
-			q.PushFront(ins.newEvent("redis::used_memory", target, ins.UsedMemory.TitleRule).
+			q.PushFront(ins.newEvent("redis::used_memory", target).
 				SetEventStatus(types.EventStatusCritical).
 				SetDescription(fmt.Sprintf("failed to query redis memory info: %v", err)))
 		} else {
@@ -710,22 +672,22 @@ func (ins *Instance) gatherTarget(q *safe.Queue[*types.Event], target string) {
 		info, err := infoSection("stats")
 		if err != nil {
 			if ins.RejectedConn.WarnGe > 0 || ins.RejectedConn.CriticalGe > 0 {
-				q.PushFront(ins.newEvent("redis::rejected_connections", target, ins.RejectedConn.TitleRule).
+				q.PushFront(ins.newEvent("redis::rejected_connections", target).
 					SetEventStatus(types.EventStatusCritical).
 					SetDescription(fmt.Sprintf("failed to query redis stats info: %v", err)))
 			}
 			if ins.EvictedKeys.WarnGe > 0 || ins.EvictedKeys.CriticalGe > 0 {
-				q.PushFront(ins.newEvent("redis::evicted_keys", target, ins.EvictedKeys.TitleRule).
+				q.PushFront(ins.newEvent("redis::evicted_keys", target).
 					SetEventStatus(types.EventStatusCritical).
 					SetDescription(fmt.Sprintf("failed to query redis stats info: %v", err)))
 			}
 			if ins.ExpiredKeys.WarnGe > 0 || ins.ExpiredKeys.CriticalGe > 0 {
-				q.PushFront(ins.newEvent("redis::expired_keys", target, ins.ExpiredKeys.TitleRule).
+				q.PushFront(ins.newEvent("redis::expired_keys", target).
 					SetEventStatus(types.EventStatusCritical).
 					SetDescription(fmt.Sprintf("failed to query redis stats info: %v", err)))
 			}
 			if ins.OpsPerSecond.WarnGe > 0 || ins.OpsPerSecond.CriticalGe > 0 {
-				q.PushFront(ins.newEvent("redis::instantaneous_ops_per_sec", target, ins.OpsPerSecond.TitleRule).
+				q.PushFront(ins.newEvent("redis::instantaneous_ops_per_sec", target).
 					SetEventStatus(types.EventStatusCritical).
 					SetDescription(fmt.Sprintf("failed to query redis stats info: %v", err)))
 			}
@@ -736,7 +698,6 @@ func (ins *Instance) gatherTarget(q *safe.Queue[*types.Event], target string) {
 					CountCheck{
 						WarnGe:     ins.OpsPerSecond.WarnGe,
 						CriticalGe: ins.OpsPerSecond.CriticalGe,
-						TitleRule:  ins.OpsPerSecond.TitleRule,
 					},
 					"instantaneous ops per second")
 			}
@@ -746,7 +707,7 @@ func (ins *Instance) gatherTarget(q *safe.Queue[*types.Event], target string) {
 	if ins.Persistence.Enabled {
 		info, err := infoSection("persistence")
 		if err != nil {
-			q.PushFront(ins.newEvent("redis::persistence", target, ins.Persistence.TitleRule).
+			q.PushFront(ins.newEvent("redis::persistence", target).
 				SetEventStatus(types.EventStatusCritical).
 				SetDescription(fmt.Sprintf("failed to query redis persistence info: %v", err)))
 		} else {
@@ -761,14 +722,14 @@ func (ins *Instance) checkResponseTime(q *safe.Queue[*types.Event], target strin
 		return
 	}
 
-	event := ins.newEvent("redis::response_time", target, ins.ResponseTime.TitleRule)
-	event.Labels[types.AttrPrefix+"response_time"] = responseTime.String()
+	attrs := map[string]string{"response_time": responseTime.String()}
 	if ins.ResponseTime.WarnGe > 0 {
-		event.Labels[types.AttrPrefix+"warn_ge"] = time.Duration(ins.ResponseTime.WarnGe).String()
+		attrs["warn_ge"] = time.Duration(ins.ResponseTime.WarnGe).String()
 	}
 	if ins.ResponseTime.CriticalGe > 0 {
-		event.Labels[types.AttrPrefix+"critical_ge"] = time.Duration(ins.ResponseTime.CriticalGe).String()
+		attrs["critical_ge"] = time.Duration(ins.ResponseTime.CriticalGe).String()
 	}
+	event := ins.newEvent("redis::response_time", target).SetAttrs(attrs)
 
 	status := types.EvaluateGeThreshold(float64(responseTime), float64(ins.ResponseTime.WarnGe), float64(ins.ResponseTime.CriticalGe))
 	switch status {
@@ -786,7 +747,7 @@ func (ins *Instance) checkResponseTime(q *safe.Queue[*types.Event], target strin
 }
 
 func (ins *Instance) checkRole(q *safe.Queue[*types.Event], target string, info map[string]string) {
-	event := ins.newEvent("redis::role", target, ins.Role.TitleRule)
+	event := ins.newEvent("redis::role", target)
 	actual, ok := info["role"]
 	if !ok {
 		q.PushFront(event.SetEventStatus(types.EventStatusCritical).
@@ -795,8 +756,7 @@ func (ins *Instance) checkRole(q *safe.Queue[*types.Event], target string, info 
 	}
 
 	actual = strings.ToLower(strings.TrimSpace(actual))
-	event.Labels[types.AttrPrefix+"actual"] = actual
-	event.Labels[types.AttrPrefix+"expect"] = ins.Role.Expect
+	event.SetAttrs(map[string]string{"actual": actual, "expect": ins.Role.Expect})
 
 	if actual == ins.Role.Expect {
 		q.PushFront(event.SetDescription(fmt.Sprintf("redis role is %s, matches expectation", actual)))
@@ -808,9 +768,10 @@ func (ins *Instance) checkRole(q *safe.Queue[*types.Event], target string, info 
 }
 
 func (ins *Instance) checkMasterLink(q *safe.Queue[*types.Event], target string, info map[string]string) {
-	event := ins.newEvent("redis::master_link_status", target, ins.MasterLink.TitleRule)
+	event := ins.newEvent("redis::master_link_status", target)
+	attrs := make(map[string]string)
 	if role, ok := info["role"]; ok {
-		event.Labels[types.AttrPrefix+"role"] = role
+		attrs["role"] = role
 	}
 	actual, ok := info["master_link_status"]
 	if !ok {
@@ -820,15 +781,15 @@ func (ins *Instance) checkMasterLink(q *safe.Queue[*types.Event], target string,
 	}
 
 	actual = strings.ToLower(strings.TrimSpace(actual))
-	event.Labels[types.AttrPrefix+"actual"] = actual
-	event.Labels[types.AttrPrefix+"expect"] = ins.MasterLink.Expect
-
+	attrs["actual"] = actual
+	attrs["expect"] = ins.MasterLink.Expect
 	if v, ok := info["master_host"]; ok && v != "" {
-		event.Labels[types.AttrPrefix+"master_host"] = v
+		attrs["master_host"] = v
 	}
 	if v, ok := info["master_port"]; ok && v != "" {
-		event.Labels[types.AttrPrefix+"master_port"] = v
+		attrs["master_port"] = v
 	}
+	event.SetAttrs(attrs)
 
 	if actual == ins.MasterLink.Expect {
 		q.PushFront(event.SetDescription(fmt.Sprintf("redis master link status is %s, matches expectation", actual)))
@@ -840,15 +801,15 @@ func (ins *Instance) checkMasterLink(q *safe.Queue[*types.Event], target string,
 }
 
 func (ins *Instance) checkCount(q *safe.Queue[*types.Event], target, check string, value int, thresholds CountCheck, metricName string) {
-	event := ins.newEvent(check, target, thresholds.TitleRule)
 	labelKey := strings.TrimPrefix(check, "redis::")
-	event.Labels[types.AttrPrefix+labelKey] = strconv.Itoa(value)
+	attrs := map[string]string{labelKey: strconv.Itoa(value)}
 	if thresholds.WarnGe > 0 {
-		event.Labels[types.AttrPrefix+"warn_ge"] = strconv.Itoa(thresholds.WarnGe)
+		attrs["warn_ge"] = strconv.Itoa(thresholds.WarnGe)
 	}
 	if thresholds.CriticalGe > 0 {
-		event.Labels[types.AttrPrefix+"critical_ge"] = strconv.Itoa(thresholds.CriticalGe)
+		attrs["critical_ge"] = strconv.Itoa(thresholds.CriticalGe)
 	}
+	event := ins.newEvent(check, target).SetAttrs(attrs)
 
 	status := types.EvaluateGeThreshold(float64(value), float64(thresholds.WarnGe), float64(thresholds.CriticalGe))
 	switch status {
@@ -866,13 +827,13 @@ func (ins *Instance) checkCount(q *safe.Queue[*types.Event], target, check strin
 func (ins *Instance) checkCountFromInfo(q *safe.Queue[*types.Event], target, check string, info map[string]string, key string, thresholds CountCheck, metricName string) {
 	value, ok, err := infoGetInt(info, key)
 	if err != nil {
-		q.PushFront(ins.newEvent(check, target, thresholds.TitleRule).
+		q.PushFront(ins.newEvent(check, target).
 			SetEventStatus(types.EventStatusCritical).
 			SetDescription(fmt.Sprintf("failed to parse redis %s: %v", key, err)))
 		return
 	}
 	if !ok {
-		q.PushFront(ins.newEvent(check, target, thresholds.TitleRule).
+		q.PushFront(ins.newEvent(check, target).
 			SetEventStatus(types.EventStatusCritical).
 			SetDescription(fmt.Sprintf("redis info output missing %s", key)))
 		return
@@ -883,13 +844,13 @@ func (ins *Instance) checkCountFromInfo(q *safe.Queue[*types.Event], target, che
 func (ins *Instance) checkMinCountFromInfo(q *safe.Queue[*types.Event], target, check string, info map[string]string, key string, thresholds MinCountCheck, metricName string) {
 	value, ok, err := infoGetInt(info, key)
 	if err != nil {
-		q.PushFront(ins.newEvent(check, target, thresholds.TitleRule).
+		q.PushFront(ins.newEvent(check, target).
 			SetEventStatus(types.EventStatusCritical).
 			SetDescription(fmt.Sprintf("failed to parse redis %s: %v", key, err)))
 		return
 	}
 	if !ok {
-		q.PushFront(ins.newEvent(check, target, thresholds.TitleRule).
+		q.PushFront(ins.newEvent(check, target).
 			SetEventStatus(types.EventStatusCritical).
 			SetDescription(fmt.Sprintf("redis info output missing %s", key)))
 		return
@@ -898,15 +859,15 @@ func (ins *Instance) checkMinCountFromInfo(q *safe.Queue[*types.Event], target, 
 }
 
 func (ins *Instance) checkMinCount(q *safe.Queue[*types.Event], target, check string, value int, thresholds MinCountCheck, metricName string) {
-	event := ins.newEvent(check, target, thresholds.TitleRule)
 	labelKey := strings.TrimPrefix(check, "redis::")
-	event.Labels[types.AttrPrefix+labelKey] = strconv.Itoa(value)
+	attrs := map[string]string{labelKey: strconv.Itoa(value)}
 	if thresholds.WarnLt > 0 {
-		event.Labels[types.AttrPrefix+"warn_lt"] = strconv.Itoa(thresholds.WarnLt)
+		attrs["warn_lt"] = strconv.Itoa(thresholds.WarnLt)
 	}
 	if thresholds.CriticalLt > 0 {
-		event.Labels[types.AttrPrefix+"critical_lt"] = strconv.Itoa(thresholds.CriticalLt)
+		attrs["critical_lt"] = strconv.Itoa(thresholds.CriticalLt)
 	}
+	event := ins.newEvent(check, target).SetAttrs(attrs)
 
 	if thresholds.CriticalLt > 0 && value < thresholds.CriticalLt {
 		q.PushFront(event.SetEventStatus(types.EventStatusCritical).
@@ -931,13 +892,13 @@ func (ins *Instance) checkCounterDeltas(q *safe.Queue[*types.Event], target stri
 	if ins.EvictedKeys.WarnGe > 0 || ins.EvictedKeys.CriticalGe > 0 {
 		value, ok, err := infoGetUint64(info, "evicted_keys")
 		if err != nil {
-			q.PushFront(ins.newEvent("redis::evicted_keys", target, ins.EvictedKeys.TitleRule).
+			q.PushFront(ins.newEvent("redis::evicted_keys", target).
 				SetEventStatus(types.EventStatusCritical).
 				SetDescription(fmt.Sprintf("failed to parse redis evicted_keys: %v", err)))
 			return
 		}
 		if !ok {
-			q.PushFront(ins.newEvent("redis::evicted_keys", target, ins.EvictedKeys.TitleRule).
+			q.PushFront(ins.newEvent("redis::evicted_keys", target).
 				SetEventStatus(types.EventStatusCritical).
 				SetDescription("redis info output missing evicted_keys"))
 			return
@@ -948,13 +909,13 @@ func (ins *Instance) checkCounterDeltas(q *safe.Queue[*types.Event], target stri
 	if ins.ExpiredKeys.WarnGe > 0 || ins.ExpiredKeys.CriticalGe > 0 {
 		value, ok, err := infoGetUint64(info, "expired_keys")
 		if err != nil {
-			q.PushFront(ins.newEvent("redis::expired_keys", target, ins.ExpiredKeys.TitleRule).
+			q.PushFront(ins.newEvent("redis::expired_keys", target).
 				SetEventStatus(types.EventStatusCritical).
 				SetDescription(fmt.Sprintf("failed to parse redis expired_keys: %v", err)))
 			return
 		}
 		if !ok {
-			q.PushFront(ins.newEvent("redis::expired_keys", target, ins.ExpiredKeys.TitleRule).
+			q.PushFront(ins.newEvent("redis::expired_keys", target).
 				SetEventStatus(types.EventStatusCritical).
 				SetDescription("redis info output missing expired_keys"))
 			return
@@ -965,13 +926,13 @@ func (ins *Instance) checkCounterDeltas(q *safe.Queue[*types.Event], target stri
 	if ins.RejectedConn.WarnGe > 0 || ins.RejectedConn.CriticalGe > 0 {
 		value, ok, err := infoGetUint64(info, "rejected_connections")
 		if err != nil {
-			q.PushFront(ins.newEvent("redis::rejected_connections", target, ins.RejectedConn.TitleRule).
+			q.PushFront(ins.newEvent("redis::rejected_connections", target).
 				SetEventStatus(types.EventStatusCritical).
 				SetDescription(fmt.Sprintf("failed to parse redis rejected_connections: %v", err)))
 			return
 		}
 		if !ok {
-			q.PushFront(ins.newEvent("redis::rejected_connections", target, ins.RejectedConn.TitleRule).
+			q.PushFront(ins.newEvent("redis::rejected_connections", target).
 				SetEventStatus(types.EventStatusCritical).
 				SetDescription("redis info output missing rejected_connections"))
 			return
@@ -992,21 +953,24 @@ func (ins *Instance) checkCounterDeltas(q *safe.Queue[*types.Event], target stri
 
 	if !initialized {
 		if ins.EvictedKeys.WarnGe > 0 || ins.EvictedKeys.CriticalGe > 0 {
-			event := ins.newEvent("redis::evicted_keys", target, ins.EvictedKeys.TitleRule)
-			event.Labels[types.AttrPrefix+"delta"] = "0"
-			event.Labels[types.AttrPrefix+"total"] = strconv.FormatUint(evicted, 10)
+			event := ins.newEvent("redis::evicted_keys", target).SetAttrs(map[string]string{
+				"delta": "0",
+				"total": strconv.FormatUint(evicted, 10),
+			})
 			q.PushFront(event.SetDescription(fmt.Sprintf("redis evicted keys baseline established (total: %d)", evicted)))
 		}
 		if ins.ExpiredKeys.WarnGe > 0 || ins.ExpiredKeys.CriticalGe > 0 {
-			event := ins.newEvent("redis::expired_keys", target, ins.ExpiredKeys.TitleRule)
-			event.Labels[types.AttrPrefix+"delta"] = "0"
-			event.Labels[types.AttrPrefix+"total"] = strconv.FormatUint(expired, 10)
+			event := ins.newEvent("redis::expired_keys", target).SetAttrs(map[string]string{
+				"delta": "0",
+				"total": strconv.FormatUint(expired, 10),
+			})
 			q.PushFront(event.SetDescription(fmt.Sprintf("redis expired keys baseline established (total: %d)", expired)))
 		}
 		if ins.RejectedConn.WarnGe > 0 || ins.RejectedConn.CriticalGe > 0 {
-			event := ins.newEvent("redis::rejected_connections", target, ins.RejectedConn.TitleRule)
-			event.Labels[types.AttrPrefix+"delta"] = "0"
-			event.Labels[types.AttrPrefix+"total"] = strconv.FormatUint(rejected, 10)
+			event := ins.newEvent("redis::rejected_connections", target).SetAttrs(map[string]string{
+				"delta": "0",
+				"total": strconv.FormatUint(rejected, 10),
+			})
 			q.PushFront(event.SetDescription(fmt.Sprintf("redis rejected connections baseline established (total: %d)", rejected)))
 		}
 		return
@@ -1038,15 +1002,17 @@ func (ins *Instance) checkCounterDeltas(q *safe.Queue[*types.Event], target stri
 }
 
 func (ins *Instance) checkDeltaCount(q *safe.Queue[*types.Event], target, check string, delta, total uint64, thresholds CountCheck, metricName string) {
-	event := ins.newEvent(check, target, thresholds.TitleRule)
-	event.Labels[types.AttrPrefix+"delta"] = strconv.FormatUint(delta, 10)
-	event.Labels[types.AttrPrefix+"total"] = strconv.FormatUint(total, 10)
+	attrs := map[string]string{
+		"delta": strconv.FormatUint(delta, 10),
+		"total": strconv.FormatUint(total, 10),
+	}
 	if thresholds.WarnGe > 0 {
-		event.Labels[types.AttrPrefix+"warn_ge"] = strconv.Itoa(thresholds.WarnGe)
+		attrs["warn_ge"] = strconv.Itoa(thresholds.WarnGe)
 	}
 	if thresholds.CriticalGe > 0 {
-		event.Labels[types.AttrPrefix+"critical_ge"] = strconv.Itoa(thresholds.CriticalGe)
+		attrs["critical_ge"] = strconv.Itoa(thresholds.CriticalGe)
 	}
+	event := ins.newEvent(check, target).SetAttrs(attrs)
 
 	status := types.EvaluateGeThreshold(float64(delta), float64(thresholds.WarnGe), float64(thresholds.CriticalGe))
 	switch status {
@@ -1062,7 +1028,7 @@ func (ins *Instance) checkDeltaCount(q *safe.Queue[*types.Event], target, check 
 }
 
 func (ins *Instance) checkUsedMemory(q *safe.Queue[*types.Event], target string, info map[string]string) {
-	event := ins.newEvent("redis::used_memory", target, ins.UsedMemory.TitleRule)
+	event := ins.newEvent("redis::used_memory", target)
 	usedMemory, ok, err := infoGetInt64(info, "used_memory")
 	if err != nil {
 		q.PushFront(event.SetEventStatus(types.EventStatusCritical).
@@ -1075,19 +1041,22 @@ func (ins *Instance) checkUsedMemory(q *safe.Queue[*types.Event], target string,
 		return
 	}
 
-	event.Labels[types.AttrPrefix+"used_memory"] = conv.HumanBytes(uint64(usedMemory))
-	event.Labels[types.AttrPrefix+"used_memory_bytes"] = strconv.FormatInt(usedMemory, 10)
+	attrs := map[string]string{
+		"used_memory":      conv.HumanBytes(uint64(usedMemory)),
+		"used_memory_bytes": strconv.FormatInt(usedMemory, 10),
+	}
 	if ins.UsedMemory.WarnGe > 0 {
-		event.Labels[types.AttrPrefix+"warn_ge"] = ins.UsedMemory.WarnGe.String()
+		attrs["warn_ge"] = ins.UsedMemory.WarnGe.String()
 	}
 	if ins.UsedMemory.CriticalGe > 0 {
-		event.Labels[types.AttrPrefix+"critical_ge"] = ins.UsedMemory.CriticalGe.String()
+		attrs["critical_ge"] = ins.UsedMemory.CriticalGe.String()
 	}
 	if maxmemory, ok, err := infoGetInt64(info, "maxmemory"); err == nil && ok && maxmemory > 0 {
-		event.Labels[types.AttrPrefix+"maxmemory"] = conv.HumanBytes(uint64(maxmemory))
-		event.Labels[types.AttrPrefix+"maxmemory_bytes"] = strconv.FormatInt(maxmemory, 10)
-		event.Labels[types.AttrPrefix+"used_percent_of_maxmemory"] = fmt.Sprintf("%.1f%%", float64(usedMemory)*100/float64(maxmemory))
+		attrs["maxmemory"] = conv.HumanBytes(uint64(maxmemory))
+		attrs["maxmemory_bytes"] = strconv.FormatInt(maxmemory, 10)
+		attrs["used_percent_of_maxmemory"] = fmt.Sprintf("%.1f%%", float64(usedMemory)*100/float64(maxmemory))
 	}
+	event.SetAttrs(attrs)
 
 	status := types.EvaluateGeThreshold(float64(usedMemory), float64(ins.UsedMemory.WarnGe), float64(ins.UsedMemory.CriticalGe))
 	switch status {
@@ -1105,7 +1074,7 @@ func (ins *Instance) checkUsedMemory(q *safe.Queue[*types.Event], target string,
 }
 
 func (ins *Instance) checkPersistence(q *safe.Queue[*types.Event], target string, info map[string]string) {
-	event := ins.newEvent("redis::persistence", target, ins.Persistence.TitleRule)
+	event := ins.newEvent("redis::persistence", target)
 
 	loading, ok, err := infoGetInt(info, "loading")
 	if err != nil {
@@ -1119,22 +1088,23 @@ func (ins *Instance) checkPersistence(q *safe.Queue[*types.Event], target string
 		return
 	}
 
-	event.Labels[types.AttrPrefix+"loading"] = strconv.Itoa(loading)
+	attrs := map[string]string{"loading": strconv.Itoa(loading)}
 	if v, ok := info["rdb_last_bgsave_status"]; ok {
-		event.Labels[types.AttrPrefix+"rdb_last_bgsave_status"] = v
+		attrs["rdb_last_bgsave_status"] = v
 	}
 	if v, ok := info["aof_enabled"]; ok {
-		event.Labels[types.AttrPrefix+"aof_enabled"] = v
+		attrs["aof_enabled"] = v
 	}
 	if v, ok := info["aof_last_write_status"]; ok {
-		event.Labels[types.AttrPrefix+"aof_last_write_status"] = v
+		attrs["aof_last_write_status"] = v
 	}
 	if v, ok := info["rdb_bgsave_in_progress"]; ok {
-		event.Labels[types.AttrPrefix+"rdb_bgsave_in_progress"] = v
+		attrs["rdb_bgsave_in_progress"] = v
 	}
 	if v, ok := info["aof_rewrite_in_progress"]; ok {
-		event.Labels[types.AttrPrefix+"aof_rewrite_in_progress"] = v
+		attrs["aof_rewrite_in_progress"] = v
 	}
+	event.SetAttrs(attrs)
 
 	if loading == 1 {
 		q.PushFront(event.SetEventStatus(ins.Persistence.Severity).
@@ -1159,13 +1129,10 @@ func (ins *Instance) checkPersistence(q *safe.Queue[*types.Event], target string
 	q.PushFront(event.SetDescription("redis persistence status is healthy"))
 }
 
-func (ins *Instance) newEvent(check, target, titleRule string) *types.Event {
-	if titleRule == "" {
-		titleRule = "[TPL]${check} ${from_hostip} ${target}"
-	}
+func (ins *Instance) newEvent(check, target string) *types.Event {
 	return types.BuildEvent(map[string]string{
 		"check":  check,
 		"target": target,
-	}).SetTitleRule(titleRule)
+	})
 }
 

@@ -5,8 +5,6 @@ const (
 	EventStatusWarning  = "Warning"
 	EventStatusInfo     = "Info"
 	EventStatusOk       = "Ok"
-
-	AttrPrefix = "_attr_"
 )
 
 type Event struct {
@@ -14,7 +12,7 @@ type Event struct {
 	EventStatus string            `json:"event_status"`
 	AlertKey    string            `json:"alert_key"`
 	Labels      map[string]string `json:"labels"`
-	TitleRule   string            `json:"title_rule"` // $a::b::$c
+	Attrs       map[string]string `json:"attrs,omitempty"`
 	Description string            `json:"description"`
 
 	// for internal use
@@ -42,8 +40,13 @@ func (e *Event) SetEventTime(t int64) *Event {
 	return e
 }
 
-func (e *Event) SetTitleRule(rule string) *Event {
-	e.TitleRule = rule
+func (e *Event) SetAttrs(attrs map[string]string) *Event {
+	if e.Attrs == nil {
+		e.Attrs = make(map[string]string, len(attrs))
+	}
+	for k, v := range attrs {
+		e.Attrs[k] = v
+	}
 	return e
 }
 

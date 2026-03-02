@@ -39,7 +39,6 @@ var starttlsHandlers = map[string]starttlsHandler{
 type ExpiryCheck struct {
 	WarnWithin     config.Duration `toml:"warn_within"`
 	CriticalWithin config.Duration `toml:"critical_within"`
-	TitleRule      string          `toml:"title_rule"`
 }
 
 type Instance struct {
@@ -211,8 +210,7 @@ func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
 		q.PushFront(types.BuildEvent(map[string]string{
 			"check":  "cert::file_expiry",
 			"target": "glob",
-		}).SetTitleRule("[TPL]${check} ${from_hostip}").
-			SetEventStatus(types.EventStatusWarning).
+		}).SetEventStatus(types.EventStatusWarning).
 			SetDescription(fmt.Sprintf("file_targets resolved to %d files, exceeding max_file_targets(%d), only checking the first %d",
 				len(resolvedFiles), ins.MaxFileTargets, ins.MaxFileTargets)))
 		resolvedFiles = resolvedFiles[:ins.MaxFileTargets]
@@ -281,7 +279,7 @@ func (ins *Instance) checkRemote(q *safe.Queue[*types.Event], target string) {
 	sni := ins.determineSNI(target)
 	tlsCfg := ins.tlsConfig.Clone()
 	tlsCfg.ServerName = sni
-	event.Labels[types.AttrPrefix+"cert_sni"] = sni
+	event.SetAttrs(map[string]string{"cert_sni": sni})
 
 	// TCP connect
 	conn, err := net.DialTimeout("tcp", target, timeout)
@@ -426,24 +424,26 @@ func (ins *Instance) evaluateExpiry(event *types.Event, cert *x509.Certificate, 
 	timeUntil := time.Until(expiry)
 	now := time.Now()
 
-	// Populate _attr_ labels
-	event.Labels[types.AttrPrefix+"cert_subject"] = cert.Subject.String()
-	event.Labels[types.AttrPrefix+"cert_issuer"] = cert.Issuer.String()
-	event.Labels[types.AttrPrefix+"cert_serial"] = formatSerial(cert.SerialNumber)
-	event.Labels[types.AttrPrefix+"cert_sha256"] = sha256Fingerprint(cert.Raw)
-	event.Labels[types.AttrPrefix+"cert_not_before"] = cert.NotBefore.UTC().Format("2006-01-02 15:04:05")
-	event.Labels[types.AttrPrefix+"cert_expires_at"] = expiry.UTC().Format("2006-01-02 15:04:05")
+	attrs := map[string]string{
+		"cert_subject":     cert.Subject.String(),
+		"cert_issuer":      cert.Issuer.String(),
+		"cert_serial":      formatSerial(cert.SerialNumber),
+		"cert_sha256":      sha256Fingerprint(cert.Raw),
+		"cert_not_before":  cert.NotBefore.UTC().Format("2006-01-02 15:04:05"),
+		"cert_expires_at":  expiry.UTC().Format("2006-01-02 15:04:05"),
+		"cert_chain_count": strconv.Itoa(chainLen),
+		"warn_within":      humanDuration(time.Duration(check.WarnWithin)),
+		"critical_within":  humanDuration(time.Duration(check.CriticalWithin)),
+	}
 	if timeUntil >= 0 {
-		event.Labels[types.AttrPrefix+"time_until_expiry"] = humanDuration(timeUntil)
+		attrs["time_until_expiry"] = humanDuration(timeUntil)
 	} else {
-		event.Labels[types.AttrPrefix+"time_until_expiry"] = "-" + humanDuration(-timeUntil)
+		attrs["time_until_expiry"] = "-" + humanDuration(-timeUntil)
 	}
 	if len(cert.DNSNames) > 0 {
-		event.Labels[types.AttrPrefix+"cert_dns_names"] = strings.Join(cert.DNSNames, ", ")
+		attrs["cert_dns_names"] = strings.Join(cert.DNSNames, ", ")
 	}
-	event.Labels[types.AttrPrefix+"cert_chain_count"] = strconv.Itoa(chainLen)
-	event.Labels[types.AttrPrefix+"warn_within"] = humanDuration(time.Duration(check.WarnWithin))
-	event.Labels[types.AttrPrefix+"critical_within"] = humanDuration(time.Duration(check.CriticalWithin))
+	event.SetAttrs(attrs)
 
 	isIntermediate := certIdx > 0
 	warnWithin := time.Duration(check.WarnWithin)
@@ -491,25 +491,17 @@ func earliestExpiry(certs []*x509.Certificate) (*x509.Certificate, int) {
 // --- Event builders ---
 
 func (ins *Instance) buildRemoteEvent(target string) *types.Event {
-	tr := ins.RemoteExpiry.TitleRule
-	if tr == "" {
-		tr = "[TPL]${check} ${from_hostip} ${target}"
-	}
 	return types.BuildEvent(map[string]string{
 		"check":  "cert::remote_expiry",
 		"target": target,
-	}).SetTitleRule(tr)
+	})
 }
 
 func (ins *Instance) buildFileEvent(target string) *types.Event {
-	tr := ins.FileExpiry.TitleRule
-	if tr == "" {
-		tr = "[TPL]${check} ${from_hostip} ${target}"
-	}
 	return types.BuildEvent(map[string]string{
 		"check":  "cert::file_expiry",
 		"target": target,
-	}).SetTitleRule(tr)
+	})
 }
 
 // --- Formatting helpers ---

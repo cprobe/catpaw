@@ -10,7 +10,6 @@
 interval = "60s"
 
 [instances.param_check]
-# title_rule = "[TPL]${check} ${from_hostip} ${target}"
 params = [
   { key = "net.core.somaxconn", op = "ge", value = "65535" },
   { key = "vm.swappiness", op = "le", value = "10" },

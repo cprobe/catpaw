@@ -137,11 +137,11 @@ func TestGatherMemoryUsage(t *testing.T) {
 	if event.Labels["target"] != "memory" {
 		t.Errorf("expected target=memory, got %s", event.Labels["target"])
 	}
-	if event.Labels[types.AttrPrefix+"total"] == "" {
-		t.Error("expected _attr_total to be set")
+	if event.Attrs["total"] == "" {
+		t.Error("expected total attr to be set")
 	}
-	if event.Labels[types.AttrPrefix+"used_percent"] == "" {
-		t.Error("expected _attr_used_percent to be set")
+	if event.Attrs["used_percent"] == "" {
+		t.Error("expected used_percent attr to be set")
 	}
 }
 

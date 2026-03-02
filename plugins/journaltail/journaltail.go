@@ -24,8 +24,7 @@ const (
 )
 
 type MatchCheck struct {
-	Severity  string `toml:"severity"`
-	TitleRule string `toml:"title_rule"`
+	Severity string `toml:"severity"`
 }
 
 type Instance struct {
@@ -211,30 +210,26 @@ func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
 		ins.cursor = newCursor
 	}
 
-	tr := ins.Match.TitleRule
-	if tr == "" {
-		tr = "[TPL]${check} ${from_hostip} ${target}"
-	}
-
-	labels := map[string]string{
-		"check":  "journaltail::match",
-		"target": target,
-	}
+	attrs := make(map[string]string)
 	if len(ins.Units) > 0 {
-		labels[types.AttrPrefix+"units"] = strings.Join(ins.Units, ", ")
+		attrs["units"] = strings.Join(ins.Units, ", ")
 	}
 	if ins.Priority != "" {
-		labels[types.AttrPrefix+"priority"] = ins.Priority
+		attrs["priority"] = ins.Priority
+	}
+	if len(matched) > 0 {
+		attrs["matched_count"] = fmt.Sprintf("%d", len(matched))
 	}
 
-	e := types.BuildEvent(labels).SetTitleRule(tr)
+	e := types.BuildEvent(map[string]string{
+		"check":  "journaltail::match",
+		"target": target,
+	}).SetAttrs(attrs)
 
 	if len(matched) == 0 {
 		q.PushFront(e)
 		return
 	}
-
-	labels[types.AttrPrefix+"matched_count"] = fmt.Sprintf("%d", len(matched))
 
 	var desc strings.Builder
 	fmt.Fprintf(&desc, "matched %d lines:\n", len(matched))
@@ -255,15 +250,10 @@ func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
 }
 
 func (ins *Instance) buildErrorEvent(target, errMsg string) *types.Event {
-	tr := ins.Match.TitleRule
-	if tr == "" {
-		tr = "[TPL]${check} ${from_hostip} ${target}"
-	}
-
 	return types.BuildEvent(map[string]string{
 		"check":  "journaltail::match",
 		"target": target,
-	}).SetTitleRule(tr).
+	}).
 		SetEventStatus(types.EventStatusCritical).
 		SetDescription(errMsg)
 }

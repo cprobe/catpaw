@@ -38,7 +38,6 @@ critical_lt = 1
 # warn_lt = 1
 # warn_gt = 50
 # critical_gt = 100
-# title_rule = "[TPL]${check} ${from_hostip} ${target}"
 
 [instances.alerting]
 for_duration = 0

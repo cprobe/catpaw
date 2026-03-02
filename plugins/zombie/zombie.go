@@ -16,9 +16,8 @@ const pluginName = "zombie"
 type Instance struct {
 	config.InternalConfig
 
-	WarnGt     *int   `toml:"warn_gt"`
-	CriticalGt *int   `toml:"critical_gt"`
-	TitleRule  string `toml:"title_rule"`
+	WarnGt     *int `toml:"warn_gt"`
+	CriticalGt *int `toml:"critical_gt"`
 }
 
 type ZombiePlugin struct {
@@ -69,14 +68,14 @@ func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
 
 	logger.Logger.Debugw("zombie count", "count", count)
 
-	event := ins.newEvent()
-	event.Labels[types.AttrPrefix+"zombie_count"] = fmt.Sprintf("%d", count)
+	attrs := map[string]string{"zombie_count": fmt.Sprintf("%d", count)}
 	if ins.CriticalGt != nil {
-		event.Labels[types.AttrPrefix+"critical_gt"] = fmt.Sprintf("%d", *ins.CriticalGt)
+		attrs["critical_gt"] = fmt.Sprintf("%d", *ins.CriticalGt)
 	}
 	if ins.WarnGt != nil {
-		event.Labels[types.AttrPrefix+"warn_gt"] = fmt.Sprintf("%d", *ins.WarnGt)
+		attrs["warn_gt"] = fmt.Sprintf("%d", *ins.WarnGt)
 	}
+	event := ins.newEvent().SetAttrs(attrs)
 
 	if ins.CriticalGt != nil && count > *ins.CriticalGt {
 		q.PushFront(event.SetEventStatus(types.EventStatusCritical).
@@ -94,14 +93,10 @@ func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
 }
 
 func (ins *Instance) newEvent() *types.Event {
-	tr := ins.TitleRule
-	if tr == "" {
-		tr = "[TPL]${check} ${from_hostip} ${target}"
-	}
 	return types.BuildEvent(map[string]string{
 		"check":  "zombie::count",
 		"target": "system",
-	}).SetTitleRule(tr)
+	})
 }
 
 func countZombieProcesses() (int, error) {

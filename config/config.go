@@ -3,7 +3,6 @@ package config
 import (
 	"fmt"
 	"net"
-	"net/http"
 	"os"
 	"path"
 	"path/filepath"
@@ -28,11 +27,24 @@ type LogConfig struct {
 	Fields map[string]interface{} `toml:"fields"`
 }
 
-type Flashduty struct {
-	Url        string       `toml:"url"`
-	Timeout    Duration     `toml:"timeout"`
-	MaxRetries int          `toml:"max_retries"`
-	Client     *http.Client `toml:"-"`
+type FlashdutyConfig struct {
+	IntegrationKey string   `toml:"integration_key"`
+	BaseUrl        string   `toml:"base_url"`
+	Timeout        Duration `toml:"timeout"`
+	MaxRetries     int      `toml:"max_retries"`
+}
+
+type PagerDutyConfig struct {
+	RoutingKey  string            `toml:"routing_key"`
+	BaseUrl     string            `toml:"base_url"`
+	SeverityMap map[string]string `toml:"severity_map"`
+	Timeout     Duration          `toml:"timeout"`
+	MaxRetries  int               `toml:"max_retries"`
+}
+
+type NotifyConfig struct {
+	Flashduty *FlashdutyConfig `toml:"flashduty"`
+	PagerDuty *PagerDutyConfig `toml:"pagerduty"`
 }
 
 type AIConfig struct {
@@ -66,18 +78,17 @@ type ConfigType struct {
 	StateDir  string `toml:"-"`
 	TestMode  bool   `toml:"-"`
 	Plugins   string `toml:"-"`
-	Url       string `toml:"-"`
 	Loglevel  string `toml:"-"`
 
-	Global    Global    `toml:"global"`
-	LogConfig LogConfig `toml:"log"`
-	Flashduty Flashduty `toml:"flashduty"`
-	AI        AIConfig  `toml:"ai"`
+	Global    Global       `toml:"global"`
+	LogConfig LogConfig    `toml:"log"`
+	Notify    NotifyConfig `toml:"notify"`
+	AI        AIConfig     `toml:"ai"`
 }
 
 var Config *ConfigType
 
-func InitConfig(configDir string, testMode bool, interval int64, plugins, url, loglevel string) error {
+func InitConfig(configDir string, testMode bool, interval int64, plugins, loglevel string) error {
 	configFile := path.Join(configDir, "config.toml")
 	if !file.IsExist(configFile) {
 		return fmt.Errorf("configuration file(%s) not found", configFile)
@@ -88,7 +99,6 @@ func InitConfig(configDir string, testMode bool, interval int64, plugins, url, l
 		StateDir:  filepath.Join(filepath.Dir(configDir), "state.d"),
 		TestMode:  testMode,
 		Plugins:   plugins,
-		Url:       url,
 		Loglevel:  loglevel,
 	}
 
@@ -124,21 +134,7 @@ func InitConfig(configDir string, testMode bool, interval int64, plugins, url, l
 		Config.LogConfig.Fields = make(map[string]interface{})
 	}
 
-	if Config.Flashduty.Timeout == 0 {
-		Config.Flashduty.Timeout = Duration(10 * time.Second)
-	}
-
-	if Config.Flashduty.MaxRetries <= 0 {
-		Config.Flashduty.MaxRetries = 1
-	}
-
-	if Config.Url != "" {
-		Config.Flashduty.Url = Config.Url
-	}
-
-	Config.Flashduty.Client = &http.Client{
-		Timeout: time.Duration(Config.Flashduty.Timeout),
-	}
+	Config.Notify.applyDefaults()
 
 	Config.AI.applyDefaults()
 	Config.AI.resolveAPIKey()
@@ -270,4 +266,36 @@ func (c *AIConfig) Validate() error {
 		return fmt.Errorf("[ai] queue_full_policy must be \"drop\" or \"wait\", got %q", c.QueueFullPolicy)
 	}
 	return nil
+}
+
+func (c *NotifyConfig) applyDefaults() {
+	if c.Flashduty != nil {
+		if c.Flashduty.BaseUrl == "" {
+			c.Flashduty.BaseUrl = "https://api.flashcat.cloud/event/push/alert/standard"
+		}
+		if c.Flashduty.Timeout == 0 {
+			c.Flashduty.Timeout = Duration(10 * time.Second)
+		}
+		if c.Flashduty.MaxRetries <= 0 {
+			c.Flashduty.MaxRetries = 1
+		}
+	}
+	if c.PagerDuty != nil {
+		if c.PagerDuty.BaseUrl == "" {
+			c.PagerDuty.BaseUrl = "https://events.pagerduty.com/v2/enqueue"
+		}
+		if c.PagerDuty.Timeout == 0 {
+			c.PagerDuty.Timeout = Duration(10 * time.Second)
+		}
+		if c.PagerDuty.MaxRetries <= 0 {
+			c.PagerDuty.MaxRetries = 1
+		}
+		if c.PagerDuty.SeverityMap == nil {
+			c.PagerDuty.SeverityMap = map[string]string{
+				"Critical": "critical",
+				"Warning":  "warning",
+				"Info":     "info",
+			}
+		}
+	}
 }

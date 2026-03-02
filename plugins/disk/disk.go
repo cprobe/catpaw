@@ -24,19 +24,16 @@ const pluginName = "disk"
 type SpaceUsageCheck struct {
 	WarnGe     float64 `toml:"warn_ge"`
 	CriticalGe float64 `toml:"critical_ge"`
-	TitleRule  string  `toml:"title_rule"`
 }
 
 type InodeUsageCheck struct {
 	WarnGe     float64 `toml:"warn_ge"`
 	CriticalGe float64 `toml:"critical_ge"`
-	TitleRule  string  `toml:"title_rule"`
 }
 
 type WritableCheck struct {
-	Severity  string `toml:"severity"`
-	TestFile  string `toml:"test_file"`
-	TitleRule string `toml:"title_rule"`
+	Severity string `toml:"severity"`
+	TestFile string `toml:"test_file"`
 }
 
 type Instance struct {
@@ -118,8 +115,7 @@ func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
 		q.PushFront(types.BuildEvent(map[string]string{
 			"check":  "disk::space_usage",
 			"target": "partitions",
-		}).SetTitleRule("[TPL]${check} ${from_hostip}").
-			SetEventStatus(types.EventStatusCritical).
+		}).SetEventStatus(types.EventStatusCritical).
 			SetDescription(fmt.Sprintf("failed to get disk partitions: %v", err)))
 		return
 	}
@@ -181,8 +177,7 @@ func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
 					q.PushFront(types.BuildEvent(map[string]string{
 						"check":  "disk::space_usage",
 						"target": mi.MountPoint,
-					}).SetTitleRule("[TPL]${check} ${from_hostip} ${target}").
-						SetEventStatus(types.EventStatusCritical).
+					}).SetEventStatus(types.EventStatusCritical).
 						SetDescription(fmt.Sprintf("panic during check: %v", r)))
 				}
 				ins.inFlight.Delete(mi.MountPoint)
@@ -211,17 +206,13 @@ func (ins *Instance) gatherMountPoint(q *safe.Queue[*types.Event], mountPoint, d
 	if err != nil {
 		logger.Logger.Errorw("failed to get disk usage", "mount_point", mountPoint, "error", err)
 
-		tr := ins.SpaceUsage.TitleRule
-		if tr == "" {
-			tr = "[TPL]${check} ${from_hostip} ${target}"
-		}
-
 		q.PushFront(types.BuildEvent(map[string]string{
-			"check":                      "disk::space_usage",
-			"target":                     mountPoint,
-			types.AttrPrefix + "device":  device,
-			types.AttrPrefix + "fs_type": fsType,
-		}).SetTitleRule(tr).SetEventStatus(types.EventStatusCritical).
+			"check":  "disk::space_usage",
+			"target": mountPoint,
+		}).SetAttrs(map[string]string{
+			"device":   device,
+			"fs_type":  fsType,
+		}).SetEventStatus(types.EventStatusCritical).
 			SetDescription(fmt.Sprintf("failed to get disk usage: %v", err)))
 		return
 	}
@@ -239,21 +230,17 @@ func (ins *Instance) checkUsage(q *safe.Queue[*types.Event], mountPoint, device,
 		return
 	}
 
-	tr := ins.SpaceUsage.TitleRule
-	if tr == "" {
-		tr = "[TPL]${check} ${from_hostip} ${target}"
-	}
-
 	event := types.BuildEvent(map[string]string{
-		"check":                           "disk::space_usage",
-		"target":                          mountPoint,
-		types.AttrPrefix + "device":       device,
-		types.AttrPrefix + "fs_type":      fsType,
-		types.AttrPrefix + "total":        conv.HumanBytes(usage.Total),
-		types.AttrPrefix + "used":         conv.HumanBytes(usage.Used),
-		types.AttrPrefix + "available":    conv.HumanBytes(usage.Free),
-		types.AttrPrefix + "used_percent": fmt.Sprintf("%.1f%%", usage.UsedPercent),
-	}).SetTitleRule(tr).SetDescription("everything is ok")
+		"check":  "disk::space_usage",
+		"target": mountPoint,
+	}).SetAttrs(map[string]string{
+		"device":       device,
+		"fs_type":      fsType,
+		"total":        conv.HumanBytes(usage.Total),
+		"used":         conv.HumanBytes(usage.Used),
+		"available":    conv.HumanBytes(usage.Free),
+		"used_percent": fmt.Sprintf("%.1f%%", usage.UsedPercent),
+	}).SetDescription("everything is ok")
 
 	if ins.SpaceUsage.CriticalGe > 0 && usage.UsedPercent >= ins.SpaceUsage.CriticalGe {
 		q.PushFront(event.SetEventStatus(types.EventStatusCritical).
@@ -279,21 +266,17 @@ func (ins *Instance) checkInodes(q *safe.Queue[*types.Event], mountPoint, device
 		return
 	}
 
-	tr := ins.InodeUsage.TitleRule
-	if tr == "" {
-		tr = "[TPL]${check} ${from_hostip} ${target}"
-	}
-
 	event := types.BuildEvent(map[string]string{
-		"check":                                  "disk::inode_usage",
-		"target":                                 mountPoint,
-		types.AttrPrefix + "device":              device,
-		types.AttrPrefix + "fs_type":             fsType,
-		types.AttrPrefix + "inodes_total":        fmt.Sprintf("%d", usage.InodesTotal),
-		types.AttrPrefix + "inodes_used":         fmt.Sprintf("%d", usage.InodesUsed),
-		types.AttrPrefix + "inodes_free":         fmt.Sprintf("%d", usage.InodesFree),
-		types.AttrPrefix + "inodes_used_percent": fmt.Sprintf("%.1f%%", usage.InodesUsedPercent),
-	}).SetTitleRule(tr).SetDescription("everything is ok")
+		"check":  "disk::inode_usage",
+		"target": mountPoint,
+	}).SetAttrs(map[string]string{
+		"device":              device,
+		"fs_type":             fsType,
+		"inodes_total":        fmt.Sprintf("%d", usage.InodesTotal),
+		"inodes_used":         fmt.Sprintf("%d", usage.InodesUsed),
+		"inodes_free":         fmt.Sprintf("%d", usage.InodesFree),
+		"inodes_used_percent": fmt.Sprintf("%.1f%%", usage.InodesUsedPercent),
+	}).SetDescription("everything is ok")
 
 	if ins.InodeUsage.CriticalGe > 0 && usage.InodesUsedPercent >= ins.InodeUsage.CriticalGe {
 		q.PushFront(event.SetEventStatus(types.EventStatusCritical).
@@ -311,17 +294,13 @@ func (ins *Instance) checkInodes(q *safe.Queue[*types.Event], mountPoint, device
 }
 
 func (ins *Instance) checkWritable(q *safe.Queue[*types.Event], mountPoint, device, fsType string) {
-	tr := ins.Writable.TitleRule
-	if tr == "" {
-		tr = "[TPL]${check} ${from_hostip} ${target}"
-	}
-
 	event := types.BuildEvent(map[string]string{
-		"check":                      "disk::writable",
-		"target":                     mountPoint,
-		types.AttrPrefix + "device":  device,
-		types.AttrPrefix + "fs_type": fsType,
-	}).SetTitleRule(tr)
+		"check":  "disk::writable",
+		"target": mountPoint,
+	}).SetAttrs(map[string]string{
+		"device":  device,
+		"fs_type": fsType,
+	})
 
 	testFile := filepath.Join(mountPoint, ins.Writable.TestFile)
 	testContent := fmt.Sprintf("catpaw-disk-check-%d", time.Now().UnixNano())
@@ -377,11 +356,11 @@ func (ins *Instance) isIgnoredFSType(fsType string) bool {
 
 func (ins *Instance) buildHungEvent(mountPoint string, elapsedSec int64) *types.Event {
 	return types.BuildEvent(map[string]string{
-		"check":                              "disk::hung",
-		"target":                             mountPoint,
-		types.AttrPrefix + "elapsed_seconds": fmt.Sprintf("%d", elapsedSec),
-	}).SetTitleRule("[TPL]${check} ${from_hostip} ${target}").
-		SetEventStatus(types.EventStatusCritical).
+		"check":  "disk::hung",
+		"target": mountPoint,
+	}).SetAttrs(map[string]string{
+		"elapsed_seconds": fmt.Sprintf("%d", elapsedSec),
+	}).SetEventStatus(types.EventStatusCritical).
 		SetDescription(fmt.Sprintf("disk check hung for %d seconds (possible NFS/network disk issue)", elapsedSec))
 }
 
@@ -389,6 +368,5 @@ func (ins *Instance) buildHungRecoveryEvent(mountPoint string) *types.Event {
 	return types.BuildEvent(map[string]string{
 		"check":  "disk::hung",
 		"target": mountPoint,
-	}).SetTitleRule("[TPL]${check} ${from_hostip} ${target}").
-		SetDescription("disk check recovered from hung state")
+	}).SetDescription("disk check recovered from hung state")
 }

@@ -28,20 +28,17 @@ const (
 )
 
 type SyncCheck struct {
-	Severity  string `toml:"severity"`
-	TitleRule string `toml:"title_rule"`
+	Severity string `toml:"severity"`
 }
 
 type OffsetCheck struct {
 	WarnGe     config.Duration `toml:"warn_ge"`
 	CriticalGe config.Duration `toml:"critical_ge"`
-	TitleRule  string          `toml:"title_rule"`
 }
 
 type StratumCheck struct {
-	WarnGe     int    `toml:"warn_ge"`
-	CriticalGe int    `toml:"critical_ge"`
-	TitleRule  string `toml:"title_rule"`
+	WarnGe     int `toml:"warn_ge"`
+	CriticalGe int `toml:"critical_ge"`
 }
 
 type Instance struct {
@@ -400,15 +397,10 @@ func parseTimedatectl(data []byte) (*ntpResult, error) {
 // --- check dimensions ---
 
 func (ins *Instance) checkSync(q *safe.Queue[*types.Event], r *ntpResult) {
-	tr := ins.Sync.TitleRule
-	if tr == "" {
-		tr = "[TPL]${check} ${from_hostip} ${target}"
-	}
-
 	event := types.BuildEvent(map[string]string{
 		"check":  "ntp::sync",
 		"target": "ntp",
-	}, ins.attrLabels(r)).SetTitleRule(tr)
+	}).SetAttrs(ins.attrLabels(r))
 
 	if r.synced {
 		desc := fmt.Sprintf("NTP synchronized (mode: %s", ins.detectedMode)
@@ -438,19 +430,16 @@ func (ins *Instance) checkOffset(q *safe.Queue[*types.Event], r *ntpResult) {
 		return
 	}
 
-	tr := ins.Offset.TitleRule
-	if tr == "" {
-		tr = "[TPL]${check} ${from_hostip} ${target}"
-	}
-
 	absOffset := time.Duration(math.Abs(float64(r.offset)))
 
+	attrs := mergeAttrs(ins.attrLabels(r), map[string]string{
+		"offset":     r.offset.String(),
+		"abs_offset": absOffset.String(),
+	})
 	event := types.BuildEvent(map[string]string{
-		"check":                         "ntp::offset",
-		"target":                        "ntp",
-		types.AttrPrefix + "offset":     r.offset.String(),
-		types.AttrPrefix + "abs_offset": absOffset.String(),
-	}, ins.attrLabels(r)).SetTitleRule(tr)
+		"check":  "ntp::offset",
+		"target": "ntp",
+	}).SetAttrs(attrs)
 
 	if ins.Offset.CriticalGe > 0 && absOffset >= time.Duration(ins.Offset.CriticalGe) {
 		q.PushFront(event.SetEventStatus(types.EventStatusCritical).
@@ -478,16 +467,13 @@ func (ins *Instance) checkStratum(q *safe.Queue[*types.Event], r *ntpResult) {
 		return
 	}
 
-	tr := ins.Stratum.TitleRule
-	if tr == "" {
-		tr = "[TPL]${check} ${from_hostip} ${target}"
-	}
-
+	attrs := mergeAttrs(ins.attrLabels(r), map[string]string{
+		"stratum": fmt.Sprintf("%d", r.stratum),
+	})
 	event := types.BuildEvent(map[string]string{
-		"check":                      "ntp::stratum",
-		"target":                     "ntp",
-		types.AttrPrefix + "stratum": fmt.Sprintf("%d", r.stratum),
-	}, ins.attrLabels(r)).SetTitleRule(tr)
+		"check":  "ntp::stratum",
+		"target": "ntp",
+	}).SetAttrs(attrs)
 
 	if ins.Stratum.CriticalGe > 0 && r.stratum >= ins.Stratum.CriticalGe {
 		q.PushFront(event.SetEventStatus(types.EventStatusCritical).
@@ -510,26 +496,35 @@ func (ins *Instance) checkStratum(q *safe.Queue[*types.Event], r *ntpResult) {
 
 func (ins *Instance) attrLabels(r *ntpResult) map[string]string {
 	m := map[string]string{
-		types.AttrPrefix + "mode": ins.detectedMode,
+		"mode": ins.detectedMode,
 	}
 	if r.source != "" {
-		m[types.AttrPrefix+"source"] = r.source
+		m["source"] = r.source
 	}
 	if r.stratum > 0 {
-		m[types.AttrPrefix+"stratum"] = fmt.Sprintf("%d", r.stratum)
+		m["stratum"] = fmt.Sprintf("%d", r.stratum)
 	}
 	for k, v := range r.extra {
-		m[types.AttrPrefix+k] = v
+		m[k] = v
 	}
 	return m
 }
 
+func mergeAttrs(maps ...map[string]string) map[string]string {
+	result := make(map[string]string)
+	for _, m := range maps {
+		for k, v := range m {
+			result[k] = v
+		}
+	}
+	return result
+}
+
 func (ins *Instance) buildErrorEvent(errMsg string) *types.Event {
 	return types.BuildEvent(map[string]string{
-		"check":                   "ntp::sync",
-		"target":                  "ntp",
-		types.AttrPrefix + "mode": ins.detectedMode,
-	}).SetTitleRule("[TPL]${check} ${from_hostip} ${target}").
+		"check":  "ntp::sync",
+		"target": "ntp",
+	}).SetAttrs(map[string]string{"mode": ins.detectedMode}).
 		SetEventStatus(ins.Sync.Severity).
 		SetDescription(errMsg)
 }

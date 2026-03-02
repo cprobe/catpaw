@@ -17,7 +17,6 @@ const pluginName = "uptime"
 type RebootDetectedCheck struct {
 	WarnLt     config.Duration `toml:"warn_lt"`
 	CriticalLt config.Duration `toml:"critical_lt"`
-	TitleRule  string          `toml:"title_rule"`
 }
 
 type Instance struct {
@@ -65,18 +64,12 @@ func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
 		return
 	}
 
-	tr := ins.RebootDetected.TitleRule
-	if tr == "" {
-		tr = "[TPL]${check} ${from_hostip}"
-	}
-
 	uptimeSec, err := host.Uptime()
 	if err != nil {
 		q.PushFront(types.BuildEvent(map[string]string{
 			"check":  "uptime::reboot_detected",
 			"target": "system",
-		}).SetTitleRule(tr).
-			SetEventStatus(types.EventStatusCritical).
+		}).SetEventStatus(types.EventStatusCritical).
 			SetDescription(fmt.Sprintf("failed to get system uptime: %v", err)))
 		return
 	}
@@ -86,25 +79,24 @@ func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
 	uptimeDur := time.Duration(uptimeSec) * time.Second
 	uptimeHuman := humanDuration(uptimeDur)
 
-	labels := map[string]string{
-		"check":                             "uptime::reboot_detected",
-		"target":                            "system",
-		types.AttrPrefix + "uptime":         uptimeHuman,
-		types.AttrPrefix + "uptime_seconds": strconv.FormatUint(uptimeSec, 10),
+	attrs := map[string]string{
+		"uptime":         uptimeHuman,
+		"uptime_seconds": strconv.FormatUint(uptimeSec, 10),
 	}
-
 	if bootTimeSec > 0 {
-		labels[types.AttrPrefix+"boot_time"] = time.Unix(int64(bootTimeSec), 0).Format("2006-01-02 15:04:05 MST")
+		attrs["boot_time"] = time.Unix(int64(bootTimeSec), 0).Format("2006-01-02 15:04:05 MST")
 	}
-
 	if criticalDur > 0 {
-		labels[types.AttrPrefix+"critical_lt"] = humanDuration(criticalDur)
+		attrs["critical_lt"] = humanDuration(criticalDur)
 	}
 	if warnDur > 0 {
-		labels[types.AttrPrefix+"warn_lt"] = humanDuration(warnDur)
+		attrs["warn_lt"] = humanDuration(warnDur)
 	}
 
-	event := types.BuildEvent(labels).SetTitleRule(tr)
+	event := types.BuildEvent(map[string]string{
+		"check":  "uptime::reboot_detected",
+		"target": "system",
+	}).SetAttrs(attrs)
 
 	if criticalDur > 0 && uptimeDur < criticalDur {
 		q.PushFront(event.SetEventStatus(types.EventStatusCritical).

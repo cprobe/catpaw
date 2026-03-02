@@ -303,14 +303,14 @@ func TestGather_WithMockedFiles(t *testing.T) {
 			if event.Labels["target"] != "system" {
 				t.Errorf("unexpected target label: %s", event.Labels["target"])
 			}
-			if event.Labels[types.AttrPrefix+"allocated"] == "" {
-				t.Error("missing _attr_allocated")
+			if event.Attrs["allocated"] == "" {
+				t.Error("missing allocated attr")
 			}
-			if event.Labels[types.AttrPrefix+"max"] == "" {
-				t.Error("missing _attr_max")
+			if event.Attrs["max"] == "" {
+				t.Error("missing max attr")
 			}
-			if event.Labels[types.AttrPrefix+"usage_percent"] == "" {
-				t.Error("missing _attr_usage_percent")
+			if event.Attrs["usage_percent"] == "" {
+				t.Error("missing usage_percent attr")
 			}
 		})
 	}

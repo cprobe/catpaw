@@ -349,14 +349,14 @@ func TestGather_WithMockedFiles(t *testing.T) {
 			if event.Labels["target"] != "system" {
 				t.Errorf("unexpected target label: %s", event.Labels["target"])
 			}
-			if event.Labels[types.AttrPrefix+"entries"] == "" {
-				t.Error("missing _attr_entries")
+			if event.Attrs["entries"] == "" {
+				t.Error("missing attrs.entries")
 			}
-			if event.Labels[types.AttrPrefix+"gc_thresh3"] == "" {
-				t.Error("missing _attr_gc_thresh3")
+			if event.Attrs["gc_thresh3"] == "" {
+				t.Error("missing attrs.gc_thresh3")
 			}
-			if event.Labels[types.AttrPrefix+"usage_percent"] == "" {
-				t.Error("missing _attr_usage_percent")
+			if event.Attrs["usage_percent"] == "" {
+				t.Error("missing attrs.usage_percent")
 			}
 		})
 	}

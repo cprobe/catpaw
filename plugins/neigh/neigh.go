@@ -23,7 +23,6 @@ var (
 type NeighUsageCheck struct {
 	WarnGe     float64 `toml:"warn_ge"`
 	CriticalGe float64 `toml:"critical_ge"`
-	TitleRule  string  `toml:"title_rule"`
 }
 
 type Instance struct {
@@ -75,17 +74,12 @@ func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
 		return
 	}
 
-	tr := ins.NeighUsage.TitleRule
-	if tr == "" {
-		tr = "[TPL]${check} ${from_hostip}"
-	}
-
 	entries, gcThresh3, err := readNeighData()
 	if err != nil {
 		q.PushFront(types.BuildEvent(map[string]string{
 			"check":  "neigh::neigh_usage",
 			"target": "system",
-		}).SetTitleRule(tr).
+		}).
 			SetEventStatus(types.EventStatusCritical).
 			SetDescription(fmt.Sprintf("failed to read neigh data: %v", err)))
 		return
@@ -95,7 +89,7 @@ func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
 		q.PushFront(types.BuildEvent(map[string]string{
 			"check":  "neigh::neigh_usage",
 			"target": "system",
-		}).SetTitleRule(tr).
+		}).
 			SetEventStatus(types.EventStatusCritical).
 			SetDescription("gc_thresh3 is 0, cannot calculate usage"))
 		return
@@ -106,12 +100,13 @@ func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
 	gcThresh3Str := strconv.FormatUint(gcThresh3, 10)
 
 	event := types.BuildEvent(map[string]string{
-		"check":                            "neigh::neigh_usage",
-		"target":                           "system",
-		types.AttrPrefix + "entries":       entriesStr,
-		types.AttrPrefix + "gc_thresh3":    gcThresh3Str,
-		types.AttrPrefix + "usage_percent": fmt.Sprintf("%.1f%%", usagePercent),
-	}).SetTitleRule(tr)
+		"check":  "neigh::neigh_usage",
+		"target": "system",
+	}).SetAttrs(map[string]string{
+		"entries":       entriesStr,
+		"gc_thresh3":    gcThresh3Str,
+		"usage_percent": fmt.Sprintf("%.1f%%", usagePercent),
+	})
 
 	status := types.EvaluateGeThreshold(usagePercent, ins.NeighUsage.WarnGe, ins.NeighUsage.CriticalGe)
 	event.SetEventStatus(status)

@@ -26,7 +26,6 @@ var conntrackPaths = [][2]string{
 type ConntrackUsageCheck struct {
 	WarnGe     float64 `toml:"warn_ge"`
 	CriticalGe float64 `toml:"critical_ge"`
-	TitleRule  string  `toml:"title_rule"`
 }
 
 type Instance struct {
@@ -78,11 +77,6 @@ func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
 		return
 	}
 
-	tr := ins.ConntrackUsage.TitleRule
-	if tr == "" {
-		tr = "[TPL]${check} ${from_hostip}"
-	}
-
 	count, max, err := readConntrackFiles()
 	if errors.Is(err, errModuleNotLoaded) {
 		return
@@ -91,8 +85,7 @@ func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
 		q.PushFront(types.BuildEvent(map[string]string{
 			"check":  "conntrack::conntrack_usage",
 			"target": "system",
-		}).SetTitleRule(tr).
-			SetEventStatus(types.EventStatusCritical).
+		}).SetEventStatus(types.EventStatusCritical).
 			SetDescription(fmt.Sprintf("failed to read conntrack data: %v", err)))
 		return
 	}
@@ -101,8 +94,7 @@ func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
 		q.PushFront(types.BuildEvent(map[string]string{
 			"check":  "conntrack::conntrack_usage",
 			"target": "system",
-		}).SetTitleRule(tr).
-			SetEventStatus(types.EventStatusCritical).
+		}).SetEventStatus(types.EventStatusCritical).
 			SetDescription("nf_conntrack_max is 0, cannot calculate usage"))
 		return
 	}
@@ -112,12 +104,13 @@ func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
 	maxStr := strconv.FormatUint(max, 10)
 
 	event := types.BuildEvent(map[string]string{
-		"check":                            "conntrack::conntrack_usage",
-		"target":                           "system",
-		types.AttrPrefix + "count":         countStr,
-		types.AttrPrefix + "max":           maxStr,
-		types.AttrPrefix + "usage_percent": fmt.Sprintf("%.1f%%", usagePercent),
-	}).SetTitleRule(tr)
+		"check":  "conntrack::conntrack_usage",
+		"target": "system",
+	}).SetAttrs(map[string]string{
+		"count":         countStr,
+		"max":           maxStr,
+		"usage_percent": fmt.Sprintf("%.1f%%", usagePercent),
+	})
 
 	status := types.EvaluateGeThreshold(usagePercent, ins.ConntrackUsage.WarnGe, ins.ConntrackUsage.CriticalGe)
 	event.SetEventStatus(status)

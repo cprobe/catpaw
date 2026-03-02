@@ -16,21 +16,18 @@
 ## 同步状态检查：NTP 未同步时告警
 [instances.sync]
 severity = "Critical"
-# title_rule = "[TPL]${check} ${from_hostip} ${target}"
 
 ## 时间偏移检查（仅 chrony/ntpd 模式支持，timedatectl 不提供偏移数据）
 ## 对偏移量取绝对值后与阈值比较
 [instances.offset]
 warn_ge = "100ms"
 critical_ge = "500ms"
-# title_rule = "[TPL]${check} ${from_hostip} ${target}"
 
 ## 时间源层级检查（仅 chrony/ntpd 模式支持）
 ## stratum 越大表示时间源离原子钟越远，16 表示未同步
 [instances.stratum]
 warn_ge = 10
 critical_ge = 16
-# title_rule = "[TPL]${check} ${from_hostip} ${target}"
 
 [instances.alerting]
 for_duration = 0

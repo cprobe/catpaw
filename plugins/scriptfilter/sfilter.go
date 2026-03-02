@@ -21,8 +21,7 @@ import (
 const pluginName = "scriptfilter"
 
 type MatchCheck struct {
-	Severity  string `toml:"severity"`
-	TitleRule string `toml:"title_rule"`
+	Severity string `toml:"severity"`
 }
 
 type Instance struct {
@@ -154,23 +153,19 @@ func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
 		}
 	}
 
-	tr := ins.Match.TitleRule
-	if tr == "" {
-		tr = "[TPL]${check} ${from_hostip} ${target}"
+	attrs := map[string]string{"command": ins.Command}
+	if len(matched) > 0 {
+		attrs["matched_count"] = fmt.Sprintf("%d", len(matched))
 	}
-
 	e := types.BuildEvent(map[string]string{
-		"check":                      "scriptfilter::match",
-		"target":                     ins.target,
-		types.AttrPrefix + "command": ins.Command,
-	}).SetTitleRule(tr)
+		"check":  "scriptfilter::match",
+		"target": ins.target,
+	}).SetAttrs(attrs)
 
 	if len(matched) == 0 {
 		q.PushFront(e)
 		return
 	}
-
-	e.Labels[types.AttrPrefix+"matched_count"] = fmt.Sprintf("%d", len(matched))
 
 	var desc strings.Builder
 	fmt.Fprintf(&desc, "matched %d lines:\n", len(matched))
@@ -191,16 +186,10 @@ func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
 }
 
 func (ins *Instance) buildErrorEvent(errMsg string) *types.Event {
-	tr := ins.Match.TitleRule
-	if tr == "" {
-		tr = "[TPL]${check} ${from_hostip} ${target}"
-	}
-
 	return types.BuildEvent(map[string]string{
 		"check":  "scriptfilter::match",
 		"target": ins.target,
-	}).SetTitleRule(tr).
-		SetEventStatus(types.EventStatusCritical).
+	}).SetEventStatus(types.EventStatusCritical).
 		SetDescription(errMsg)
 }
 

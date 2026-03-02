@@ -27,8 +27,7 @@ var knownUnitSuffixes = []string{
 }
 
 type StateCheck struct {
-	Severity  string `toml:"severity"`
-	TitleRule string `toml:"title_rule"`
+	Severity string `toml:"severity"`
 }
 
 type Instance struct {
@@ -125,7 +124,7 @@ func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
 					q.PushFront(types.BuildEvent(map[string]string{
 						"check":  "systemd::state",
 						"target": unit,
-					}).SetTitleRule("[TPL]${check} ${from_hostip} ${target}").
+					}).
 						SetEventStatus(types.EventStatusCritical).
 						SetDescription(fmt.Sprintf("panic during check: %v", r)))
 				}
@@ -163,41 +162,35 @@ func (ins *Instance) gatherUnit(q *safe.Queue[*types.Event], unit string) {
 	subState := props["SubState"]
 	unitType := props["Type"]
 
-	tr := ins.State.TitleRule
-	if tr == "" {
-		tr = "[TPL]${check} ${from_hostip} ${target}"
-	}
-
-	labels := map[string]string{
-		"check":  "systemd::state",
-		"target": unit,
-	}
-	attrLabels := map[string]string{
-		types.AttrPrefix + "active_state":   activeState,
-		types.AttrPrefix + "sub_state":      subState,
-		types.AttrPrefix + "load_state":     loadState,
-		types.AttrPrefix + "canonical_unit": canonicalUnit,
+	attrs := map[string]string{
+		"active_state":   activeState,
+		"sub_state":      subState,
+		"load_state":     loadState,
+		"canonical_unit": canonicalUnit,
 	}
 	if unitType != "" {
-		attrLabels[types.AttrPrefix+"type"] = unitType
+		attrs["type"] = unitType
 	}
 	if v := props["MainPID"]; v != "" && v != "0" {
-		attrLabels[types.AttrPrefix+"main_pid"] = v
+		attrs["main_pid"] = v
 	}
 	if v := props["Description"]; v != "" {
-		attrLabels[types.AttrPrefix+"description"] = v
+		attrs["description"] = v
 	}
 	if v := props["FragmentPath"]; v != "" {
-		attrLabels[types.AttrPrefix+"fragment_path"] = v
+		attrs["fragment_path"] = v
 	}
 	if v := props["ActiveEnterTimestamp"]; v != "" {
-		attrLabels[types.AttrPrefix+"active_enter_timestamp"] = v
+		attrs["active_enter_timestamp"] = v
 	}
 	if v := props["NRestarts"]; v != "" && v != "0" {
-		attrLabels[types.AttrPrefix+"n_restarts"] = v
+		attrs["n_restarts"] = v
 	}
 
-	event := types.BuildEvent(labels, attrLabels).SetTitleRule(tr)
+	event := types.BuildEvent(map[string]string{
+		"check":  "systemd::state",
+		"target": unit,
+	}).SetAttrs(attrs)
 
 	// LoadState not-found: unit does not exist
 	if loadState == "not-found" {
@@ -288,15 +281,10 @@ func parseProperties(data []byte) map[string]string {
 }
 
 func (ins *Instance) buildErrorEvent(unit, errMsg string) *types.Event {
-	tr := ins.State.TitleRule
-	if tr == "" {
-		tr = "[TPL]${check} ${from_hostip} ${target}"
-	}
-
 	return types.BuildEvent(map[string]string{
 		"check":  "systemd::state",
 		"target": unit,
-	}).SetTitleRule(tr).
+	}).
 		SetEventStatus(types.EventStatusCritical).
 		SetDescription(errMsg)
 }

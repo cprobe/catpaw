@@ -18,11 +18,10 @@ import (
 const pluginName = "mount"
 
 type MountSpec struct {
-	Path      string   `toml:"path"`
-	FSType    string   `toml:"fstype"`
-	Options   []string `toml:"options"`
-	Severity  string   `toml:"severity"`
-	TitleRule string   `toml:"title_rule"`
+	Path     string   `toml:"path"`
+	FSType   string   `toml:"fstype"`
+	Options  []string `toml:"options"`
+	Severity string   `toml:"severity"`
 }
 
 type FstabCheck struct {
@@ -132,7 +131,7 @@ func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
 		q.PushFront(types.BuildEvent(map[string]string{
 			"check":  "mount::compliance",
 			"target": "mounts",
-		}).SetTitleRule("[TPL]${check} ${from_hostip}").
+		}).
 			SetEventStatus(types.EventStatusCritical).
 			SetDescription(fmt.Sprintf("failed to parse /proc/mounts: %v", err)))
 		return
@@ -148,21 +147,17 @@ func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
 }
 
 func (ins *Instance) checkMount(q *safe.Queue[*types.Event], spec *MountSpec, mountMap map[string]mountEntry) {
-	tr := spec.TitleRule
-	if tr == "" {
-		tr = "[TPL]${check} ${from_hostip} ${target}"
-	}
-
 	entry, exists := mountMap[spec.Path]
 
 	if !exists {
 		expect := formatExpect(spec)
 		q.PushFront(types.BuildEvent(map[string]string{
-			"check":                     "mount::compliance",
-			"target":                    spec.Path,
-			types.AttrPrefix + "actual": "not mounted",
-			types.AttrPrefix + "expect": expect,
-		}).SetTitleRule(tr).
+			"check":  "mount::compliance",
+			"target": spec.Path,
+		}).SetAttrs(map[string]string{
+			"actual": "not mounted",
+			"expect": expect,
+		}).
 			SetEventStatus(spec.Severity).
 			SetDescription(formatNotMounted(spec)))
 		return
@@ -170,14 +165,13 @@ func (ins *Instance) checkMount(q *safe.Queue[*types.Event], spec *MountSpec, mo
 
 	actual := entry.fsType + ", " + entry.rawOptions
 	expect := formatExpect(spec)
+	attrs := map[string]string{"actual": actual, "expect": expect}
 
 	if spec.FSType != "" && entry.fsType != spec.FSType {
 		q.PushFront(types.BuildEvent(map[string]string{
-			"check":                     "mount::compliance",
-			"target":                    spec.Path,
-			types.AttrPrefix + "actual": actual,
-			types.AttrPrefix + "expect": expect,
-		}).SetTitleRule(tr).
+			"check":  "mount::compliance",
+			"target": spec.Path,
+		}).SetAttrs(attrs).
 			SetEventStatus(spec.Severity).
 			SetDescription(fmt.Sprintf("%s is mounted as %s, expected %s", spec.Path, entry.fsType, spec.FSType)))
 		return
@@ -192,11 +186,9 @@ func (ins *Instance) checkMount(q *safe.Queue[*types.Event], spec *MountSpec, mo
 		}
 		if len(missing) > 0 {
 			q.PushFront(types.BuildEvent(map[string]string{
-				"check":                     "mount::compliance",
-				"target":                    spec.Path,
-				types.AttrPrefix + "actual": actual,
-				types.AttrPrefix + "expect": expect,
-			}).SetTitleRule(tr).
+				"check":  "mount::compliance",
+				"target": spec.Path,
+			}).SetAttrs(attrs).
 				SetEventStatus(spec.Severity).
 				SetDescription(fmt.Sprintf("%s is missing mount options: %s (actual: %s)",
 					spec.Path, strings.Join(missing, ", "), entry.rawOptions)))
@@ -209,11 +201,9 @@ func (ins *Instance) checkMount(q *safe.Queue[*types.Event], spec *MountSpec, mo
 		desc += " with expected options (" + strings.Join(spec.Options, ", ") + ")"
 	}
 	q.PushFront(types.BuildEvent(map[string]string{
-		"check":                     "mount::compliance",
-		"target":                    spec.Path,
-		types.AttrPrefix + "actual": actual,
-		types.AttrPrefix + "expect": expect,
-	}).SetTitleRule(tr).
+		"check":  "mount::compliance",
+		"target": spec.Path,
+	}).SetAttrs(attrs).
 		SetEventStatus(types.EventStatusOk).
 		SetDescription(desc))
 }
@@ -311,7 +301,7 @@ func (ins *Instance) checkFstabMounts(q *safe.Queue[*types.Event], mountMap map[
 		q.PushFront(types.BuildEvent(map[string]string{
 			"check":  "mount::compliance",
 			"target": "fstab",
-		}).SetTitleRule("[TPL]${check} ${from_hostip}").
+		}).
 			SetEventStatus(types.EventStatusCritical).
 			SetDescription(fmt.Sprintf("failed to read /etc/fstab: %v", err)))
 		return

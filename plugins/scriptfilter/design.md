@@ -33,7 +33,7 @@ type Instance struct {
     FilterInclude []string        // 必填：行级 include 规则（glob + /regex/）
     FilterExclude []string        // 可选：行级 exclude 规则
     MaxLines      int             // 告警描述中最多展示的匹配行数，默认 10
-    Match         MatchCheck      // severity 和 title_rule
+    Match         MatchCheck      // severity
 }
 ```
 

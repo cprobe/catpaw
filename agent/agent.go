@@ -9,6 +9,7 @@ import (
 	"github.com/cprobe/catpaw/config"
 	"github.com/cprobe/catpaw/diagnose"
 	"github.com/cprobe/catpaw/logger"
+	"github.com/cprobe/catpaw/notify"
 	"github.com/cprobe/catpaw/pkg/choice"
 	"github.com/cprobe/catpaw/plugins"
 	"github.com/toolkits/pkg/file"
@@ -70,6 +71,7 @@ func New() *Agent {
 func (a *Agent) Start() {
 	logger.Logger.Info("agent starting")
 
+	initNotifiers()
 	a.initDiagnoseEngine()
 
 	pcs, err := loadFileConfigs()
@@ -83,6 +85,15 @@ func (a *Agent) Start() {
 	}
 
 	logger.Logger.Info("agent started")
+}
+
+func initNotifiers() {
+	if cfg := config.Config.Notify.Flashduty; cfg != nil && cfg.IntegrationKey != "" {
+		notify.Register(notify.NewFlashdutyNotifier(cfg))
+	}
+	if cfg := config.Config.Notify.PagerDuty; cfg != nil && cfg.RoutingKey != "" {
+		notify.Register(notify.NewPagerDutyNotifier(cfg))
+	}
 }
 
 func (a *Agent) initDiagnoseEngine() {

@@ -94,7 +94,7 @@
   - `warn_within` / `critical_within` — 时间窗口内触发
 - Description 统一风格：纯文本，先说实际值再说阈值（如 "usage 94.2% >= critical threshold 90%"）
 - 恢复事件统一描述："everything is ok"
-- `_attr_` 前缀标签携带动态度量数据，不参与 AlertKey 计算
+- `attrs`（通过 `SetAttrs` 设置）携带动态度量数据，不参与 AlertKey 计算
 
 ## 12. 每个插件必须有测试覆盖
 

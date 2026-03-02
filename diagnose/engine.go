@@ -10,8 +10,8 @@ import (
 
 	"github.com/cprobe/catpaw/config"
 	"github.com/cprobe/catpaw/diagnose/aiclient"
-	"github.com/cprobe/catpaw/flashduty"
 	"github.com/cprobe/catpaw/logger"
+	"github.com/cprobe/catpaw/notify"
 	"github.com/cprobe/catpaw/types"
 )
 
@@ -280,6 +280,9 @@ func (e *DiagnoseEngine) initSessionAccessor(ctx context.Context, req *DiagnoseR
 	if req.InstanceRef == nil {
 		return nil
 	}
+	if !e.registry.HasAccessorFactory(req.Plugin) {
+		return nil
+	}
 	accessor, err := e.registry.CreateAccessor(req.Plugin, ctx, req.InstanceRef)
 	if err != nil {
 		return fmt.Errorf("create accessor for %s::%s: %w", req.Plugin, req.Target, err)
@@ -316,8 +319,8 @@ func (e *DiagnoseEngine) Shutdown() {
 	logger.Logger.Infow("diagnose engine shutdown", "cancelled", len(cancels))
 }
 
-// forwardReport sends the diagnosis report to FlashDuty as a new Event
-// with the same AlertKey but a fresh EventTime and Description.
+// forwardReport sends the diagnosis report to all configured notifiers
+// as a new Event with the same AlertKey but a fresh EventTime and Description.
 func (e *DiagnoseEngine) forwardReport(req *DiagnoseRequest, report string) {
 	original := req.Events[0]
 	desc := FormatReportForFlashDuty(req.Session.Record, report)
@@ -327,11 +330,10 @@ func (e *DiagnoseEngine) forwardReport(req *DiagnoseRequest, report string) {
 		EventStatus: types.EventStatusInfo,
 		AlertKey:    original.AlertKey,
 		Labels:      original.Labels,
-		TitleRule:   original.TitleRule,
 		Description: desc,
 	}
 
-	if flashduty.Forward(event) {
+	if notify.Forward(event) {
 		logger.Logger.Infow("diagnose report forwarded",
 			"alert_key", event.AlertKey, "plugin", req.Plugin, "target", req.Target)
 	} else {

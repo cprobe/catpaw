@@ -460,8 +460,8 @@ func TestEvaluateExpiryExpired(t *testing.T) {
 	if !strings.Contains(event.Description, "expired") {
 		t.Errorf("expected 'expired' in description, got: %s", event.Description)
 	}
-	// Check _attr_time_until_expiry has negative prefix
-	tueVal := event.Labels[types.AttrPrefix+"time_until_expiry"]
+	// Check time_until_expiry attr has negative prefix
+	tueVal := event.Attrs["time_until_expiry"]
 	if !strings.HasPrefix(tueVal, "-") {
 		t.Errorf("expected negative time_until_expiry for expired cert, got: %s", tueVal)
 	}
@@ -534,16 +534,16 @@ func TestCheckFileOk(t *testing.T) {
 		t.Errorf("expected Ok, got %s: %s", events[0].EventStatus, events[0].Description)
 	}
 
-	// Verify _attr_ labels
-	if events[0].Labels[types.AttrPrefix+"cert_subject"] == "" {
-		t.Error("expected cert_subject label")
+	// Verify attrs
+	if events[0].Attrs["cert_subject"] == "" {
+		t.Error("expected cert_subject attr")
 	}
-	if events[0].Labels[types.AttrPrefix+"cert_sha256"] == "" {
-		t.Error("expected cert_sha256 label")
+	if events[0].Attrs["cert_sha256"] == "" {
+		t.Error("expected cert_sha256 attr")
 	}
-	if events[0].Labels[types.AttrPrefix+"cert_dns_names"] != "test.example.com" {
+	if events[0].Attrs["cert_dns_names"] != "test.example.com" {
 		t.Errorf("expected dns_names=test.example.com, got %s",
-			events[0].Labels[types.AttrPrefix+"cert_dns_names"])
+			events[0].Attrs["cert_dns_names"])
 	}
 }
 
@@ -695,8 +695,8 @@ func TestCheckRemoteOk(t *testing.T) {
 	if events[0].EventStatus != types.EventStatusOk {
 		t.Errorf("expected Ok, got %s: %s", events[0].EventStatus, events[0].Description)
 	}
-	if events[0].Labels[types.AttrPrefix+"cert_sni"] == "" {
-		t.Error("expected cert_sni label to be set")
+	if events[0].Attrs["cert_sni"] == "" {
+		t.Error("expected cert_sni attr to be set")
 	}
 }
 

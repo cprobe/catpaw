@@ -23,7 +23,6 @@ const pluginName = "procfd"
 type FdUsageCheck struct {
 	WarnGe     float64 `toml:"warn_ge"`
 	CriticalGe float64 `toml:"critical_ge"`
-	TitleRule  string  `toml:"title_rule"`
 }
 
 type Instance struct {
@@ -186,26 +185,23 @@ func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
 		return
 	}
 
-	tr := ins.FdUsage.TitleRule
-	if tr == "" {
-		tr = "[TPL]${check} ${from_hostip} ${target}"
+	attrs := map[string]string{
+		"pid":           fmt.Sprintf("%d", worst.pid),
+		"open_fds":      fmt.Sprintf("%d", worst.openFds),
+		"nofile_soft":   fmt.Sprintf("%d", worst.softLimit),
+		"nofile_hard":   fmt.Sprintf("%d", worst.hardLimit),
+		"usage_percent": fmt.Sprintf("%.1f%%", worst.usagePercent),
+		"matched_count": fmt.Sprintf("%d", matchedCount),
+		"checked_count": fmt.Sprintf("%d", checkedCount),
+	}
+	if worst.execName != "" {
+		attrs["exec_name"] = worst.execName
 	}
 
 	event := types.BuildEvent(map[string]string{
-		"check":                            "procfd::fd_usage",
-		"target":                           ins.searchLabel,
-		types.AttrPrefix + "pid":           fmt.Sprintf("%d", worst.pid),
-		types.AttrPrefix + "open_fds":      fmt.Sprintf("%d", worst.openFds),
-		types.AttrPrefix + "nofile_soft":   fmt.Sprintf("%d", worst.softLimit),
-		types.AttrPrefix + "nofile_hard":   fmt.Sprintf("%d", worst.hardLimit),
-		types.AttrPrefix + "usage_percent": fmt.Sprintf("%.1f%%", worst.usagePercent),
-		types.AttrPrefix + "matched_count": fmt.Sprintf("%d", matchedCount),
-		types.AttrPrefix + "checked_count": fmt.Sprintf("%d", checkedCount),
-	}).SetTitleRule(tr)
-
-	if worst.execName != "" {
-		event.Labels[types.AttrPrefix+"exec_name"] = worst.execName
-	}
+		"check":  "procfd::fd_usage",
+		"target": ins.searchLabel,
+	}).SetAttrs(attrs)
 
 	status := types.EvaluateGeThreshold(worst.usagePercent, ins.FdUsage.WarnGe, ins.FdUsage.CriticalGe)
 	event.SetEventStatus(status)
@@ -428,12 +424,8 @@ func (ins *Instance) findByPidFile() ([]int32, error) {
 }
 
 func (ins *Instance) newEvent() *types.Event {
-	tr := ins.FdUsage.TitleRule
-	if tr == "" {
-		tr = "[TPL]${check} ${from_hostip} ${target}"
-	}
 	return types.BuildEvent(map[string]string{
 		"check":  "procfd::fd_usage",
 		"target": ins.searchLabel,
-	}).SetTitleRule(tr)
+	})
 }

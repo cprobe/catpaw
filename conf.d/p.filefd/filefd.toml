@@ -8,7 +8,6 @@
 [instances.filefd_usage]
 warn_ge = 80.0
 critical_ge = 90.0
-# title_rule = "[TPL]${check} ${from_hostip}"
 
 ## 采集间隔
 interval = "30s"

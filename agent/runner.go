@@ -102,7 +102,7 @@ func (r *PluginRunner) gatherInstancePlugin(ins plugins.Instance) {
 			queue.PushFront(types.BuildEvent(map[string]string{
 				"check":  r.pluginName + "::panic",
 				"target": r.pluginName,
-			}).SetTitleRule("[TPL]${check} ${from_hostip}").
+			}).
 				SetEventStatus(types.EventStatusCritical).
 				SetDescription(fmt.Sprintf("plugin panic: %v", rc)))
 		}

@@ -111,14 +111,14 @@ func TestGatherLive(t *testing.T) {
 			event.EventStatus, event.Description)
 	}
 
-	if event.Labels[types.AttrPrefix+"uptime"] == "" {
-		t.Error("missing _attr_uptime label")
+	if event.Attrs["uptime"] == "" {
+		t.Error("missing uptime attr")
 	}
-	if event.Labels[types.AttrPrefix+"uptime_seconds"] == "" {
-		t.Error("missing _attr_uptime_seconds label")
+	if event.Attrs["uptime_seconds"] == "" {
+		t.Error("missing uptime_seconds attr")
 	}
-	if event.Labels[types.AttrPrefix+"boot_time"] == "" {
-		t.Error("missing _attr_boot_time label")
+	if event.Attrs["boot_time"] == "" {
+		t.Error("missing boot_time attr")
 	}
 }
 

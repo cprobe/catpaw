@@ -27,15 +27,13 @@ var validAppArmorStates = map[string]bool{
 }
 
 type EnforceModeCheck struct {
-	Expect    string `toml:"expect"`
-	Severity  string `toml:"severity"`
-	TitleRule string `toml:"title_rule"`
+	Expect   string `toml:"expect"`
+	Severity string `toml:"severity"`
 }
 
 type AppArmorCheck struct {
-	Expect    string `toml:"expect"`
-	Severity  string `toml:"severity"`
-	TitleRule string `toml:"title_rule"`
+	Expect   string `toml:"expect"`
+	Severity string `toml:"severity"`
 }
 
 type Instance struct {
@@ -118,28 +116,24 @@ func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
 }
 
 func (ins *Instance) checkEnforceMode(q *safe.Queue[*types.Event]) {
-	tr := ins.EnforceMode.TitleRule
-	if tr == "" {
-		tr = "[TPL]${check} ${from_hostip} ${target}"
-	}
-
 	actual, err := readSELinuxMode()
 	if err != nil {
 		q.PushFront(types.BuildEvent(map[string]string{
 			"check":  "secmod::selinux_mode",
 			"target": "selinux",
-		}).SetTitleRule(tr).
+		}).
 			SetEventStatus(types.EventStatusCritical).
 			SetDescription(fmt.Sprintf("failed to read SELinux status: %v", err)))
 		return
 	}
 
 	event := types.BuildEvent(map[string]string{
-		"check":                     "secmod::selinux_mode",
-		"target":                    "selinux",
-		types.AttrPrefix + "actual": actual,
-		types.AttrPrefix + "expect": ins.EnforceMode.Expect,
-	}).SetTitleRule(tr)
+		"check":  "secmod::selinux_mode",
+		"target": "selinux",
+	}).SetAttrs(map[string]string{
+		"actual": actual,
+		"expect": ins.EnforceMode.Expect,
+	})
 
 	if actual == ins.EnforceMode.Expect {
 		event.SetEventStatus(types.EventStatusOk).
@@ -153,28 +147,24 @@ func (ins *Instance) checkEnforceMode(q *safe.Queue[*types.Event]) {
 }
 
 func (ins *Instance) checkAppArmor(q *safe.Queue[*types.Event]) {
-	tr := ins.AppArmor.TitleRule
-	if tr == "" {
-		tr = "[TPL]${check} ${from_hostip} ${target}"
-	}
-
 	actual, err := readAppArmorStatus()
 	if err != nil {
 		q.PushFront(types.BuildEvent(map[string]string{
 			"check":  "secmod::apparmor_enabled",
 			"target": "apparmor",
-		}).SetTitleRule(tr).
+		}).
 			SetEventStatus(types.EventStatusCritical).
 			SetDescription(fmt.Sprintf("failed to read AppArmor status: %v", err)))
 		return
 	}
 
 	event := types.BuildEvent(map[string]string{
-		"check":                     "secmod::apparmor_enabled",
-		"target":                    "apparmor",
-		types.AttrPrefix + "actual": actual,
-		types.AttrPrefix + "expect": ins.AppArmor.Expect,
-	}).SetTitleRule(tr)
+		"check":  "secmod::apparmor_enabled",
+		"target": "apparmor",
+	}).SetAttrs(map[string]string{
+		"actual": actual,
+		"expect": ins.AppArmor.Expect,
+	})
 
 	if actual == ins.AppArmor.Expect {
 		event.SetEventStatus(types.EventStatusOk).

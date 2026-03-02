@@ -29,34 +29,29 @@ const (
 )
 
 type ConnectivityCheck struct {
-	Severity  string `toml:"severity"`
-	TitleRule string `toml:"title_rule"`
+	Severity string `toml:"severity"`
 }
 
 type ResponseTimeCheck struct {
 	WarnGe     config.Duration `toml:"warn_ge"`
 	CriticalGe config.Duration `toml:"critical_ge"`
-	TitleRule  string          `toml:"title_rule"`
 }
 
 type CertExpiryCheck struct {
 	WarnWithin     config.Duration `toml:"warn_within"`
 	CriticalWithin config.Duration `toml:"critical_within"`
-	TitleRule      string          `toml:"title_rule"`
 }
 
 type StatusCodeCheck struct {
-	Expect    []string `toml:"expect"`
-	Severity  string   `toml:"severity"`
-	TitleRule string   `toml:"title_rule"`
-	filter    filter.Filter
+	Expect   []string `toml:"expect"`
+	Severity string   `toml:"severity"`
+	filter   filter.Filter
 }
 
 type ResponseBodyCheck struct {
 	ExpectSubstring string `toml:"expect_substring"`
 	ExpectRegex     string `toml:"expect_regex"`
 	Severity        string `toml:"severity"`
-	TitleRule       string `toml:"title_rule"`
 	compiledRegex   *regexp.Regexp
 }
 
@@ -285,8 +280,7 @@ func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
 					q.PushFront(types.BuildEvent(map[string]string{
 						"check":  "http::connectivity",
 						"target": target,
-					}).SetTitleRule("[TPL]${check} ${from_hostip} ${target}").
-						SetEventStatus(types.EventStatusCritical).
+					}).SetEventStatus(types.EventStatusCritical).
 						SetDescription(fmt.Sprintf("panic during check: %v", r)))
 				}
 				se.Release()
@@ -313,13 +307,9 @@ func (ins *Instance) gather(q *safe.Queue[*types.Event], target string) {
 
 	request, err := http.NewRequest(ins.GetMethod(), target, payload)
 	if err != nil {
-		connTR := ins.Connectivity.TitleRule
-		if connTR == "" {
-			connTR = "[TPL]${check} ${from_hostip} ${target}"
-		}
 		connEvent := types.BuildEvent(map[string]string{
 			"check": "http::connectivity",
-		}, labels).SetTitleRule(connTR)
+		}, labels)
 		connEvent.SetEventStatus(ins.Connectivity.Severity)
 		connEvent.SetDescription(fmt.Sprintf("failed to create request: %v", err))
 		q.PushFront(connEvent)
@@ -337,20 +327,15 @@ func (ins *Instance) gather(q *safe.Queue[*types.Event], target string) {
 		request.SetBasicAuth(ins.BasicAuthUser, ins.BasicAuthPass)
 	}
 
-	// connectivity check
-	connTR := ins.Connectivity.TitleRule
-	if connTR == "" {
-		connTR = "[TPL]${check} ${from_hostip} ${target}"
-	}
-
 	start := time.Now()
 	resp, err := ins.client.Do(request)
 	responseTime := time.Since(start)
 
 	connEvent := types.BuildEvent(map[string]string{
-		"check":                            "http::connectivity",
-		types.AttrPrefix + "response_time": responseTime.String(),
-	}, labels).SetTitleRule(connTR)
+		"check": "http::connectivity",
+	}, labels).SetAttrs(map[string]string{
+		"response_time": responseTime.String(),
+	})
 
 	if err != nil {
 		connEvent.SetEventStatus(ins.Connectivity.Severity)
@@ -368,19 +353,14 @@ func (ins *Instance) gather(q *safe.Queue[*types.Event], target string) {
 
 	defer resp.Body.Close()
 
-	// response time check
 	if ins.ResponseTime.WarnGe > 0 || ins.ResponseTime.CriticalGe > 0 {
-		rtTR := ins.ResponseTime.TitleRule
-		if rtTR == "" {
-			rtTR = "[TPL]${check} ${from_hostip} ${target}"
-		}
-
 		rtEvent := types.BuildEvent(map[string]string{
-			"check":                                 "http::response_time",
-			types.AttrPrefix + "response_time":      responseTime.String(),
-			types.AttrPrefix + "warn_threshold":     ins.ResponseTime.WarnGe.HumanString(),
-			types.AttrPrefix + "critical_threshold": ins.ResponseTime.CriticalGe.HumanString(),
-		}, labels).SetTitleRule(rtTR)
+			"check": "http::response_time",
+		}, labels).SetAttrs(map[string]string{
+			"response_time":      responseTime.String(),
+			"warn_threshold":     ins.ResponseTime.WarnGe.HumanString(),
+			"critical_threshold": ins.ResponseTime.CriticalGe.HumanString(),
+		})
 
 		if ins.ResponseTime.CriticalGe > 0 && responseTime >= time.Duration(ins.ResponseTime.CriticalGe) {
 			rtEvent.SetEventStatus(types.EventStatusCritical)
@@ -395,18 +375,12 @@ func (ins *Instance) gather(q *safe.Queue[*types.Event], target string) {
 		q.PushFront(rtEvent)
 	}
 
-	// cert expiry check
 	if (ins.CertExpiry.WarnWithin > 0 || ins.CertExpiry.CriticalWithin > 0) &&
 		strings.HasPrefix(target, "https://") && resp.TLS != nil {
 
-		certTR := ins.CertExpiry.TitleRule
-		if certTR == "" {
-			certTR = "[TPL]${check} ${from_hostip} ${target}"
-		}
-
 		certEvent := types.BuildEvent(map[string]string{
 			"check": "http::cert_expiry",
-		}, labels).SetTitleRule(certTR)
+		}, labels)
 
 		certExpiry := getEarliestCertExpiry(resp.TLS)
 
@@ -415,10 +389,12 @@ func (ins *Instance) gather(q *safe.Queue[*types.Event], target string) {
 			certEvent.SetDescription("no peer certificates found in TLS connection")
 		} else {
 			timeUntilExpiry := time.Until(certExpiry)
-			certEvent.Labels[types.AttrPrefix+"cert_expires_at"] = certExpiry.Format("2006-01-02 15:04:05")
-			certEvent.Labels[types.AttrPrefix+"time_until_expiry"] = timeUntilExpiry.Truncate(time.Minute).String()
-			certEvent.Labels[types.AttrPrefix+"warn_within"] = ins.CertExpiry.WarnWithin.HumanString()
-			certEvent.Labels[types.AttrPrefix+"critical_within"] = ins.CertExpiry.CriticalWithin.HumanString()
+			certEvent.SetAttrs(map[string]string{
+				"cert_expires_at":     certExpiry.Format("2006-01-02 15:04:05"),
+				"time_until_expiry":   timeUntilExpiry.Truncate(time.Minute).String(),
+				"warn_within":         ins.CertExpiry.WarnWithin.HumanString(),
+				"critical_within":     ins.CertExpiry.CriticalWithin.HumanString(),
+			})
 
 			if ins.CertExpiry.CriticalWithin > 0 && timeUntilExpiry <= time.Duration(ins.CertExpiry.CriticalWithin) {
 				certEvent.SetEventStatus(types.EventStatusCritical)
@@ -449,19 +425,14 @@ func (ins *Instance) gather(q *safe.Queue[*types.Event], target string) {
 		}
 	}
 
-	// status code check
 	if len(ins.StatusCode.Expect) > 0 {
-		scTR := ins.StatusCode.TitleRule
-		if scTR == "" {
-			scTR = "[TPL]${check} ${from_hostip} ${target}"
-		}
-
 		scEvent := types.BuildEvent(map[string]string{
-			"check":                            "http::status_code",
-			types.AttrPrefix + "status_code":   statusCode,
-			types.AttrPrefix + "expect_code":   fmt.Sprintf("%v", ins.StatusCode.Expect),
-			types.AttrPrefix + "response_body": truncateBody(body, maxBodyDisplaySize),
-		}, labels).SetTitleRule(scTR)
+			"check": "http::status_code",
+		}, labels).SetAttrs(map[string]string{
+			"status_code":    statusCode,
+			"expect_code":    fmt.Sprintf("%v", ins.StatusCode.Expect),
+			"response_body":  truncateBody(body, maxBodyDisplaySize),
+		})
 
 		if !ins.StatusCode.filter.Match(statusCode) {
 			scEvent.SetEventStatus(ins.StatusCode.Severity)
@@ -473,30 +444,25 @@ func (ins *Instance) gather(q *safe.Queue[*types.Event], target string) {
 		q.PushFront(scEvent)
 	}
 
-	// response body check
 	if ins.ResponseBody.ExpectSubstring != "" || ins.ResponseBody.compiledRegex != nil {
-		rbTR := ins.ResponseBody.TitleRule
-		if rbTR == "" {
-			rbTR = "[TPL]${check} ${from_hostip} ${target}"
+		rbAttrs := map[string]string{
+			"status_code":   statusCode,
+			"response_body": truncateBody(body, maxBodyDisplaySize),
 		}
-
-		rbEvent := types.BuildEvent(map[string]string{
-			"check":                            "http::response_body",
-			types.AttrPrefix + "status_code":   statusCode,
-			types.AttrPrefix + "response_body": truncateBody(body, maxBodyDisplaySize),
-		}, labels).SetTitleRule(rbTR)
-
 		var matched bool
 		var expectDesc string
 		if ins.ResponseBody.compiledRegex != nil {
 			matched = ins.ResponseBody.compiledRegex.Match(body)
 			expectDesc = fmt.Sprintf("expect_regex: %s", ins.ResponseBody.ExpectRegex)
-			rbEvent.Labels[types.AttrPrefix+"expect_regex"] = ins.ResponseBody.ExpectRegex
+			rbAttrs["expect_regex"] = ins.ResponseBody.ExpectRegex
 		} else {
 			matched = strings.Contains(string(body), ins.ResponseBody.ExpectSubstring)
 			expectDesc = fmt.Sprintf("expect_substring: %s", ins.ResponseBody.ExpectSubstring)
-			rbEvent.Labels[types.AttrPrefix+"expect_substring"] = ins.ResponseBody.ExpectSubstring
+			rbAttrs["expect_substring"] = ins.ResponseBody.ExpectSubstring
 		}
+		rbEvent := types.BuildEvent(map[string]string{
+			"check": "http::response_body",
+		}, labels).SetAttrs(rbAttrs)
 
 		if !matched {
 			rbEvent.SetEventStatus(ins.ResponseBody.Severity)

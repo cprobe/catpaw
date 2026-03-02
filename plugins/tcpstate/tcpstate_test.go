@@ -168,11 +168,11 @@ func TestGatherNetlinkOk(t *testing.T) {
 	if cwEvent.EventStatus != types.EventStatusOk {
 		t.Fatalf("close_wait should be Ok, got %q", cwEvent.EventStatus)
 	}
-	if cwEvent.Labels[types.AttrPrefix+"count"] != "10" {
-		t.Fatalf("expected count=10, got %s", cwEvent.Labels[types.AttrPrefix+"count"])
+	if cwEvent.Attrs["count"] != "10" {
+		t.Fatalf("expected count=10, got %s", cwEvent.Attrs["count"])
 	}
-	if cwEvent.Labels[types.AttrPrefix+"established"] != "5000" {
-		t.Fatalf("expected established=5000, got %s", cwEvent.Labels[types.AttrPrefix+"established"])
+	if cwEvent.Attrs["established"] != "5000" {
+		t.Fatalf("expected established=5000, got %s", cwEvent.Attrs["established"])
 	}
 
 	twEvent := popEvent(t, q)
@@ -314,8 +314,8 @@ func TestGatherSockstatOk(t *testing.T) {
 	if e.EventStatus != types.EventStatusOk {
 		t.Fatalf("expected Ok, got %q", e.EventStatus)
 	}
-	if _, ok := e.Labels[types.AttrPrefix+"established"]; ok {
-		t.Fatal("sockstat path should NOT have _attr_established")
+	if _, ok := e.Attrs["established"]; ok {
+		t.Fatal("sockstat path should NOT have attrs.established")
 	}
 }
 
@@ -425,40 +425,6 @@ func TestGatherZeroCountOk(t *testing.T) {
 		if e.EventStatus != types.EventStatusOk {
 			t.Fatalf("zero count should be Ok, got %q for %s", e.EventStatus, e.Labels["check"])
 		}
-	}
-}
-
-// --- title_rule ---
-
-func TestDefaultTitleRule(t *testing.T) {
-	defer mockLinux()()
-	defer mockQueryStates(&stateCounts{closeWait: 10}, nil)()
-
-	ins := &Instance{CloseWait: StateCheck{WarnGe: 100}}
-	ins.Init()
-
-	q := safe.NewQueue[*types.Event]()
-	ins.Gather(q)
-
-	e := popEvent(t, q)
-	if e.TitleRule != "[TPL]${check} ${from_hostip}" {
-		t.Fatalf("default title_rule should be [TPL]${check} ${from_hostip}, got %q", e.TitleRule)
-	}
-}
-
-func TestCustomTitleRule(t *testing.T) {
-	defer mockLinux()()
-	defer mockQueryStates(&stateCounts{closeWait: 10}, nil)()
-
-	ins := &Instance{CloseWait: StateCheck{WarnGe: 100, TitleRule: "[TPL]${check} ${from_hostip} ${target}"}}
-	ins.Init()
-
-	q := safe.NewQueue[*types.Event]()
-	ins.Gather(q)
-
-	e := popEvent(t, q)
-	if e.TitleRule != "[TPL]${check} ${from_hostip} ${target}" {
-		t.Fatalf("expected custom title_rule, got %q", e.TitleRule)
 	}
 }
 

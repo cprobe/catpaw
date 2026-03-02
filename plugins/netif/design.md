@@ -33,7 +33,6 @@
 
 - **每个接口 × 每个维度独立产出事件**——eth0 的 errors 事件不影响 eth1 的 drops 事件
 - **target label** 为接口名（如 `"eth0"`、`"bond0"`）
-- **默认 title_rule** 为 `"[TPL]${check} ${from_hostip} ${target}"`
 
 ### 为什么将 errors 和 drops 拆成两个 check label
 
@@ -46,7 +45,7 @@
 
 ### 为什么将 rx + tx 合并到同一个事件
 
-rx_errors 和 tx_errors 通常由同一个根因触发（网卡故障、线缆问题同时影响收发）。拆成 4 个维度（rx_errors、tx_errors、rx_dropped、tx_dropped）会导致事件数量爆炸。`_attr_` 标签中保留 rx/tx 明细，供排查时区分方向。
+rx_errors 和 tx_errors 通常由同一个根因触发（网卡故障、线缆问题同时影响收发）。拆成 4 个维度（rx_errors、tx_errors、rx_dropped、tx_dropped）会导致事件数量爆炸。attrs 中保留 rx/tx 明细，供排查时区分方向。
 
 ## 数据来源
 
@@ -122,13 +121,11 @@ severity = "Critical"
 type DeltaCheck struct {
     WarnGe     float64 `toml:"warn_ge"`
     CriticalGe float64 `toml:"critical_ge"`
-    TitleRule  string  `toml:"title_rule"`
 }
 
 type LinkSpec struct {
     Interface string `toml:"interface"`
     Severity  string `toml:"severity"`
-    TitleRule string `toml:"title_rule"`
 }
 
 type Instance struct {
@@ -161,23 +158,23 @@ type ifCounters struct {
 - `Timeout` — sysfs 读取是纯内存操作
 - `Concurrency` — 接口数量有限（几十个上限），串行遍历
 
-## _attr_ 标签
+## Attrs（SetAttrs 设置）
 
 ### errors / drops 事件
 
-| 标签 | 示例值 | 说明 |
+| 属性 | 示例值 | 说明 |
 | --- | --- | --- |
-| `_attr_delta` | `5` | 本次检查周期内的增量（rx + tx 合计） |
-| `_attr_rx` | `3` | 本次增量中 rx 部分 |
-| `_attr_tx` | `2` | 本次增量中 tx 部分 |
-| `_attr_total` | `12345` | 系统启动以来的累计值 |
+| `delta` | `5` | 本次检查周期内的增量（rx + tx 合计） |
+| `rx` | `3` | 本次增量中 rx 部分 |
+| `tx` | `2` | 本次增量中 tx 部分 |
+| `total` | `12345` | 系统启动以来的累计值 |
 
 ### link 事件
 
-| 标签 | 示例值 | 说明 |
+| 属性 | 示例值 | 说明 |
 | --- | --- | --- |
-| `_attr_operstate` | `down` | 当前 operstate 值 |
-| `_attr_expect` | `up` | 期望状态（始终为 up） |
+| `operstate` | `down` | 当前 operstate 值 |
+| `expect` | `up` | 期望状态（始终为 up） |
 
 ## Init() 校验
 
@@ -410,13 +407,11 @@ exclude = ["lo", "docker*", "veth*", "br-*", "virbr*", "cali*", "flannel*", "cni
 [instances.errors]
 warn_ge = 1
 critical_ge = 100
-# title_rule = "[TPL]${check} ${from_hostip} ${target}"
 
 ## 丢包增量检查（rx_dropped + tx_dropped 合计增量）
 [instances.drops]
 warn_ge = 1
 critical_ge = 100
-# title_rule = "[TPL]${check} ${from_hostip} ${target}"
 
 ## 链路状态检查（手动指定期望 up 的接口）
 ## 不是所有接口都需要 up（备用网卡、管理口可能正常 down），所以需要手动列出
@@ -425,7 +420,6 @@ critical_ge = 100
 # [[instances.link_up]]
 # interface = "eth0"
 # severity = "Critical"
-# # title_rule = "[TPL]${check} ${from_hostip} ${target}"
 
 # [[instances.link_up]]
 # interface = "bond0"

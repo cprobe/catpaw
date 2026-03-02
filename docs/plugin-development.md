@@ -75,13 +75,14 @@ func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
         event := types.BuildEvent(map[string]string{
             "check":  "myplugin::health",
             "target": target,
-        }).SetTitleRule("[TPL]${check} ${from_hostip} ${target}")
+        })
 
         // ... 执行检查逻辑 ...
 
         if somethingWrong {
             event.SetEventStatus(types.EventStatusCritical)
             event.SetDescription("something went wrong")
+            event.SetAttrs(map[string]string{"response_time": "150ms"})
         } else {
             event.SetDescription("everything is ok")
         }
@@ -122,7 +123,10 @@ repeat_number = 3
 
 - `check` — 必须设置，格式为 `pluginName::dimension`
 - `target` — 检查对象的标识
-- 动态数据使用 `types.AttrPrefix` 前缀（如 `_attr_response_time`）
+
+### Attrs（展示属性）
+
+动态度量数据（如响应时间、使用率、阈值等）使用 `event.SetAttrs(map[string]string{...})` 设置，不参与 AlertKey 计算。
 
 ### EventStatus
 
@@ -134,10 +138,6 @@ repeat_number = 3
 ### Description
 
 纯文本，简洁描述当前状态。不要使用 Markdown。
-
-### TitleRule
-
-通常为 `"[TPL]${check} ${from_hostip} ${target}"`，FlashDuty 会从 Labels 中取值渲染为告警标题。
 
 ## 多维度检查
 

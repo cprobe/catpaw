@@ -182,15 +182,15 @@ func TestGatherCpuUsage(t *testing.T) {
 
 	// Init() warms up gopsutil's snapshot, so the normal path should be taken.
 	// If the API returned an error (Critical without attr), skip attr checks.
-	if event.EventStatus == types.EventStatusCritical && event.Labels[types.AttrPrefix+"cpu_usage"] == "" {
+	if event.EventStatus == types.EventStatusCritical && event.Attrs["cpu_usage"] == "" {
 		t.Log("cpu.Percent returned an error, skipping attr checks")
 		return
 	}
-	if event.Labels[types.AttrPrefix+"cpu_usage"] == "" {
-		t.Error("expected _attr_cpu_usage to be set")
+	if event.Attrs["cpu_usage"] == "" {
+		t.Error("expected cpu_usage attr to be set")
 	}
-	if event.Labels[types.AttrPrefix+"cpu_cores"] == "" {
-		t.Error("expected _attr_cpu_cores to be set")
+	if event.Attrs["cpu_cores"] == "" {
+		t.Error("expected cpu_cores attr to be set")
 	}
 }
 
@@ -217,20 +217,20 @@ func TestGatherLoadAverage(t *testing.T) {
 	if event.Labels["check"] != "cpu::load_average" {
 		t.Errorf("expected check=cpu::load_average, got %s", event.Labels["check"])
 	}
-	if event.Labels[types.AttrPrefix+"load1"] == "" {
-		t.Error("expected _attr_load1 to be set")
+	if event.Attrs["load1"] == "" {
+		t.Error("expected load1 attr to be set")
 	}
-	if event.Labels[types.AttrPrefix+"load5"] == "" {
-		t.Error("expected _attr_load5 to be set")
+	if event.Attrs["load5"] == "" {
+		t.Error("expected load5 attr to be set")
 	}
-	if event.Labels[types.AttrPrefix+"load15"] == "" {
-		t.Error("expected _attr_load15 to be set")
+	if event.Attrs["load15"] == "" {
+		t.Error("expected load15 attr to be set")
 	}
-	if event.Labels[types.AttrPrefix+"per_core_load"] == "" {
-		t.Error("expected _attr_per_core_load to be set")
+	if event.Attrs["per_core_load"] == "" {
+		t.Error("expected per_core_load attr to be set")
 	}
-	if event.Labels[types.AttrPrefix+"period"] != "5m" {
-		t.Errorf("expected _attr_period=5m, got %s", event.Labels[types.AttrPrefix+"period"])
+	if event.Attrs["period"] != "5m" {
+		t.Errorf("expected period=5m, got %s", event.Attrs["period"])
 	}
 }
 

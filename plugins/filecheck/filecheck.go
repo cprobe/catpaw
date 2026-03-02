@@ -31,21 +31,18 @@ const (
 var errWalkLimitReached = errors.New("file limit reached")
 
 type MtimeCheck struct {
-	Severity  string          `toml:"severity"`
-	Mode      string          `toml:"mode"`
-	TimeSpan  config.Duration `toml:"time_span"`
-	TitleRule string          `toml:"title_rule"`
+	Severity string          `toml:"severity"`
+	Mode     string          `toml:"mode"`
+	TimeSpan config.Duration `toml:"time_span"`
 }
 
 type ChecksumCheck struct {
 	Severity    string      `toml:"severity"`
-	TitleRule   string      `toml:"title_rule"`
 	MaxFileSize config.Size `toml:"max_file_size"`
 }
 
 type ExistenceCheck struct {
-	Severity  string `toml:"severity"`
-	TitleRule string `toml:"title_rule"`
+	Severity string `toml:"severity"`
 }
 
 type Instance struct {
@@ -210,27 +207,23 @@ func (ins *Instance) targetLabel() string {
 
 func (ins *Instance) checkExistence(q *safe.Queue[*types.Event], missing []string, accessErrors []string) {
 	target := ins.targetLabel()
-	tr := ins.Existence.TitleRule
-	if tr == "" {
-		tr = "[TPL]${check} ${from_hostip} ${target}"
-	}
 
 	if len(missing) == 0 && len(accessErrors) == 0 {
 		q.PushFront(types.BuildEvent(map[string]string{
 			"check":  "filecheck::existence",
 			"target": target,
-		}).SetTitleRule(tr).
+		}).
 			SetEventStatus(types.EventStatusOk).
 			SetDescription("all targets exist"))
 		return
 	}
 
-	labels := map[string]string{
+	event := types.BuildEvent(map[string]string{
 		"check":  "filecheck::existence",
 		"target": target,
-	}
+	})
 	if len(missing) > 0 {
-		labels[types.AttrPrefix+"missing_count"] = fmt.Sprintf("%d", len(missing))
+		event.SetAttrs(map[string]string{"missing_count": fmt.Sprintf("%d", len(missing))})
 	}
 
 	var desc strings.Builder
@@ -242,7 +235,7 @@ func (ins *Instance) checkExistence(q *safe.Queue[*types.Event], missing []strin
 	}
 	appendAccessErrors(&desc, accessErrors)
 
-	q.PushFront(types.BuildEvent(labels).SetTitleRule(tr).
+	q.PushFront(event.
 		SetEventStatus(ins.Existence.Severity).
 		SetDescription(desc.String()))
 }
@@ -281,10 +274,6 @@ func (ins *Instance) checkMtime(q *safe.Queue[*types.Event], files []string) {
 	}
 
 	target := ins.targetLabel()
-	tr := ins.Mtime.TitleRule
-	if tr == "" {
-		tr = "[TPL]${check} ${from_hostip} ${target}"
-	}
 
 	if len(matched) == 0 {
 		var okDesc strings.Builder
@@ -297,19 +286,20 @@ func (ins *Instance) checkMtime(q *safe.Queue[*types.Event], files []string) {
 		q.PushFront(types.BuildEvent(map[string]string{
 			"check":  "filecheck::mtime",
 			"target": target,
-		}).SetTitleRule(tr).
+		}).
 			SetEventStatus(types.EventStatusOk).
 			SetDescription(okDesc.String()))
 		return
 	}
 
-	labels := map[string]string{
-		"check":                            "filecheck::mtime",
-		"target":                           target,
-		types.AttrPrefix + "matched_count": fmt.Sprintf("%d", len(matched)),
-		types.AttrPrefix + "mode":          ins.Mtime.Mode,
-		types.AttrPrefix + "time_span":     timeSpan.String(),
-	}
+	event := types.BuildEvent(map[string]string{
+		"check":  "filecheck::mtime",
+		"target": target,
+	}).SetAttrs(map[string]string{
+		"matched_count": fmt.Sprintf("%d", len(matched)),
+		"mode":          ins.Mtime.Mode,
+		"time_span":     timeSpan.String(),
+	})
 
 	var desc strings.Builder
 	if ins.Mtime.Mode == "stale" {
@@ -330,7 +320,7 @@ func (ins *Instance) checkMtime(q *safe.Queue[*types.Event], files []string) {
 	}
 	appendAccessErrors(&desc, errs)
 
-	q.PushFront(types.BuildEvent(labels).SetTitleRule(tr).
+	q.PushFront(event.
 		SetEventStatus(ins.Mtime.Severity).
 		SetDescription(desc.String()))
 }
@@ -367,10 +357,6 @@ func (ins *Instance) checkChecksum(q *safe.Queue[*types.Event], files []string) 
 	}
 
 	target := ins.targetLabel()
-	tr := ins.Checksum.TitleRule
-	if tr == "" {
-		tr = "[TPL]${check} ${from_hostip} ${target}"
-	}
 
 	if len(changedFiles) == 0 {
 		var okDesc strings.Builder
@@ -379,17 +365,18 @@ func (ins *Instance) checkChecksum(q *safe.Queue[*types.Event], files []string) 
 		q.PushFront(types.BuildEvent(map[string]string{
 			"check":  "filecheck::checksum",
 			"target": target,
-		}).SetTitleRule(tr).
+		}).
 			SetEventStatus(types.EventStatusOk).
 			SetDescription(okDesc.String()))
 		return
 	}
 
-	labels := map[string]string{
-		"check":                            "filecheck::checksum",
-		"target":                           target,
-		types.AttrPrefix + "changed_count": fmt.Sprintf("%d", len(changedFiles)),
-	}
+	event := types.BuildEvent(map[string]string{
+		"check":  "filecheck::checksum",
+		"target": target,
+	}).SetAttrs(map[string]string{
+		"changed_count": fmt.Sprintf("%d", len(changedFiles)),
+	})
 
 	var desc strings.Builder
 	fmt.Fprintf(&desc, "%d file checksums changed:\n", len(changedFiles))
@@ -405,7 +392,7 @@ func (ins *Instance) checkChecksum(q *safe.Queue[*types.Event], files []string) 
 	}
 	appendAccessErrors(&desc, errs)
 
-	q.PushFront(types.BuildEvent(labels).SetTitleRule(tr).
+	q.PushFront(event.
 		SetEventStatus(ins.Checksum.Severity).
 		SetDescription(desc.String()))
 }

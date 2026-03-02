@@ -134,8 +134,10 @@ func ExtractCheckSnapshot(event *types.Event) CheckSnapshot {
 }
 
 func extractAttr(event *types.Event, key, fallback string) string {
-	if v, ok := event.Labels[types.AttrPrefix+key]; ok && v != "" {
-		return v
+	if event.Attrs != nil {
+		if v, ok := event.Attrs[key]; ok && v != "" {
+			return v
+		}
 	}
 	return fallback
 }

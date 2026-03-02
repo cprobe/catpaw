@@ -12,9 +12,13 @@ level = "info"
 # output = "stdout"
 # fields = {}
 
-[flashduty]
-url = "https://api.flashcat.cloud/event/push/alert/standard?integration_key=x"
-timeout = "10s"
+[notify.flashduty]
+integration_key = "your-flashduty-integration-key"
+# timeout = "10s"
+
+# [notify.pagerduty]
+# routing_key = "your-pagerduty-routing-key"
+# timeout = "10s"
 
 ## AI 智能诊断配置（告警触发后自动分析根因）
 # [ai]

@@ -23,7 +23,6 @@ var (
 	interval    = flag.Int64("interval", 0, "Global collection interval (seconds)")
 	showVersion = flag.Bool("version", false, "Show version")
 	plugins     = flag.String("plugins", "", "Plugin filter (e.g. redis:cpu:disk)")
-	url         = flag.String("url", "", "FlashDuty event push URL")
 	loglevel    = flag.String("loglevel", "", "Log level (debug/info/warn/error)")
 )
 
@@ -61,7 +60,7 @@ func main() {
 
 	winx.Args(appPath)
 
-	if err := config.InitConfig(*configDir, *testMode, *interval, *plugins, *url, *loglevel); err != nil {
+	if err := config.InitConfig(*configDir, *testMode, *interval, *plugins, *loglevel); err != nil {
 		panic(err)
 	}
 
@@ -142,7 +141,7 @@ func handleDiagnoseSubcommand(args []string) {
 }
 
 func handleInspectSubcommand(args []string) {
-	if err := config.InitConfig(*configDir, false, 0, "", "", *loglevel); err != nil {
+	if err := config.InitConfig(*configDir, false, 0, "", *loglevel); err != nil {
 		fmt.Fprintf(os.Stderr, "Error loading config: %v\n", err)
 		os.Exit(1)
 	}
