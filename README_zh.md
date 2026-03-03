@@ -5,7 +5,7 @@
 catpaw 是一个轻量的监控 Agent，具备 **AI 智能诊断**能力。
 它通过插件化检查探测异常、产出标准事件，并在告警触发时自动调用 AI 进行根因分析——内置 70+ 诊断工具，覆盖系统、网络、存储、安全等各个维度。
 
-通常与 [Flashduty](https://flashcat.cloud/product/flashduty/) 配合使用（catpaw 产出事件，Flashduty 负责告警分发），也可对接自建事件接收服务。
+事件可推送到任意告警平台（Flashduty、PagerDuty 或任何 HTTP 端点），也可直接输出到控制台快速验证。
 
 ## 核心特点
 
@@ -16,6 +16,7 @@ catpaw 是一个轻量的监控 Agent，具备 **AI 智能诊断**能力。
 - **主动健康巡检** — 按需对目标执行 AI 驱动的深度检查
 - **70+ 诊断工具** — 系统、网络、存储、安全、进程、内核全覆盖
 - **MCP 集成** — 通过 [Model Context Protocol](https://modelcontextprotocol.io/) 接入 Prometheus、Jaeger、CMDB 等外部数据源
+- **灵活通知** — 控制台、通用 WebAPI、Flashduty、PagerDuty，可同时开启多个
 - **适合自监控** — 监控系统的监控系统，避免循环依赖
 
 ## 架构概览
@@ -30,8 +31,8 @@ catpaw 是一个轻量的监控 Agent，具备 **AI 智能诊断**能力。
 │  └──────┬──────┘            └──────────────┘               │   │
 │         │                                                  ▼   │
 │         │ 事件      ┌──────────────┐         ┌───────────────┐ │
-│         └────────── │  FlashDuty / │         │  70+ 诊断    │ │
-│                     │  事件接收服务 │         │     工具     │ │
+│         └────────── │   通知渠道   │         │  70+ 诊断    │ │
+│                     │  （多选）    │         │     工具     │ │
 │                     └──────────────┘         └───────┬───────┘ │
 │                                                      │         │
 │  ┌─────────────┐                            ┌────────┴───────┐ │
@@ -114,15 +115,57 @@ catpaw mcptest                          MCP 连接测试
 
 ### 基础监控
 
-1. 编辑 `conf.d/config.toml`，填入 FlashDuty 的 `integration_key`（或自建事件接收服务地址）
-2. 在 `conf.d/p.<plugin>/` 下启用需要的插件配置
-3. 启动：
+1. 在 `conf.d/p.<plugin>/` 下启用需要的插件配置
+2. 启动：
 
 ```bash
 ./catpaw run
 ```
 
-默认配置已开启 `[notify.console]`，事件会直接输出到终端。正式使用时，关闭 console 并启用 Flashduty/PagerDuty/WebAPI 即可。
+默认配置已开启 `[notify.console]`，事件会以带颜色的格式输出到终端——无需任何外部服务即可快速验证。
+
+### 事件通知
+
+catpaw 支持多种通知渠道，在 `conf.d/config.toml` 中配置，可同时启用多个：
+
+| 渠道 | 配置段 | 说明 |
+| --- | --- | --- |
+| **控制台** | `[notify.console]` | 输出到终端（默认开启） |
+| **通用 WebAPI** | `[notify.webapi]` | 将原始 Event JSON 推送到任意 HTTP 端点 |
+| **Flashduty** | `[notify.flashduty]` | 对接 [Flashduty](https://flashcat.cloud/product/flashduty/) 告警平台 |
+| **PagerDuty** | `[notify.pagerduty]` | 对接 [PagerDuty](https://www.pagerduty.com/) 事件管理平台 |
+
+**控制台**（默认开启，快速验证）：
+
+```toml
+[notify.console]
+enabled = true
+```
+
+**通用 WebAPI**（推送原始 Event JSON 到任意 HTTP 端点）：
+
+```toml
+[notify.webapi]
+url = "https://your-service.example.com/api/v1/events"
+# method = "POST"
+# timeout = "10s"
+[notify.webapi.headers]
+Authorization = "Bearer ${WEBAPI_TOKEN}"
+```
+
+**Flashduty**：
+
+```toml
+[notify.flashduty]
+integration_key = "your-integration-key"
+```
+
+**PagerDuty**：
+
+```toml
+[notify.pagerduty]
+routing_key = "your-routing-key"
+```
 
 ### AI 智能诊断（可选）
 
@@ -168,14 +211,6 @@ PROMETHEUS_URL = "http://127.0.0.1:9090"
 ```bash
 ./catpaw mcptest
 ```
-
-## 对接 Flashduty
-
-1. 注册 [Flashduty](https://console.flashcat.cloud/)
-2. 在集成中心创建"标准告警事件"集成，获取 webhook URL
-3. 填入 `conf.d/config.toml` 的 `flashduty.url` 字段
-
-产品介绍：[Flashduty](https://flashcat.cloud/product/flashduty/)
 
 ## 配置说明
 

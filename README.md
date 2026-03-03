@@ -5,7 +5,7 @@ English | [中文](README_zh.md)
 catpaw is a lightweight monitoring agent with **AI-powered diagnostics**.
 It detects anomalies through plugin-based checks, produces standardized events, and — when an alert fires — can automatically trigger AI root-cause analysis using 70+ built-in diagnostic tools.
 
-It pairs naturally with [Flashduty](https://flashcat.cloud/product/flashduty/) for alert routing, but works with any event receiver.
+Events can be forwarded to any alert platform (Flashduty, PagerDuty, or any HTTP endpoint), or simply printed to the console for quick validation.
 
 ## Key Features
 
@@ -16,6 +16,7 @@ It pairs naturally with [Flashduty](https://flashcat.cloud/product/flashduty/) f
 - **Proactive health inspection** — on-demand AI-driven health checks
 - **70+ diagnostic tools** — system, network, storage, security, process, kernel
 - **MCP integration** — connect external data sources (Prometheus, Jaeger, CMDB, etc.) via [Model Context Protocol](https://modelcontextprotocol.io/)
+- **Flexible notification** — console, generic WebAPI, Flashduty, PagerDuty, or any combination
 - **Self-monitoring friendly** — ideal for monitoring your monitoring systems
 
 ## Architecture Overview
@@ -30,8 +31,8 @@ It pairs naturally with [Flashduty](https://flashcat.cloud/product/flashduty/) f
 │  └──────┬──────┘            └──────────────┘               │   │
 │         │                                                  ▼   │
 │         │ events    ┌──────────────┐         ┌───────────────┐ │
-│         └────────── │  FlashDuty / │         │  70+ Diagnose │ │
-│                     │ Event Receiver│         │     Tools     │ │
+│         └────────── │   Notifiers  │         │  70+ Diagnose │ │
+│                     │  (multiple)  │         │     Tools     │ │
 │                     └──────────────┘         └───────┬───────┘ │
 │                                                      │         │
 │  ┌─────────────┐                            ┌────────┴───────┐ │
@@ -114,15 +115,59 @@ Download the binary from [GitHub Releases](https://github.com/cprobe/catpaw/rele
 
 ### Basic Monitoring
 
-1. Edit `conf.d/config.toml` — set your FlashDuty `integration_key` (or your own receiver)
-2. Enable plugin configs under `conf.d/p.<plugin>/`
-3. Start:
+1. Enable plugin configs under `conf.d/p.<plugin>/`
+2. Start:
 
 ```bash
 ./catpaw run
 ```
 
-Events are printed to the terminal by default (`[notify.console]` is enabled in the example config). When you're ready for production, disable console and enable Flashduty/PagerDuty/WebAPI.
+The default config enables `[notify.console]`, so events are printed to the terminal with colored output — no external service needed for a quick test.
+
+### Event Notification
+
+catpaw supports multiple notification channels. Configure one or more in `conf.d/config.toml`:
+
+| Channel | Config Section | Description |
+| --- | --- | --- |
+| **Console** | `[notify.console]` | Print events to terminal (enabled by default) |
+| **WebAPI** | `[notify.webapi]` | Push raw Event JSON to any HTTP endpoint |
+| **Flashduty** | `[notify.flashduty]` | Forward to [Flashduty](https://flashcat.cloud/product/flashduty/) alert platform |
+| **PagerDuty** | `[notify.pagerduty]` | Forward to [PagerDuty](https://www.pagerduty.com/) incident management |
+
+Multiple channels can be active simultaneously. For example, you can print to console for debugging while also forwarding to your alert platform.
+
+**Console** (default — for quick validation):
+
+```toml
+[notify.console]
+enabled = true
+```
+
+**WebAPI** (push raw Event JSON to any HTTP endpoint):
+
+```toml
+[notify.webapi]
+url = "https://your-service.example.com/api/v1/events"
+# method = "POST"
+# timeout = "10s"
+[notify.webapi.headers]
+Authorization = "Bearer ${WEBAPI_TOKEN}"
+```
+
+**Flashduty**:
+
+```toml
+[notify.flashduty]
+integration_key = "your-integration-key"
+```
+
+**PagerDuty**:
+
+```toml
+[notify.pagerduty]
+routing_key = "your-routing-key"
+```
 
 ### AI Diagnosis (optional)
 
@@ -168,14 +213,6 @@ Verify connectivity:
 ```bash
 ./catpaw mcptest
 ```
-
-## Integrating with Flashduty
-
-1. Sign up at [Flashduty](https://console.flashcat.cloud/)
-2. Create a "Standard Alert Event" integration to get a webhook URL
-3. Set the URL in `conf.d/config.toml` under `flashduty.url`
-
-Learn more: [Flashduty](https://flashcat.cloud/product/flashduty/)
 
 ## Configuration
 
