@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"net"
 	"os"
 	"os/exec"
 	"runtime"
@@ -73,6 +74,9 @@ type chatPromptData struct {
 }
 
 func buildChatSystemPrompt(registry *diagnose.ToolRegistry, snapshot, mcpIdentity, language string) string {
+	if language == "" {
+		language = "中文"
+	}
 	hostname, _ := os.Hostname()
 	ip := getLocalIP()
 	kernel := getKernelVersion()
@@ -100,13 +104,21 @@ func getLocalIP() string {
 	out, err := execCommand("hostname", "-I")
 	if err != nil {
 		out, err = execCommand("hostname", "-i")
-		if err != nil {
-			return "unknown"
+	}
+	if err == nil {
+		if parts := strings.Fields(strings.TrimSpace(out)); len(parts) > 0 {
+			return parts[0]
 		}
 	}
-	parts := strings.Fields(strings.TrimSpace(out))
-	if len(parts) > 0 {
-		return parts[0]
+	// Fallback: use Go's net package (works on macOS and other platforms)
+	addrs, err := net.InterfaceAddrs()
+	if err != nil {
+		return "unknown"
+	}
+	for _, addr := range addrs {
+		if ipNet, ok := addr.(*net.IPNet); ok && !ipNet.IP.IsLoopback() && ipNet.IP.To4() != nil {
+			return ipNet.IP.String()
+		}
 	}
 	return "unknown"
 }

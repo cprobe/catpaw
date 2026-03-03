@@ -4,102 +4,17 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-
-	"github.com/cprobe/catpaw/diagnose/aiclient"
 )
 
-const maxToolOutputBytes = 32 * 1024 // 32KB per tool output
-
-// buildToolSet constructs the tool definitions sent to the AI.
-// Direct-inject tools come from the triggering plugin; meta-tools enable
-// progressive discovery of all other tools.
-func buildToolSet(registry *ToolRegistry, req *DiagnoseRequest) ([]aiclient.Tool, []DiagnoseTool) {
-	var aiTools []aiclient.Tool
-	directTools := registry.ByPlugin(req.Plugin)
-
-	for _, t := range directTools {
-		aiTools = append(aiTools, diagnoseToolToAI(t))
-	}
-
-	aiTools = append(aiTools, metaTools()...)
-	return aiTools, directTools
-}
-
-func metaTools() []aiclient.Tool {
-	return []aiclient.Tool{
-		{
-			Type: "function",
-			Function: aiclient.ToolFunction{
-				Name:        "list_tool_categories",
-				Description: "列出所有可用的诊断工具大类（如 disk、cpu、memory、redis 等）",
-			},
-		},
-		{
-			Type: "function",
-			Function: aiclient.ToolFunction{
-				Name:        "list_tools",
-				Description: "列出某个大类下的所有诊断工具及其参数说明",
-				Parameters: &aiclient.Parameters{
-					Type: "object",
-					Properties: map[string]aiclient.Property{
-						"category": {Type: "string", Description: "工具大类名称"},
-					},
-					Required: []string{"category"},
-				},
-			},
-		},
-		{
-			Type: "function",
-			Function: aiclient.ToolFunction{
-				Name:        "call_tool",
-				Description: "调用一个非直接注入的诊断工具",
-				Parameters: &aiclient.Parameters{
-					Type: "object",
-					Properties: map[string]aiclient.Property{
-						"name":      {Type: "string", Description: "工具名称"},
-						"tool_args": {Type: "string", Description: "工具参数，JSON 字符串格式"},
-					},
-					Required: []string{"name"},
-				},
-			},
-		},
-	}
-}
-
-// diagnoseToolToAI converts a DiagnoseTool to the AI function-calling format.
-func diagnoseToolToAI(t DiagnoseTool) aiclient.Tool {
-	tool := aiclient.Tool{
-		Type: "function",
-		Function: aiclient.ToolFunction{
-			Name:        t.Name,
-			Description: t.Description,
-		},
-	}
-	if len(t.Parameters) > 0 {
-		props := make(map[string]aiclient.Property, len(t.Parameters))
-		var required []string
-		for _, p := range t.Parameters {
-			props[p.Name] = aiclient.Property{
-				Type:        p.Type,
-				Description: p.Description,
-			}
-			if p.Required {
-				required = append(required, p.Name)
-			}
-		}
-		tool.Function.Parameters = &aiclient.Parameters{
-			Type:       "object",
-			Properties: props,
-			Required:   required,
-		}
-	}
-	return tool
-}
+const (
+	maxToolOutputBytes  = 32 * 1024 // 32KB per tool output sent to AI
+	maxRecordResultBytes = 64 * 1024 // 64KB per tool result stored in record
+)
 
 // executeTool routes a tool call to the appropriate handler:
 // meta-tools (list_tool_categories, list_tools, call_tool) or direct-inject tools.
-func executeTool(ctx context.Context, registry *ToolRegistry, req *DiagnoseRequest, name string, rawArgs string) (string, error) {
-	args := parseArgs(rawArgs)
+func executeTool(ctx context.Context, registry *ToolRegistry, session *DiagnoseSession, name string, rawArgs string) (string, error) {
+	args := ParseArgs(rawArgs)
 
 	switch name {
 	case "list_tool_categories":
@@ -121,19 +36,19 @@ func executeTool(ctx context.Context, registry *ToolRegistry, req *DiagnoseReque
 		if !ok {
 			return "", fmt.Errorf("unknown tool: %s", toolName)
 		}
-		toolArgs := parseToolArgs(args["tool_args"])
-		return executeToolImpl(ctx, req, *tool, toolArgs)
+		toolArgs := ParseToolArgs(args["tool_args"])
+		return executeToolImpl(ctx, session, *tool, toolArgs)
 
 	default:
 		tool, ok := registry.Get(name)
 		if !ok {
 			return "", fmt.Errorf("unknown tool: %s", name)
 		}
-		return executeToolImpl(ctx, req, *tool, args)
+		return executeToolImpl(ctx, session, *tool, args)
 	}
 }
 
-func executeToolImpl(ctx context.Context, req *DiagnoseRequest, tool DiagnoseTool, args map[string]string) (string, error) {
+func executeToolImpl(ctx context.Context, session *DiagnoseSession, tool DiagnoseTool, args map[string]string) (string, error) {
 	if tool.Scope == ToolScopeLocal {
 		if tool.Execute == nil {
 			return "", fmt.Errorf("tool %s has no Execute function", tool.Name)
@@ -144,7 +59,6 @@ func executeToolImpl(ctx context.Context, req *DiagnoseRequest, tool DiagnoseToo
 	if tool.RemoteExecute == nil {
 		return "", fmt.Errorf("tool %s has no RemoteExecute function", tool.Name)
 	}
-	session := req.Session
 	if session == nil {
 		return "", fmt.Errorf("no session available for remote tool %s", tool.Name)
 	}
@@ -153,14 +67,14 @@ func executeToolImpl(ctx context.Context, req *DiagnoseRequest, tool DiagnoseToo
 	return tool.RemoteExecute(ctx, session, args)
 }
 
-// parseArgs parses the AI's function call arguments JSON into a flat string map.
-func parseArgs(raw string) map[string]string {
+// ParseArgs parses the AI's function call arguments JSON into a flat string map.
+// Exported for reuse by chat/ and other callers.
+func ParseArgs(raw string) map[string]string {
 	if raw == "" {
 		return make(map[string]string)
 	}
 	var m map[string]string
 	if err := json.Unmarshal([]byte(raw), &m); err != nil {
-		// Try parsing as map[string]any for numeric/boolean values
 		var anyMap map[string]any
 		if err2 := json.Unmarshal([]byte(raw), &anyMap); err2 != nil {
 			return map[string]string{"_raw": raw}
@@ -173,8 +87,9 @@ func parseArgs(raw string) map[string]string {
 	return m
 }
 
-// parseToolArgs parses the nested tool_args JSON string (from call_tool).
-func parseToolArgs(raw string) map[string]string {
+// ParseToolArgs parses the nested tool_args JSON string (from call_tool).
+// Exported for reuse by chat/ and other callers.
+func ParseToolArgs(raw string) map[string]string {
 	if raw == "" {
 		return nil
 	}
@@ -185,10 +100,20 @@ func parseToolArgs(raw string) map[string]string {
 	return m
 }
 
-// TruncateOutput ensures a tool's output doesn't exceed the maximum size.
+// TruncateOutput ensures a tool's output doesn't exceed the maximum size
+// for sending to the AI. Uses UTF-8-safe truncation.
 func TruncateOutput(s string) string {
 	if len(s) <= maxToolOutputBytes {
 		return s
 	}
-	return s[:maxToolOutputBytes] + "\n...[output truncated]"
+	return TruncateUTF8(s, maxToolOutputBytes) + "\n...[output truncated]"
+}
+
+// TruncateForRecord truncates tool output for storage in DiagnoseRecord.
+// Allows a larger budget than TruncateOutput since records are for audit.
+func TruncateForRecord(s string) string {
+	if len(s) <= maxRecordResultBytes {
+		return s
+	}
+	return TruncateUTF8(s, maxRecordResultBytes) + "\n...[record truncated]"
 }

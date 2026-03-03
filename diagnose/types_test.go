@@ -84,6 +84,24 @@ func TestDiagnoseRequestFields(t *testing.T) {
 	}
 }
 
+func TestSeverityRank(t *testing.T) {
+	if SeverityRank("Critical") <= SeverityRank("Warning") {
+		t.Error("Critical should rank higher than Warning")
+	}
+	if SeverityRank("Warning") <= SeverityRank("Info") {
+		t.Error("Warning should rank higher than Info")
+	}
+	if SeverityRank("Info") <= SeverityRank("Ok") {
+		t.Error("Info should rank higher than Ok")
+	}
+	if SeverityRank("Ok") != 0 {
+		t.Errorf("SeverityRank(Ok) = %d, want 0", SeverityRank("Ok"))
+	}
+	if SeverityRank("garbage") != 0 {
+		t.Errorf("SeverityRank(garbage) = %d, want 0", SeverityRank("garbage"))
+	}
+}
+
 func TestDiagnoseRecord(t *testing.T) {
 	rec := &DiagnoseRecord{
 		ID:     "d8f3a2b1",

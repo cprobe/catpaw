@@ -22,11 +22,21 @@ func CLIList(stateDir string, limit int) error {
 		return fmt.Errorf("read diagnoses dir: %w", err)
 	}
 
-	var files []os.DirEntry
+	type fileEntry struct {
+		name    string
+		modTime time.Time
+	}
+
+	var files []fileEntry
 	for _, e := range entries {
-		if !e.IsDir() && strings.HasSuffix(e.Name(), ".json") {
-			files = append(files, e)
+		if e.IsDir() || !strings.HasSuffix(e.Name(), ".json") {
+			continue
 		}
+		info, err := e.Info()
+		if err != nil {
+			continue
+		}
+		files = append(files, fileEntry{name: e.Name(), modTime: info.ModTime()})
 	}
 
 	if len(files) == 0 {
@@ -35,12 +45,7 @@ func CLIList(stateDir string, limit int) error {
 	}
 
 	sort.Slice(files, func(i, j int) bool {
-		fi, _ := files[i].Info()
-		fj, _ := files[j].Info()
-		if fi == nil || fj == nil {
-			return files[i].Name() > files[j].Name()
-		}
-		return fi.ModTime().After(fj.ModTime())
+		return files[i].modTime.After(files[j].modTime)
 	})
 
 	if limit > 0 && limit < len(files) {
@@ -52,9 +57,9 @@ func CLIList(stateDir string, limit int) error {
 	fmt.Println(strings.Repeat("-", 120))
 
 	for _, f := range files {
-		record, err := loadRecord(filepath.Join(dir, f.Name()))
+		record, err := loadRecord(filepath.Join(dir, f.name))
 		if err != nil {
-			fmt.Printf("%-50s  (error: %s)\n", f.Name(), err)
+			fmt.Printf("%-50s  (error: %s)\n", f.name, err)
 			continue
 		}
 		fmt.Printf("%-50s  %-8s  %-8s  %-6d  %-20s  %dms\n",
@@ -124,7 +129,7 @@ func tryFuzzyMatch(dir, pattern string) error {
 	for _, m := range matches {
 		fmt.Printf("  %s\n", m)
 	}
-	return nil
+	return fmt.Errorf("record %q not found, see suggestions above", pattern)
 }
 
 func printRecordDetail(r *DiagnoseRecord) {
@@ -168,14 +173,14 @@ func printRecordDetail(r *DiagnoseRecord) {
 					round.Round, tc.Name, formatArgs(tc.Args), tc.DurationMs)
 				result := tc.Result
 				if len(result) > 500 {
-					result = result[:497] + "..."
+					result = TruncateUTF8(result, 497) + "..."
 				}
 				fmt.Printf("  Result: %s\n", result)
 			}
 			if round.AIReasoning != "" {
 				reasoning := round.AIReasoning
 				if len(reasoning) > 300 {
-					reasoning = reasoning[:297] + "..."
+					reasoning = TruncateUTF8(reasoning, 297) + "..."
 				}
 				fmt.Printf("[Round %d] AI: %s\n", round.Round, reasoning)
 			}

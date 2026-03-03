@@ -53,8 +53,9 @@ type AIConfig struct {
 	APIKey  string `toml:"api_key"`
 	Model   string `toml:"model"`
 
-	MaxTokens      int      `toml:"max_tokens"`
-	MaxRounds      int      `toml:"max_rounds"`
+	MaxTokens     int      `toml:"max_tokens"`
+	ContextWindow int      `toml:"context_window"`
+	MaxRounds     int      `toml:"max_rounds"`
 	RequestTimeout Duration `toml:"request_timeout"`
 
 	MaxRetries   int      `toml:"max_retries"`

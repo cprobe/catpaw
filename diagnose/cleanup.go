@@ -24,11 +24,21 @@ func CleanupRecords() {
 		return
 	}
 
-	var files []os.DirEntry
+	type fileEntry struct {
+		name    string
+		modTime time.Time
+	}
+
+	var files []fileEntry
 	for _, e := range entries {
-		if !e.IsDir() && strings.HasSuffix(e.Name(), ".json") {
-			files = append(files, e)
+		if e.IsDir() || !strings.HasSuffix(e.Name(), ".json") {
+			continue
 		}
+		info, err := e.Info()
+		if err != nil {
+			continue
+		}
+		files = append(files, fileEntry{name: e.Name(), modTime: info.ModTime()})
 	}
 
 	if len(files) == 0 {
@@ -36,12 +46,7 @@ func CleanupRecords() {
 	}
 
 	sort.Slice(files, func(i, j int) bool {
-		fi, _ := files[i].Info()
-		fj, _ := files[j].Info()
-		if fi == nil || fj == nil {
-			return files[i].Name() < files[j].Name()
-		}
-		return fi.ModTime().After(fj.ModTime())
+		return files[i].modTime.After(files[j].modTime)
 	})
 
 	retention := time.Duration(config.Config.AI.DiagnoseRetention)
@@ -56,16 +61,14 @@ func CleanupRecords() {
 			shouldRemove = true
 		}
 
-		if !shouldRemove && retention > 0 {
-			if info, err := f.Info(); err == nil && now.Sub(info.ModTime()) > retention {
-				shouldRemove = true
-			}
+		if !shouldRemove && retention > 0 && now.Sub(f.modTime) > retention {
+			shouldRemove = true
 		}
 
 		if shouldRemove {
-			path := filepath.Join(dir, f.Name())
+			path := filepath.Join(dir, f.name)
 			if err := os.Remove(path); err != nil {
-				logger.Logger.Warnw("cleanup: remove file failed", "file", f.Name(), "error", err)
+				logger.Logger.Warnw("cleanup: remove file failed", "file", f.name, "error", err)
 			} else {
 				removed++
 			}

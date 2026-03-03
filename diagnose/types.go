@@ -6,6 +6,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/cprobe/catpaw/logger"
 	"github.com/cprobe/catpaw/types"
 )
 
@@ -82,7 +83,6 @@ type DiagnoseRequest struct {
 	Target      string
 	Checks      []CheckSnapshot
 	InstanceRef any
-	Session     *DiagnoseSession
 	Timeout     time.Duration
 	Cooldown    time.Duration
 }
@@ -90,21 +90,10 @@ type DiagnoseRequest struct {
 // DiagnoseSession manages the lifecycle of a single diagnosis run.
 // All remote tool calls within the same diagnosis share one Accessor (TCP connection).
 type DiagnoseSession struct {
-	Request   *DiagnoseRequest
-	Accessor  any              // shared remote Accessor, created by the plugin's factory
+	Accessor  any             // shared remote Accessor, created by the plugin's factory
 	Record    *DiagnoseRecord
 	StartTime time.Time
 	mu        sync.Mutex
-}
-
-// LockAccessor acquires the accessor mutex for concurrent tool execution safety.
-func (s *DiagnoseSession) LockAccessor() {
-	s.mu.Lock()
-}
-
-// UnlockAccessor releases the accessor mutex.
-func (s *DiagnoseSession) UnlockAccessor() {
-	s.mu.Unlock()
 }
 
 // Close releases the shared Accessor if it implements io.Closer.
@@ -113,7 +102,9 @@ func (s *DiagnoseSession) Close() {
 		return
 	}
 	if closer, ok := s.Accessor.(io.Closer); ok {
-		closer.Close()
+		if err := closer.Close(); err != nil {
+			logger.Logger.Debugw("session accessor close error", "error", err)
+		}
 	}
 }
 
@@ -165,3 +156,18 @@ type ToolCallRecord struct {
 // AccessorFactory creates a shared Accessor for a remote plugin.
 // The engine calls this once per DiagnoseSession.
 type AccessorFactory func(ctx context.Context, instanceRef any) (any, error)
+
+// SeverityRank returns a numeric rank for severity comparison.
+// Higher rank = more severe.
+func SeverityRank(status string) int {
+	switch status {
+	case types.EventStatusCritical:
+		return 3
+	case types.EventStatusWarning:
+		return 2
+	case types.EventStatusInfo:
+		return 1
+	default:
+		return 0
+	}
+}

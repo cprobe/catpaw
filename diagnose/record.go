@@ -1,6 +1,8 @@
 package diagnose
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -19,7 +21,7 @@ func NewDiagnoseRecord(req *DiagnoseRequest) *DiagnoseRecord {
 	}
 	prefix := mode
 	return &DiagnoseRecord{
-		ID:        fmt.Sprintf("%s_%s_%s_%d", prefix, req.Plugin, sanitizeTarget(req.Target), time.Now().UnixMilli()),
+		ID:        fmt.Sprintf("%s_%s_%s_%d_%s", prefix, req.Plugin, sanitizeTarget(req.Target), time.Now().UnixMilli(), randHex4()),
 		Mode:      mode,
 		Status:    "running",
 		CreatedAt: time.Now(),
@@ -71,4 +73,10 @@ func sanitizeTarget(target string) string {
 		}
 	}
 	return string(result)
+}
+
+func randHex4() string {
+	var b [2]byte
+	rand.Read(b[:])
+	return hex.EncodeToString(b[:])
 }

@@ -73,9 +73,7 @@ func runInspectRequest(registry *diagnose.ToolRegistry, pluginName, target strin
 	fmt.Printf("   AI model: %s, max rounds: %d\n", config.Config.AI.Model, config.Config.AI.MaxRounds)
 	fmt.Println()
 
-	engine.RunDiagnose(req)
-
-	record := req.Session.Record
+	record := engine.RunDiagnose(req)
 	if record.Status == "failed" {
 		return fmt.Errorf("inspection failed: %s", record.Error)
 	}

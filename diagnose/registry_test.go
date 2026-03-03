@@ -10,23 +10,17 @@ func TestRegistryRegisterAndGet(t *testing.T) {
 	r := NewToolRegistry()
 
 	r.RegisterCategory("redis", "redis", "Redis diagnostics", ToolScopeRemote)
-	err := r.Register("redis", DiagnoseTool{
+	r.Register("redis", DiagnoseTool{
 		Name:        "redis_info",
 		Description: "Get Redis INFO",
 		Scope:       ToolScopeRemote,
 		Parameters:  []ToolParam{{Name: "section", Type: "string", Description: "INFO section"}},
 	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	err = r.Register("redis", DiagnoseTool{
+	r.Register("redis", DiagnoseTool{
 		Name:        "redis_slowlog",
 		Description: "Get Redis SLOWLOG",
 		Scope:       ToolScopeRemote,
 	})
-	if err != nil {
-		t.Fatal(err)
-	}
 
 	if r.ToolCount() != 2 {
 		t.Fatalf("ToolCount() = %d, want 2", r.ToolCount())
@@ -58,18 +52,18 @@ func TestRegistryRegisterAndGet(t *testing.T) {
 
 func TestRegistryDuplicateTool(t *testing.T) {
 	r := NewToolRegistry()
-	_ = r.Register("a", DiagnoseTool{Name: "tool1", Scope: ToolScopeLocal})
-	err := r.Register("b", DiagnoseTool{Name: "tool1", Scope: ToolScopeLocal})
-	if err == nil {
-		t.Fatal("expected duplicate error")
+	r.Register("a", DiagnoseTool{Name: "tool1", Scope: ToolScopeLocal})
+	r.Register("b", DiagnoseTool{Name: "tool1", Scope: ToolScopeLocal})
+	if r.ToolCount() != 1 {
+		t.Fatalf("expected 1 tool (duplicate skipped), got %d", r.ToolCount())
 	}
 }
 
 func TestRegistryListCategories(t *testing.T) {
 	r := NewToolRegistry()
 	r.RegisterCategory("disk", "disk", "Disk diagnostics", ToolScopeLocal)
-	_ = r.Register("disk", DiagnoseTool{Name: "disk_iostat", Description: "IO stats", Scope: ToolScopeLocal})
-	_ = r.Register("disk", DiagnoseTool{Name: "disk_usage", Description: "Disk usage", Scope: ToolScopeLocal})
+	r.Register("disk", DiagnoseTool{Name: "disk_iostat", Description: "IO stats", Scope: ToolScopeLocal})
+	r.Register("disk", DiagnoseTool{Name: "disk_usage", Description: "Disk usage", Scope: ToolScopeLocal})
 
 	out := r.ListCategories()
 	if !strings.Contains(out, "disk") || !strings.Contains(out, "2 tools") {
@@ -80,13 +74,13 @@ func TestRegistryListCategories(t *testing.T) {
 func TestRegistryListAllTools(t *testing.T) {
 	r := NewToolRegistry()
 	r.RegisterCategory("cpu", "cpu", "CPU diagnostics", ToolScopeLocal)
-	_ = r.Register("cpu", DiagnoseTool{
+	r.Register("cpu", DiagnoseTool{
 		Name:        "cpu_usage",
 		Description: "Show CPU usage",
 		Scope:       ToolScopeLocal,
 	})
 	r.RegisterCategory("disk", "disk", "Disk diagnostics", ToolScopeLocal)
-	_ = r.Register("disk", DiagnoseTool{
+	r.Register("disk", DiagnoseTool{
 		Name:        "disk_usage",
 		Description: "Show disk usage",
 		Scope:       ToolScopeLocal,
@@ -130,7 +124,7 @@ func TestRegistryAccessorFactory(t *testing.T) {
 		return "mock-accessor", nil
 	})
 
-	acc, err := r.CreateAccessor("redis", context.Background(), nil)
+	acc, err := r.CreateAccessor(context.Background(), "redis", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -138,7 +132,7 @@ func TestRegistryAccessorFactory(t *testing.T) {
 		t.Errorf("accessor = %v, want mock-accessor", acc)
 	}
 
-	_, err = r.CreateAccessor("unknown", context.Background(), nil)
+	_, err = r.CreateAccessor(context.Background(), "unknown", nil)
 	if err == nil {
 		t.Fatal("expected error for unknown plugin")
 	}

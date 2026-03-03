@@ -49,9 +49,9 @@ func NewDiagnoseEngine(registry *ToolRegistry, cfg config.AIConfig) *DiagnoseEng
 	state := NewDiagnoseState()
 	state.Load()
 
-	contextWindow := 128000
-	if cfg.MaxTokens > 0 && cfg.MaxTokens < contextWindow {
-		contextWindow = cfg.MaxTokens * 32
+	contextWindow := cfg.ContextWindow
+	if contextWindow <= 0 {
+		contextWindow = 128000
 	}
 
 	return &DiagnoseEngine{
@@ -104,9 +104,9 @@ func (e *DiagnoseEngine) Submit(req *DiagnoseRequest) {
 
 // RunDiagnose is the goroutine entry point. It includes panic recovery,
 // session lifecycle, cooldown update, and state persistence.
-func (e *DiagnoseEngine) RunDiagnose(req *DiagnoseRequest) {
-	req.Session = &DiagnoseSession{
-		Request:   req,
+// Returns the DiagnoseRecord so callers (e.g. inspect CLI) can inspect results.
+func (e *DiagnoseEngine) RunDiagnose(req *DiagnoseRequest) *DiagnoseRecord {
+	session := &DiagnoseSession{
 		Record:    NewDiagnoseRecord(req),
 		StartTime: time.Now(),
 	}
@@ -115,14 +115,14 @@ func (e *DiagnoseEngine) RunDiagnose(req *DiagnoseRequest) {
 		if r := recover(); r != nil {
 			logger.Logger.Errorw("diagnose panic recovered",
 				"target", req.Target, "panic", r, "stack", string(debug.Stack()))
-			req.Session.Record.Status = "failed"
-			req.Session.Record.Error = fmt.Sprintf("panic: %v", r)
-			if err := req.Session.Record.Save(); err != nil {
+			session.Record.Status = "failed"
+			session.Record.Error = fmt.Sprintf("panic: %v", r)
+			if err := session.Record.Save(); err != nil {
 				logger.Logger.Warnw("failed to save panic record", "error", err)
 			}
 		}
 	}()
-	defer req.Session.Close()
+	defer session.Close()
 
 	timeout := req.Timeout
 	if timeout == 0 {
@@ -137,39 +137,41 @@ func (e *DiagnoseEngine) RunDiagnose(req *DiagnoseRequest) {
 	logger.Logger.Infow("diagnose started",
 		"plugin", req.Plugin, "target", req.Target, "checks", len(req.Checks))
 
-	report, err := e.diagnose(ctx, req)
+	report, err := e.diagnose(ctx, req, session)
 	if err != nil {
-		req.Session.Record.Status = "failed"
-		req.Session.Record.Error = err.Error()
+		session.Record.Status = "failed"
+		session.Record.Error = err.Error()
 		logger.Logger.Warnw("diagnose failed",
 			"plugin", req.Plugin, "target", req.Target, "error", err)
 	} else {
-		req.Session.Record.Status = "success"
-		req.Session.Record.Report = report
+		session.Record.Status = "success"
+		session.Record.Report = report
 		logger.Logger.Infow("diagnose completed",
 			"plugin", req.Plugin, "target", req.Target,
-			"rounds", req.Session.Record.AI.TotalRounds,
-			"tokens", req.Session.Record.AI.InputTokens+req.Session.Record.AI.OutputTokens)
+			"rounds", session.Record.AI.TotalRounds,
+			"tokens", session.Record.AI.InputTokens+session.Record.AI.OutputTokens)
 	}
-	req.Session.Record.DurationMs = time.Since(req.Session.StartTime).Milliseconds()
+	session.Record.DurationMs = time.Since(session.StartTime).Milliseconds()
 
-	if err := req.Session.Record.Save(); err != nil {
+	if err := session.Record.Save(); err != nil {
 		logger.Logger.Warnw("failed to save diagnose record", "error", err)
 	}
 
 	if report != "" && len(req.Events) > 0 {
-		e.forwardReport(req, report)
+		e.forwardReport(req, session.Record, report)
 	}
 
-	e.state.AddTokens(req.Session.Record.AI.InputTokens, req.Session.Record.AI.OutputTokens)
+	e.state.AddTokens(session.Record.AI.InputTokens, session.Record.AI.OutputTokens)
 	if req.Mode != ModeInspect {
 		e.state.UpdateCooldown(req.Plugin, req.Target, req.Cooldown)
 	}
 	e.state.Save()
+
+	return session.Record
 }
 
-func (e *DiagnoseEngine) diagnose(ctx context.Context, req *DiagnoseRequest) (string, error) {
-	if err := e.initSessionAccessor(ctx, req); err != nil {
+func (e *DiagnoseEngine) diagnose(ctx context.Context, req *DiagnoseRequest, session *DiagnoseSession) (string, error) {
+	if err := e.initSessionAccessor(ctx, req, session); err != nil {
 		return "", fmt.Errorf("create accessor: %w", err)
 	}
 
@@ -191,6 +193,7 @@ func (e *DiagnoseEngine) diagnose(ctx context.Context, req *DiagnoseRequest) (st
 	}
 
 	estimatedTokens := aiclient.EstimateTokensChinese(prompt)
+	session.Record.AI.Model = e.cfg.Model
 	retryCfg := aiclient.RetryConfig{
 		MaxRetries:   e.maxRetries,
 		RetryBackoff: e.retryBackoff,
@@ -198,18 +201,16 @@ func (e *DiagnoseEngine) diagnose(ctx context.Context, req *DiagnoseRequest) (st
 	contextWarned := false
 
 	for round := 0; round < e.maxRounds; round++ {
-		if round == e.maxRounds-1 {
-			messages = append(messages, aiclient.Message{
-				Role:    "user",
-				Content: "你已使用了所有可用的工具调用轮次。请基于目前收集到的信息，立即输出最终诊断报告。不要再调用任何工具。",
-			})
-		}
-
 		if !contextWarned && estimatedTokens > e.contextWindowLimit {
 			contextWarned = true
 			messages = append(messages, aiclient.Message{
 				Role:    "user",
-				Content: "上下文空间即将耗尽。请基于目前收集到的信息，立即输出最终诊断报告。",
+				Content: "上下文空间即将耗尽。请基于目前收集到的信息，立即输出最终诊断报告。不要再调用任何工具。",
+			})
+		} else if round == e.maxRounds-1 {
+			messages = append(messages, aiclient.Message{
+				Role:    "user",
+				Content: "你已使用了所有可用的工具调用轮次。请基于目前收集到的信息，立即输出最终诊断报告。不要再调用任何工具。",
 			})
 		}
 
@@ -221,9 +222,8 @@ func (e *DiagnoseEngine) diagnose(ctx context.Context, req *DiagnoseRequest) (st
 		if resp.Usage.TotalTokens > 0 {
 			estimatedTokens = resp.Usage.TotalTokens
 		}
-		req.Session.Record.AI.InputTokens += resp.Usage.PromptTokens
-		req.Session.Record.AI.OutputTokens += resp.Usage.CompletionTokens
-		req.Session.Record.AI.Model = e.cfg.Model
+		session.Record.AI.InputTokens += resp.Usage.PromptTokens
+		session.Record.AI.OutputTokens += resp.Usage.CompletionTokens
 
 		content := ""
 		var toolCalls []aiclient.ToolCall
@@ -233,11 +233,10 @@ func (e *DiagnoseEngine) diagnose(ctx context.Context, req *DiagnoseRequest) (st
 		}
 
 		if len(toolCalls) == 0 {
-			req.Session.Record.AI.TotalRounds = round + 1
+			session.Record.AI.TotalRounds = round + 1
 			return content, nil
 		}
 
-		// Build assistant message with tool calls
 		messages = append(messages, aiclient.Message{
 			Role:      "assistant",
 			Content:   content,
@@ -251,7 +250,7 @@ func (e *DiagnoseEngine) diagnose(ctx context.Context, req *DiagnoseRequest) (st
 			toolCtx, toolCancel := context.WithTimeout(ctx, e.toolTimeout)
 			toolStart := time.Now()
 
-			result, toolErr := executeTool(toolCtx, e.registry, req, tc.Function.Name, tc.Function.Arguments)
+			result, toolErr := executeTool(toolCtx, e.registry, session, tc.Function.Name, tc.Function.Arguments)
 			toolCancel()
 
 			if toolErr != nil {
@@ -268,34 +267,38 @@ func (e *DiagnoseEngine) diagnose(ctx context.Context, req *DiagnoseRequest) (st
 
 			roundRecord.ToolCalls = append(roundRecord.ToolCalls, ToolCallRecord{
 				Name:       tc.Function.Name,
-				Args:       parseArgs(tc.Function.Arguments),
-				Result:     result,
+				Args:       ParseArgs(tc.Function.Arguments),
+				Result:     TruncateForRecord(result),
 				DurationMs: time.Since(toolStart).Milliseconds(),
 			})
 		}
 		roundRecord.AIReasoning = content
-		req.Session.Record.Rounds = append(req.Session.Record.Rounds, roundRecord)
+		session.Record.Rounds = append(session.Record.Rounds, roundRecord)
 	}
 
-	req.Session.Record.AI.TotalRounds = e.maxRounds
+	session.Record.AI.TotalRounds = e.maxRounds
 	return "[诊断未完成] 已达到最大轮次限制，AI 未能在限定轮次内输出最终报告。", nil
 }
 
-func (e *DiagnoseEngine) initSessionAccessor(ctx context.Context, req *DiagnoseRequest) error {
+func (e *DiagnoseEngine) initSessionAccessor(ctx context.Context, req *DiagnoseRequest, session *DiagnoseSession) error {
 	if req.InstanceRef == nil {
 		return nil
 	}
 	if !e.registry.HasAccessorFactory(req.Plugin) {
 		return nil
 	}
-	accessor, err := e.registry.CreateAccessor(req.Plugin, ctx, req.InstanceRef)
+	accessor, err := e.registry.CreateAccessor(ctx, req.Plugin, req.InstanceRef)
 	if err != nil {
 		return fmt.Errorf("create accessor for %s::%s: %w", req.Plugin, req.Target, err)
 	}
-	req.Session.Accessor = accessor
+	session.Accessor = accessor
 	return nil
 }
 
+// registerInFlight tracks a running diagnosis for graceful shutdown.
+// Overwrites any existing entry for the same key; this is safe because
+// alert-mode diagnoses are protected by cooldown, and inspect-mode is
+// CLI-driven (no concurrent runs for the same target).
 func (e *DiagnoseEngine) registerInFlight(req *DiagnoseRequest, cancel context.CancelFunc) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
@@ -326,9 +329,9 @@ func (e *DiagnoseEngine) Shutdown() {
 
 // forwardReport sends the diagnosis report to all configured notifiers
 // as a new Event with the same AlertKey but a fresh EventTime and Description.
-func (e *DiagnoseEngine) forwardReport(req *DiagnoseRequest, report string) {
+func (e *DiagnoseEngine) forwardReport(req *DiagnoseRequest, record *DiagnoseRecord, report string) {
 	original := req.Events[0]
-	desc := FormatReportForFlashDuty(req.Session.Record, report)
+	desc := FormatReportForFlashDuty(record, report)
 
 	labels := make(map[string]string, len(original.Labels))
 	for k, v := range original.Labels {

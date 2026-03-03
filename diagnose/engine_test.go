@@ -127,24 +127,24 @@ func TestDiagnoseEndToEnd(t *testing.T) {
 		Cooldown: 10 * time.Minute,
 	}
 
-	engine.RunDiagnose(req)
+	record := engine.RunDiagnose(req)
 
-	if req.Session.Record.Status != "success" {
-		t.Fatalf("expected success, got %s (error: %s)", req.Session.Record.Status, req.Session.Record.Error)
+	if record.Status != "success" {
+		t.Fatalf("expected success, got %s (error: %s)", record.Status, record.Error)
 	}
-	if !strings.Contains(req.Session.Record.Report, "诊断摘要") {
-		t.Fatalf("report missing expected content: %s", req.Session.Record.Report)
+	if !strings.Contains(record.Report, "诊断摘要") {
+		t.Fatalf("report missing expected content: %s", record.Report)
 	}
-	if req.Session.Record.AI.TotalRounds != 2 {
-		t.Fatalf("expected 2 rounds, got %d", req.Session.Record.AI.TotalRounds)
+	if record.AI.TotalRounds != 2 {
+		t.Fatalf("expected 2 rounds, got %d", record.AI.TotalRounds)
 	}
-	if len(req.Session.Record.Rounds) != 1 {
-		t.Fatalf("expected 1 round record, got %d", len(req.Session.Record.Rounds))
+	if len(record.Rounds) != 1 {
+		t.Fatalf("expected 1 round record, got %d", len(record.Rounds))
 	}
-	if len(req.Session.Record.Rounds[0].ToolCalls) != 1 {
-		t.Fatalf("expected 1 tool call, got %d", len(req.Session.Record.Rounds[0].ToolCalls))
+	if len(record.Rounds[0].ToolCalls) != 1 {
+		t.Fatalf("expected 1 tool call, got %d", len(record.Rounds[0].ToolCalls))
 	}
-	tc := req.Session.Record.Rounds[0].ToolCalls[0]
+	tc := record.Rounds[0].ToolCalls[0]
 	if tc.Name != "test_local_tool" {
 		t.Fatalf("expected tool name test_local_tool, got %s", tc.Name)
 	}
@@ -153,7 +153,7 @@ func TestDiagnoseEndToEnd(t *testing.T) {
 	}
 
 	// Verify record was saved to disk
-	recordPath := req.Session.Record.FilePath()
+	recordPath := record.FilePath()
 	if _, err := os.Stat(recordPath); os.IsNotExist(err) {
 		t.Fatalf("record file not written: %s", recordPath)
 	}
@@ -254,10 +254,10 @@ func TestDiagnoseMetaTools(t *testing.T) {
 		Cooldown: time.Minute,
 	}
 
-	engine.RunDiagnose(req)
+	record := engine.RunDiagnose(req)
 
-	if req.Session.Record.Status != "success" {
-		t.Fatalf("expected success, got %s (error: %s)", req.Session.Record.Status, req.Session.Record.Error)
+	if record.Status != "success" {
+		t.Fatalf("expected success, got %s (error: %s)", record.Status, record.Error)
 	}
 	if atomic.LoadInt32(&callCount) != 3 {
 		t.Fatalf("expected 3 AI calls, got %d", callCount)
@@ -299,9 +299,10 @@ func TestDiagnoseShutdown(t *testing.T) {
 		Timeout: 10 * time.Second,
 	}
 
+	var record *DiagnoseRecord
 	done := make(chan struct{})
 	go func() {
-		engine.RunDiagnose(req)
+		record = engine.RunDiagnose(req)
 		close(done)
 	}()
 
@@ -315,7 +316,7 @@ func TestDiagnoseShutdown(t *testing.T) {
 		t.Fatal("RunDiagnose did not complete after Shutdown")
 	}
 
-	if req.Session.Record.Status == "running" {
+	if record.Status == "running" {
 		t.Fatal("record should not remain in 'running' status after shutdown")
 	}
 }
@@ -491,22 +492,22 @@ func TestStateCooldownAndTokens(t *testing.T) {
 }
 
 func TestParseArgs(t *testing.T) {
-	m := parseArgs(`{"name":"redis_info","section":"memory"}`)
+	m := ParseArgs(`{"name":"redis_info","section":"memory"}`)
 	if m["name"] != "redis_info" || m["section"] != "memory" {
 		t.Fatalf("unexpected: %v", m)
 	}
 
-	m2 := parseArgs(`{"count": 10, "verbose": true}`)
+	m2 := ParseArgs(`{"count": 10, "verbose": true}`)
 	if m2["count"] != "10" || m2["verbose"] != "true" {
 		t.Fatalf("numeric/bool coercion failed: %v", m2)
 	}
 
-	m3 := parseArgs("")
+	m3 := ParseArgs("")
 	if len(m3) != 0 {
 		t.Fatalf("empty should return empty map: %v", m3)
 	}
 
-	m4 := parseArgs("not-json")
+	m4 := ParseArgs("not-json")
 	if m4["_raw"] != "not-json" {
 		t.Fatalf("invalid json should fallback: %v", m4)
 	}

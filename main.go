@@ -225,7 +225,9 @@ func handleSelftestSubcommand(args []string) {
 		}
 	}
 
-	diagnose.RunSelfTest(registry, filter, verbose)
+	if err := diagnose.RunSelfTest(registry, filter, verbose); err != nil {
+		os.Exit(1)
+	}
 }
 
 func handleMCPTestSubcommand() {

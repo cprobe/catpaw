@@ -3,8 +3,11 @@ package aiclient
 import (
 	"context"
 	"errors"
+	"math/rand"
 	"time"
 )
+
+const maxBackoff = 30 * time.Second
 
 // RetryConfig controls the retry behavior for AI API calls.
 type RetryConfig struct {
@@ -18,10 +21,14 @@ func ChatWithRetry(ctx context.Context, client *Client, cfg RetryConfig, message
 	for attempt := 0; attempt <= cfg.MaxRetries; attempt++ {
 		if attempt > 0 {
 			backoff := cfg.RetryBackoff * time.Duration(1<<(attempt-1))
+			if backoff > maxBackoff {
+				backoff = maxBackoff
+			}
+			jitter := time.Duration(float64(backoff) * (0.75 + rand.Float64()*0.5))
 			select {
 			case <-ctx.Done():
 				return nil, ctx.Err()
-			case <-time.After(backoff):
+			case <-time.After(jitter):
 			}
 		}
 

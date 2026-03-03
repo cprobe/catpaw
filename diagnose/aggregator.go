@@ -56,6 +56,9 @@ func (a *DiagnoseAggregator) Submit(event *types.Event, snapshot CheckSnapshot, 
 	a.mu.Lock()
 	defer a.mu.Unlock()
 
+	// Append to existing window. Timeout/Cooldown are determined by the first
+	// event's config, which is fine because all events for the same plugin share
+	// the same DiagnoseConfig.
 	if req, exists := a.pending[key]; exists {
 		req.Events = append(req.Events, event)
 		req.Checks = append(req.Checks, snapshot)
@@ -116,7 +119,7 @@ func shouldTrigger(cfg config.DiagnoseConfig, eventStatus string) bool {
 	}
 	minSeverity := cfg.MinSeverity
 	if minSeverity == "" {
-		minSeverity = "Warning"
+		minSeverity = types.EventStatusWarning
 	}
 	return SeverityRank(eventStatus) >= SeverityRank(minSeverity)
 }

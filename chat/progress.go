@@ -6,6 +6,8 @@ import (
 	"sync"
 	"time"
 	"unicode/utf8"
+
+	"github.com/cprobe/catpaw/diagnose"
 )
 
 // --- spinner: animated progress for long-running phases (AI thinking) ---
@@ -139,7 +141,7 @@ func truncLine(s string, maxRunes int) string {
 }
 
 func formatToolArgsDisplay(name, rawArgs string) string {
-	args := parseArgs(rawArgs)
+	args := diagnose.ParseArgs(rawArgs)
 	switch name {
 	case "call_tool":
 		toolName := args["name"]

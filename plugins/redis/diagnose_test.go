@@ -1,6 +1,7 @@
 package redis
 
 import (
+	"context"
 	"strings"
 	"testing"
 
@@ -83,7 +84,7 @@ func TestAccessorFactoryRegistered(t *testing.T) {
 	p.RegisterDiagnoseTools(registry)
 
 	// Factory should fail with wrong type
-	_, err := registry.CreateAccessor("redis", nil, "not-an-instance")
+	_, err := registry.CreateAccessor(context.Background(), "redis", "not-an-instance")
 	if err == nil {
 		t.Fatal("expected error for wrong instanceRef type")
 	}

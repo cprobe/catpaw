@@ -10,10 +10,5 @@ func EstimateTokensChinese(text string) int {
 	if n == 0 {
 		return 0
 	}
-	// 1 token ≈ 2 runes (conservative for Chinese-heavy text)
-	tokens := (n + 1) / 2
-	if tokens < 1 {
-		tokens = 1
-	}
-	return tokens
+	return (n + 1) / 2
 }

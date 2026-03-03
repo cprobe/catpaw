@@ -120,7 +120,7 @@ func runBaselineTool(parent context.Context, tool *diagnose.DiagnoseTool) string
 		return ""
 	}
 	if len(output) > maxPerToolBytes {
-		output = output[:maxPerToolBytes] + "\n...[truncated]"
+		output = diagnose.TruncateUTF8(output, maxPerToolBytes) + "\n...[truncated]"
 	}
 	return strings.TrimSpace(output)
 }

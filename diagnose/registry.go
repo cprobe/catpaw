@@ -3,6 +3,7 @@ package diagnose
 import (
 	"context"
 	"fmt"
+	"log"
 	"sort"
 	"strings"
 	"sync"
@@ -28,12 +29,14 @@ func NewToolRegistry() *ToolRegistry {
 
 // Register adds a tool under the given category. If the category doesn't exist,
 // it is created with the provided scope and description.
-func (r *ToolRegistry) Register(category string, tool DiagnoseTool) error {
+// Duplicate tool names are logged and skipped (programming error, not runtime condition).
+func (r *ToolRegistry) Register(category string, tool DiagnoseTool) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
 	if _, dup := r.toolIndex[tool.Name]; dup {
-		return fmt.Errorf("duplicate tool name: %q", tool.Name)
+		log.Printf("[warn] diagnose: duplicate tool name %q in category %q, skipped", tool.Name, category)
+		return
 	}
 
 	cat, ok := r.categories[category]
@@ -45,9 +48,10 @@ func (r *ToolRegistry) Register(category string, tool DiagnoseTool) error {
 		}
 		r.categories[category] = cat
 	}
-	cat.Tools = append(cat.Tools, tool)
-	r.toolIndex[tool.Name] = &cat.Tools[len(cat.Tools)-1]
-	return nil
+	tp := new(DiagnoseTool)
+	*tp = tool
+	cat.Tools = append(cat.Tools, *tp)
+	r.toolIndex[tool.Name] = tp
 }
 
 // RegisterCategory registers or updates a category's metadata.
@@ -74,7 +78,7 @@ func (r *ToolRegistry) RegisterAccessorFactory(plugin string, factory AccessorFa
 }
 
 // CreateAccessor calls the registered factory for the given plugin.
-func (r *ToolRegistry) CreateAccessor(plugin string, ctx context.Context, instanceRef any) (any, error) {
+func (r *ToolRegistry) CreateAccessor(ctx context.Context, plugin string, instanceRef any) (any, error) {
 	r.mu.RLock()
 	factory, ok := r.accessorFactory[plugin]
 	r.mu.RUnlock()
@@ -105,13 +109,21 @@ func (r *ToolRegistry) ByPlugin(plugin string) []DiagnoseTool {
 	return result
 }
 
-// ListCategories returns a formatted string of all categories for the AI.
+// ListCategories returns a formatted string of all categories for the AI,
+// sorted alphabetically for deterministic output.
 func (r *ToolRegistry) ListCategories() string {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
+	names := make([]string, 0, len(r.categories))
+	for name := range r.categories {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+
 	var b strings.Builder
-	for _, cat := range r.categories {
+	for _, name := range names {
+		cat := r.categories[name]
 		desc := cat.Description
 		if desc == "" {
 			desc = cat.Name + " diagnostics"
@@ -145,7 +157,7 @@ func (r *ToolRegistry) ListTools(category string) string {
 	return b.String()
 }
 
-// Categories returns a snapshot of all category names.
+// Categories returns a sorted snapshot of all category names.
 func (r *ToolRegistry) Categories() []string {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
@@ -153,6 +165,7 @@ func (r *ToolRegistry) Categories() []string {
 	for name := range r.categories {
 		names = append(names, name)
 	}
+	sort.Strings(names)
 	return names
 }
 

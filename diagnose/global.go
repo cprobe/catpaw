@@ -9,7 +9,7 @@ import (
 )
 
 var (
-	globalMu         sync.Mutex
+	globalMu         sync.RWMutex
 	globalEngine     *DiagnoseEngine
 	globalAggregator *DiagnoseAggregator
 	cleanupStop      chan struct{}
@@ -45,15 +45,15 @@ func Init(registry *ToolRegistry) {
 
 // GlobalAggregator returns the singleton aggregator, or nil if not initialized.
 func GlobalAggregator() *DiagnoseAggregator {
-	globalMu.Lock()
-	defer globalMu.Unlock()
+	globalMu.RLock()
+	defer globalMu.RUnlock()
 	return globalAggregator
 }
 
 // GlobalEngine returns the singleton engine, or nil if not initialized.
 func GlobalEngine() *DiagnoseEngine {
-	globalMu.Lock()
-	defer globalMu.Unlock()
+	globalMu.RLock()
+	defer globalMu.RUnlock()
 	return globalEngine
 }
 

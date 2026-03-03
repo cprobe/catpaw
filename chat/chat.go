@@ -2,7 +2,6 @@ package chat
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"os"
 	"os/signal"
@@ -295,7 +294,7 @@ func runConversationTurn(
 }
 
 func executeChatTool(ctx context.Context, registry *diagnose.ToolRegistry, name, rawArgs string, toolTimeout time.Duration, rl *readline.Instance) string {
-	args := parseArgs(rawArgs)
+	args := diagnose.ParseArgs(rawArgs)
 
 	switch name {
 	case "list_tools":
@@ -314,7 +313,7 @@ func executeChatTool(ctx context.Context, registry *diagnose.ToolRegistry, name,
 		if !ok {
 			return "error: unknown tool: " + toolName
 		}
-		toolArgs := parseToolArgs(args["tool_args"])
+		toolArgs := diagnose.ParseToolArgs(args["tool_args"])
 		toolCtx, cancel := context.WithTimeout(ctx, toolTimeout)
 		defer cancel()
 		result, err := executeLocalTool(toolCtx, *tool, toolArgs)
@@ -349,34 +348,6 @@ func executeLocalTool(ctx context.Context, tool diagnose.DiagnoseTool, args map[
 	return tool.Execute(ctx, args)
 }
 
-func parseArgs(raw string) map[string]string {
-	if raw == "" {
-		return make(map[string]string)
-	}
-	var m map[string]string
-	if err := json.Unmarshal([]byte(raw), &m); err != nil {
-		var anyMap map[string]any
-		if err2 := json.Unmarshal([]byte(raw), &anyMap); err2 != nil {
-			return map[string]string{"_raw": raw}
-		}
-		m = make(map[string]string, len(anyMap))
-		for k, v := range anyMap {
-			m[k] = fmt.Sprint(v)
-		}
-	}
-	return m
-}
-
-func parseToolArgs(raw string) map[string]string {
-	if raw == "" {
-		return nil
-	}
-	var m map[string]string
-	if err := json.Unmarshal([]byte(raw), &m); err != nil {
-		return map[string]string{"_raw": raw}
-	}
-	return m
-}
 
 // trimHistory keeps the system prompt and the most recent messages to stay
 // within context window limits. It never splits a tool-call sequence: an

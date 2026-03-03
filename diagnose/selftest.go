@@ -38,7 +38,8 @@ var safeDefaults = map[string]string{
 }
 
 // RunSelfTest executes all local tools in the registry and reports results.
-func RunSelfTest(registry *ToolRegistry, filter string, verbose bool) {
+// Returns a non-nil error if any tool FAILs, so the caller can decide the exit code.
+func RunSelfTest(registry *ToolRegistry, filter string, verbose bool) error {
 	categories := registry.CategoriesWithTools()
 
 	hostname, _ := os.Hostname()
@@ -179,8 +180,9 @@ func RunSelfTest(registry *ToolRegistry, filter string, verbose bool) {
 	}
 
 	if failCount > 0 {
-		os.Exit(1)
+		return fmt.Errorf("%d tool(s) failed", failCount)
 	}
+	return nil
 }
 
 func printCatHeader(printed *bool, cat ToolCategory) {
@@ -316,10 +318,10 @@ func runOneTool(category string, tool DiagnoseTool, args map[string]string, time
 }
 
 func isExpectedPlatformError(msg string) bool {
-	return strings.Contains(msg, "requires linux") ||
-		strings.Contains(msg, "requires Linux") ||
-		strings.Contains(msg, "linux only") ||
-		strings.Contains(msg, "not supported on")
+	lower := strings.ToLower(msg)
+	return strings.Contains(lower, "requires linux") ||
+		strings.Contains(lower, "linux only") ||
+		strings.Contains(lower, "not supported on")
 }
 
 func isCommandNotFound(msg string) bool {
@@ -328,11 +330,11 @@ func isCommandNotFound(msg string) bool {
 		strings.Contains(msg, "no such file or directory")
 }
 
-func truncMessage(s string, max int) string {
-	if len(s) <= max {
+func truncMessage(s string, maxBytes int) string {
+	if len(s) <= maxBytes {
 		return s
 	}
-	return s[:max-3] + "..."
+	return TruncateUTF8(s, maxBytes-3) + "..."
 }
 
 func formatDuration(d time.Duration) string {

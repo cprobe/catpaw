@@ -28,7 +28,8 @@ integration_key = "your-flashduty-integration-key"
 # model = "gpt-4o"
 #
 ## AI 请求参数
-# max_tokens = 4000                  # 单次 AI 请求最大 token 数
+# max_tokens = 4000                  # 单次 AI 返回最大 token 数
+# context_window = 128000            # 模型上下文窗口大小（token），默认 128000
 # max_rounds = 15                    # AI Agent 最大交互轮次（工具多时建议 12~20）
 # request_timeout = "60s"            # 单次 AI 请求超时
 #

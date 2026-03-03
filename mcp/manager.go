@@ -123,15 +123,10 @@ func (m *Manager) registerTools(srv *config.MCPServerConfig, tools []Tool, clien
 	}
 	registry.RegisterCategory(catName, catName, desc, diagnose.ToolScopeLocal)
 
-	count := 0
 	for _, dt := range toRegister {
-		if err := registry.Register(catName, dt); err != nil {
-			log.Printf("[mcp] %s: skip tool %s: %v", srv.Name, dt.Name, err)
-			continue
-		}
-		count++
+		registry.Register(catName, dt)
 	}
-	return count
+	return len(toRegister)
 }
 
 // Close shuts down all MCP server connections.

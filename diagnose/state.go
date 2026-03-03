@@ -91,6 +91,8 @@ func (s *DiagnoseState) Load() {
 		s.Date = today()
 		s.InputTokens = 0
 		s.OutputTokens = 0
+	}
+	if s.Cooldowns == nil {
 		s.Cooldowns = make(map[string]int64)
 	}
 	s.resetIfNewDay()

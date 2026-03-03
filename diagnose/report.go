@@ -25,15 +25,17 @@ func FormatReportForFlashDuty(record *DiagnoseRecord, report string) string {
 	overhead := headerBytes + footerBytes
 
 	if overhead >= maxDescriptionBytes {
-		return truncateUTF8(header, maxDescriptionBytes)
+		return TruncateUTF8(header, maxDescriptionBytes)
 	}
 
+	const truncSuffix = "\n...[诊断报告已截断，完整内容请查看本地记录]"
 	budget := maxDescriptionBytes - overhead
 	body := report
 	if len(body) > budget {
-		body = truncateUTF8(body, budget-len("\n...[诊断报告已截断，完整内容请查看本地记录]")) + "\n...[诊断报告已截断，完整内容请查看本地记录]"
-		if len(body) > budget {
-			body = truncateUTF8(report, budget)
+		if budget > len(truncSuffix) {
+			body = TruncateUTF8(body, budget-len(truncSuffix)) + truncSuffix
+		} else {
+			body = TruncateUTF8(body, budget)
 		}
 	}
 
@@ -56,9 +58,9 @@ func formatFooter(record *DiagnoseRecord) string {
 	return fmt.Sprintf("\n---\n完整记录: %s\n", record.FilePath())
 }
 
-// truncateUTF8 truncates s to at most maxBytes bytes without breaking
-// multi-byte UTF-8 characters.
-func truncateUTF8(s string, maxBytes int) string {
+// TruncateUTF8 truncates s to at most maxBytes bytes without breaking
+// multi-byte UTF-8 characters. Exported for reuse across packages.
+func TruncateUTF8(s string, maxBytes int) string {
 	if len(s) <= maxBytes {
 		return s
 	}

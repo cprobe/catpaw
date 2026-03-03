@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"strings"
 	"time"
+	"unicode/utf8"
 )
 
 // Client communicates with an OpenAI-compatible /v1/chat/completions endpoint.
@@ -83,7 +84,7 @@ func (c *Client) Chat(ctx context.Context, messages []Message, tools []Tool) (*C
 	if resp.StatusCode != http.StatusOK {
 		return nil, &APIError{
 			StatusCode: resp.StatusCode,
-			Body:       string(body),
+			Body:       truncStr(string(body), 1024),
 		}
 	}
 
@@ -109,9 +110,12 @@ func truncBody(b []byte) string {
 	return truncStr(string(b), 200)
 }
 
-func truncStr(s string, max int) string {
-	if len(s) <= max {
+func truncStr(s string, maxBytes int) string {
+	if len(s) <= maxBytes {
 		return s
 	}
-	return s[:max] + "..."
+	for maxBytes > 0 && !utf8.RuneStart(s[maxBytes]) {
+		maxBytes--
+	}
+	return s[:maxBytes] + "..."
 }

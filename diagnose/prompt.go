@@ -108,7 +108,6 @@ catpaw 监控系统检测到以下告警：
 - 优化建议（按紧急程度排序）
 {{- else}}
 
-- 请只使用工具获取信息，不要假设或编造数据
 - 语言精炼，关键数值内嵌到分析要点中
 - 最终输出请按以下格式：
   1. 诊断摘要（一句话）
@@ -183,7 +182,8 @@ func formatDirectTools(tools []DiagnoseTool) string {
 
 func isRemoteTarget(target string) bool {
 	t := strings.ToLower(target)
-	if strings.HasPrefix(t, "localhost") || strings.HasPrefix(t, "127.") || strings.HasPrefix(t, "[::1]") {
+	if strings.HasPrefix(t, "localhost") || strings.HasPrefix(t, "127.") ||
+		strings.HasPrefix(t, "[::1]") || strings.HasPrefix(t, "::1") {
 		return false
 	}
 	if t == "" || t == "/" {

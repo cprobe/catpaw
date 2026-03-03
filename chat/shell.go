@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/ergochat/readline"
+	"github.com/cprobe/catpaw/diagnose"
 	"github.com/cprobe/catpaw/pkg/cmdx"
 )
 
@@ -105,5 +106,5 @@ func truncateShellOutput(s string) string {
 	if len(s) <= maxShellOutputBytes {
 		return s
 	}
-	return s[:maxShellOutputBytes] + "\n...[output truncated]"
+	return diagnose.TruncateUTF8(s, maxShellOutputBytes) + "\n...[output truncated]"
 }
