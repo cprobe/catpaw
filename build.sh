@@ -74,7 +74,9 @@ case "${1}" in
         build_linux_amd64_bin
         ;;
     *)
+        build_local || exit 1
+        echo
         usage
-        exit 1
+        exit 0
         ;;
 esac
