@@ -87,7 +87,7 @@ func buildChatSystemPrompt(registry *diagnose.ToolRegistry, snapshot, mcpIdentit
 		OS:             runtime.GOOS,
 		Arch:           runtime.GOARCH,
 		Kernel:         kernel,
-		ToolCatalog:    registry.ListAllTools(),
+		ToolCatalog:    registry.ListToolCatalogSmart(),
 		SystemSnapshot: snapshot,
 		MCPIdentity:    mcpIdentity,
 		Language:       language,

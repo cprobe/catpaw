@@ -231,6 +231,48 @@ func (r *ToolRegistry) ListAllTools() string {
 	return b.String()
 }
 
+// ListToolCatalogSmart returns a hybrid catalog for diagnose prompts:
+//   - Built-in tool categories: full detail (name, params, description)
+//   - MCP categories (prefix "mcp:"): summary only (name, tool count, description)
+//
+// This keeps the prompt concise when many MCP tools are registered while
+// still allowing zero-roundtrip access to built-in tools.
+func (r *ToolRegistry) ListToolCatalogSmart() string {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	cats := make([]*ToolCategory, 0, len(r.categories))
+	for _, cat := range r.categories {
+		cats = append(cats, cat)
+	}
+	sort.Slice(cats, func(i, j int) bool { return cats[i].Name < cats[j].Name })
+
+	var b strings.Builder
+	for _, cat := range cats {
+		desc := cat.Description
+		if desc == "" {
+			desc = cat.Name
+		}
+
+		if strings.HasPrefix(cat.Name, "mcp:") {
+			fmt.Fprintf(&b, "[%s] (%d tools) %s — 使用前先 list_tools(category=\"%s\")\n",
+				cat.Name, len(cat.Tools), desc, cat.Name)
+			continue
+		}
+
+		fmt.Fprintf(&b, "[%s] %s\n", cat.Name, desc)
+		for _, t := range cat.Tools {
+			params := formatParamsCompact(t.Parameters)
+			if params != "" {
+				fmt.Fprintf(&b, "  %s(%s) - %s\n", t.Name, params, t.Description)
+			} else {
+				fmt.Fprintf(&b, "  %s() - %s\n", t.Name, t.Description)
+			}
+		}
+	}
+	return b.String()
+}
+
 func formatParamsCompact(params []ToolParam) string {
 	if len(params) == 0 {
 		return ""

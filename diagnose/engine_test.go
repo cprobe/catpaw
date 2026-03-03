@@ -564,16 +564,16 @@ func TestBuildToolSet(t *testing.T) {
 		t.Fatalf("expected 2 direct tools, got %d", len(directTools))
 	}
 
-	// 2 direct + 3 meta tools = 5
-	if len(aiTools) != 5 {
-		t.Fatalf("expected 5 AI tools, got %d", len(aiTools))
+	// 2 direct + 2 meta tools = 4
+	if len(aiTools) != 4 {
+		t.Fatalf("expected 4 AI tools, got %d", len(aiTools))
 	}
 
 	names := make(map[string]bool)
 	for _, at := range aiTools {
 		names[at.Function.Name] = true
 	}
-	for _, expected := range []string{"redis_info", "redis_slowlog", "list_tool_categories", "list_tools", "call_tool"} {
+	for _, expected := range []string{"redis_info", "redis_slowlog", "list_tools", "call_tool"} {
 		if !names[expected] {
 			t.Fatalf("missing expected tool: %s", expected)
 		}

@@ -22,15 +22,8 @@ func metaTools() []aiclient.Tool {
 		{
 			Type: "function",
 			Function: aiclient.ToolFunction{
-				Name:        "list_tool_categories",
-				Description: "列出所有可用的诊断工具大类（如 disk、cpu、memory、redis 等）",
-			},
-		},
-		{
-			Type: "function",
-			Function: aiclient.ToolFunction{
 				Name:        "list_tools",
-				Description: "列出某个大类下的所有诊断工具及其参数说明",
+				Description: "查看某个工具类别下所有工具的详细参数说明（仅在需要参数细节时使用）",
 				Parameters: &aiclient.Parameters{
 					Type: "object",
 					Properties: map[string]aiclient.Property{
@@ -44,7 +37,7 @@ func metaTools() []aiclient.Tool {
 			Type: "function",
 			Function: aiclient.ToolFunction{
 				Name:        "call_tool",
-				Description: "调用一个非直接注入的诊断工具",
+				Description: "调用一个非直接注入的诊断工具（工具名和参数见系统提示中的工具目录）",
 				Parameters: &aiclient.Parameters{
 					Type: "object",
 					Properties: map[string]aiclient.Property{

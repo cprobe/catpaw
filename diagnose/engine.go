@@ -180,12 +180,12 @@ func (e *DiagnoseEngine) diagnose(ctx context.Context, req *DiagnoseRequest, ses
 	hostname, _ := os.Hostname()
 	isRemote := isRemoteTarget(req.Target)
 	directToolsStr := formatDirectTools(directTools)
-	toolCategories := e.registry.ListCategories()
+	toolCatalog := e.registry.ListToolCatalogSmart()
 	var prompt string
 	if req.Mode == ModeInspect {
-		prompt = buildInspectPrompt(req, directToolsStr, toolCategories, hostname, isRemote, e.cfg.Language)
+		prompt = buildInspectPrompt(req, directToolsStr, toolCatalog, hostname, isRemote, e.cfg.Language)
 	} else {
-		prompt = buildSystemPrompt(req, directToolsStr, toolCategories, hostname, isRemote, e.cfg.Language)
+		prompt = buildSystemPrompt(req, directToolsStr, toolCatalog, hostname, isRemote, e.cfg.Language)
 	}
 
 	messages := []aiclient.Message{

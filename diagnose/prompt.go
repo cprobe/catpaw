@@ -58,13 +58,12 @@ catpaw 监控系统检测到以下告警：
 你可以直接调用以下 {{.Plugin}} 工具（无需通过 call_tool）：
 {{.DirectTools}}
 
-如需使用其他领域的工具，以下是所有可用的工具大类：
+以下是系统中所有可用的诊断工具（按领域分类）：
 
-{{.ToolCategories}}
-使用步骤：
-1. 调用 list_tools(category) 查看某个大类下的具体工具
-2. 调用 call_tool(name, tool_args) 执行具体工具
-   tool_args 为 JSON 字符串格式，如 call_tool(name="disk_usage", tool_args='{}')
+{{.ToolCatalog}}
+
+调用其他领域的工具：call_tool(name="工具名", tool_args='{"参数名":"值"}')
+如需查看某类工具的详细参数说明：list_tools(category="类别名")
 
 注意：上述 {{.Plugin}} 工具请直接调用，不要通过 call_tool 包装。
 
@@ -75,12 +74,15 @@ catpaw 监控系统检测到以下告警：
 1. 首先使用 {{.Plugin}} 的核心工具收集关键指标
 2. 根据初步结果，针对性地深入检查可疑领域
 3. 如果是远端服务，同时关注基础设施层面可能影响服务的因素
+4. **每轮尽可能并行调用多个工具**，减少交互轮次
 {{- else}}
 
-## 诊断提示
+## 诊断策略
 
-- 根因可能不在 {{.Plugin}} 自身，例如数据库慢可能是磁盘 I/O 瓶颈，
-  服务延迟可能是 CPU 或内存压力，请根据需要探索其他领域的工具
+- **效率优先**：如果当前信息已足以判断根因，立即输出结论，不要为了全面性进行不必要的检查
+- **并行调用**：需要多个领域数据时，在同一轮中并行调用多个工具
+- **聚焦问题**：优先检查与告警直接相关的指标；只在初步分析无法解释问题时才扩展到其他领域
+- 根因可能不在 {{.Plugin}} 自身（如数据库慢可能源于磁盘 I/O），但请先确认直接相关指标后再决定是否扩展
 {{- end}}
 {{- if .IsRemoteTarget}}
 - [!] 目标 {{.Target}} 是远端主机，本机基础设施工具（disk、cpu、memory 等）
@@ -132,28 +134,28 @@ type promptData struct {
 	Target         string
 	Checks         []CheckSnapshot
 	DirectTools    string
-	ToolCategories string
+	ToolCatalog    string
 	IsRemoteTarget bool
 	LocalHost      string
 	Language       string
 }
 
-func buildSystemPrompt(req *DiagnoseRequest, directTools, toolCategories, localHost string, isRemote bool, language string) string {
-	return renderPrompt(ModeAlert, req, directTools, toolCategories, localHost, isRemote, language)
+func buildSystemPrompt(req *DiagnoseRequest, directTools, toolCatalog, localHost string, isRemote bool, language string) string {
+	return renderPrompt(ModeAlert, req, directTools, toolCatalog, localHost, isRemote, language)
 }
 
-func buildInspectPrompt(req *DiagnoseRequest, directTools, toolCategories, localHost string, isRemote bool, language string) string {
-	return renderPrompt(ModeInspect, req, directTools, toolCategories, localHost, isRemote, language)
+func buildInspectPrompt(req *DiagnoseRequest, directTools, toolCatalog, localHost string, isRemote bool, language string) string {
+	return renderPrompt(ModeInspect, req, directTools, toolCatalog, localHost, isRemote, language)
 }
 
-func renderPrompt(mode string, req *DiagnoseRequest, directTools, toolCategories, localHost string, isRemote bool, language string) string {
+func renderPrompt(mode string, req *DiagnoseRequest, directTools, toolCatalog, localHost string, isRemote bool, language string) string {
 	data := promptData{
 		Mode:           mode,
 		Plugin:         req.Plugin,
 		Target:         req.Target,
 		Checks:         req.Checks,
 		DirectTools:    directTools,
-		ToolCategories: toolCategories,
+		ToolCatalog:    toolCatalog,
 		IsRemoteTarget: isRemote,
 		LocalHost:      localHost,
 		Language:       language,
