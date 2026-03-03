@@ -140,9 +140,10 @@ func Run(verbose bool) error {
 
 		msgCount := len(messages)
 
+		autoApprove := false
 		var reply string
 		var usage aiclient.Usage
-		reply, messages, usage, err = runConversationTurn(ctx, client, retryCfg, registry, aiTools, messages, toolTimeout, rl, verbose)
+		reply, messages, usage, err = runConversationTurn(ctx, client, retryCfg, registry, aiTools, messages, toolTimeout, rl, verbose, &autoApprove)
 		if err != nil {
 			fmt.Printf("\033[31merror: %v\033[0m\n\n", err)
 			messages = messages[:msgCount-1]
@@ -217,6 +218,7 @@ func runConversationTurn(
 	toolTimeout time.Duration,
 	rl *readline.Instance,
 	verbose bool,
+	autoApprove *bool,
 ) (string, []aiclient.Message, aiclient.Usage, error) {
 	const maxRounds = 20
 	var totalUsage aiclient.Usage
@@ -269,7 +271,7 @@ func runConversationTurn(
 
 			if name == "exec_shell" {
 				fmt.Printf("  %s▶ exec_shell%s %s%s%s\n", colorYellow, colorReset, colorGray, argsDisplay, colorReset)
-				result := executeChatTool(ctx, registry, name, tc.Function.Arguments, toolTimeout, rl)
+				result := executeChatTool(ctx, registry, name, tc.Function.Arguments, toolTimeout, rl, autoApprove)
 				isErr := strings.HasPrefix(result, "error:")
 				if verbose && !isErr {
 					printToolOutput(result, 5)
@@ -282,7 +284,7 @@ func runConversationTurn(
 			} else {
 				printToolStart(name, argsDisplay)
 				toolStart := time.Now()
-				result := executeChatTool(ctx, registry, name, tc.Function.Arguments, toolTimeout, rl)
+				result := executeChatTool(ctx, registry, name, tc.Function.Arguments, toolTimeout, rl, autoApprove)
 				isErr := strings.HasPrefix(result, "error:")
 				printToolDone(name, argsDisplay, time.Since(toolStart), len(result), isErr)
 				if verbose && !isErr {
@@ -300,7 +302,7 @@ func runConversationTurn(
 	return "[incomplete] max tool-calling rounds reached", messages, totalUsage, nil
 }
 
-func executeChatTool(ctx context.Context, registry *diagnose.ToolRegistry, name, rawArgs string, toolTimeout time.Duration, rl *readline.Instance) string {
+func executeChatTool(ctx context.Context, registry *diagnose.ToolRegistry, name, rawArgs string, toolTimeout time.Duration, rl *readline.Instance, autoApprove *bool) string {
 	args := diagnose.ParseArgs(rawArgs)
 
 	switch name {
@@ -334,7 +336,7 @@ func executeChatTool(ctx context.Context, registry *diagnose.ToolRegistry, name,
 		if command == "" {
 			return "error: exec_shell requires 'command' parameter"
 		}
-		result, err := execShellInteractive(ctx, rl, command, toolTimeout)
+		result, err := execShellInteractive(ctx, rl, command, toolTimeout, autoApprove)
 		if err != nil {
 			return "error: " + err.Error()
 		}
