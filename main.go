@@ -91,7 +91,6 @@ func handleSubcommand(args []string) bool {
 
 func handleRunSubcommand(args []string) {
 	fs := flag.NewFlagSet("run", flag.ExitOnError)
-	testMode := fs.Bool("test", false, "Test mode: print results to stdout")
 	interval := fs.Int64("interval", 0, "Global collection interval (seconds)")
 	pluginFilter := fs.String("plugins", "", "Plugin filter (e.g. redis:cpu:disk)")
 	fs.Usage = printRunUsage
@@ -99,7 +98,7 @@ func handleRunSubcommand(args []string) {
 
 	winx.Args(appPath)
 
-	if err := config.InitConfig(*configDir, *testMode, *interval, *pluginFilter, *loglevel); err != nil {
+	if err := config.InitConfig(*configDir, *interval, *pluginFilter, *loglevel); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
 	}
@@ -168,7 +167,7 @@ func handleChatSubcommand(args []string) {
 	fs.Usage = printChatUsage
 	fs.Parse(args[1:])
 
-	if err := config.InitConfig(*configDir, false, 0, "", *loglevel); err != nil {
+	if err := config.InitConfig(*configDir, 0, "", *loglevel); err != nil {
 		fmt.Fprintf(os.Stderr, "Error loading config: %v\n", err)
 		os.Exit(1)
 	}
@@ -180,7 +179,7 @@ func handleChatSubcommand(args []string) {
 }
 
 func handleInspectSubcommand(args []string) {
-	if err := config.InitConfig(*configDir, false, 0, "", *loglevel); err != nil {
+	if err := config.InitConfig(*configDir, 0, "", *loglevel); err != nil {
 		fmt.Fprintf(os.Stderr, "Error loading config: %v\n", err)
 		os.Exit(1)
 	}
@@ -231,7 +230,7 @@ func handleSelftestSubcommand(args []string) {
 }
 
 func handleMCPTestSubcommand() {
-	if err := config.InitConfig(*configDir, false, 0, "", *loglevel); err != nil {
+	if err := config.InitConfig(*configDir, 0, "", *loglevel); err != nil {
 		fmt.Fprintf(os.Stderr, "Error loading config: %v\n", err)
 		os.Exit(1)
 	}
@@ -304,13 +303,13 @@ Start the monitoring agent. Collects metrics, evaluates alerts,
 and optionally triggers AI-powered diagnosis.
 
 Flags:
-  --test              Test mode: print results to stdout instead of forwarding
   --interval <sec>    Override global collection interval (seconds)
   --plugins <list>    Plugin filter, colon-separated (e.g. redis:cpu:disk)
 
+Tip: Enable [notify.console] in config.toml to print events to stdout.
+
 Examples:
   catpaw run                              Start with default config
-  catpaw run --test                       Print metrics to stdout
   catpaw run --plugins redis:cpu          Only run redis and cpu plugins
   catpaw --configs /etc/catpaw/conf.d run Start with custom config dir`)
 }

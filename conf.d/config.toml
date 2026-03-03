@@ -12,13 +12,27 @@ level = "info"
 # output = "stdout"
 # fields = {}
 
-[notify.flashduty]
-integration_key = "your-flashduty-integration-key"
+## 控制台输出（新用户快速验证告警效果，无需任何外部服务）
+[notify.console]
+enabled = true
+
+# [notify.flashduty]
+# integration_key = "your-flashduty-integration-key"
 # timeout = "10s"
 
 # [notify.pagerduty]
 # routing_key = "your-pagerduty-routing-key"
 # timeout = "10s"
+
+## 通用 WebAPI（直接将 catpaw 原始 Event JSON 推送到任意 HTTP 端点）
+# [notify.webapi]
+# url = "https://your-service.example.com/api/v1/events"
+# method = "POST"                          # POST（默认）或 PUT
+# timeout = "10s"
+# max_retries = 1
+# [notify.webapi.headers]
+# Authorization = "Bearer ${WEBAPI_TOKEN}" # 支持 ${ENV_VAR} 引用环境变量
+# X-Custom-Header = "catpaw"
 
 ## AI 智能诊断配置（告警触发后自动分析根因）
 # [ai]

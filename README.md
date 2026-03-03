@@ -122,11 +122,7 @@ Download the binary from [GitHub Releases](https://github.com/cprobe/catpaw/rele
 ./catpaw run
 ```
 
-Test mode (events printed to terminal):
-
-```bash
-./catpaw run --test
-```
+Events are printed to the terminal by default (`[notify.console]` is enabled in the example config). When you're ready for production, disable console and enable Flashduty/PagerDuty/WebAPI.
 
 ### AI Diagnosis (optional)
 

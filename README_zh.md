@@ -122,11 +122,7 @@ catpaw mcptest                          MCP 连接测试
 ./catpaw run
 ```
 
-测试模式（事件输出到终端，不发送）：
-
-```bash
-./catpaw run --test
-```
+默认配置已开启 `[notify.console]`，事件会直接输出到终端。正式使用时，关闭 console 并启用 Flashduty/PagerDuty/WebAPI 即可。
 
 ### AI 智能诊断（可选）
 
