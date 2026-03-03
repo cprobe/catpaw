@@ -23,7 +23,7 @@ const (
 )
 
 // Run starts the interactive chat REPL.
-func Run() error {
+func Run(verbose bool) error {
 	cfg := config.Config.AI
 	if !cfg.Enabled {
 		return fmt.Errorf("AI is not enabled, set [ai] enabled = true in config.toml")
@@ -126,7 +126,7 @@ func Run() error {
 		msgCount := len(messages)
 
 		var reply string
-		reply, messages, err = runConversationTurn(ctx, client, retryCfg, registry, aiTools, messages, toolTimeout, rl)
+		reply, messages, err = runConversationTurn(ctx, client, retryCfg, registry, aiTools, messages, toolTimeout, rl, verbose)
 		if err != nil {
 			fmt.Printf("\033[31merror: %v\033[0m\n\n", err)
 			messages = messages[:msgCount-1]
@@ -199,13 +199,18 @@ func runConversationTurn(
 	messages []aiclient.Message,
 	toolTimeout time.Duration,
 	rl *readline.Instance,
+	verbose bool,
 ) (string, []aiclient.Message, error) {
 	const maxRounds = 20
 
 	for round := 0; round < maxRounds; round++ {
-		sp := startSpinner("thinking...")
+		roundNum := round + 1
+
+		sp := startSpinner(fmt.Sprintf("[round %d] ⟳ thinking...", roundNum))
+		start := time.Now()
 		resp, err := aiclient.ChatWithRetry(ctx, client, retryCfg, messages, aiTools)
 		sp.stop()
+		printThinkingDone(roundNum, time.Since(start))
 		if err != nil {
 			return "", messages, fmt.Errorf("AI API call failed: %w", err)
 		}
@@ -226,6 +231,10 @@ func runConversationTurn(
 			return content, messages, nil
 		}
 
+		if content != "" {
+			printAIReasoning(content)
+		}
+
 		messages = append(messages, aiclient.Message{
 			Role:      "assistant",
 			Content:   content,
@@ -234,17 +243,29 @@ func runConversationTurn(
 
 		for _, tc := range toolCalls {
 			name := tc.Function.Name
+			argsDisplay := formatToolArgsDisplay(name, tc.Function.Arguments)
+
 			if name == "exec_shell" {
+				fmt.Printf("  %s▶ exec_shell%s %s%s%s\n", colorYellow, colorReset, colorGray, argsDisplay, colorReset)
 				result := executeChatTool(ctx, registry, name, tc.Function.Arguments, toolTimeout, rl)
+				isErr := strings.HasPrefix(result, "error:")
+				if verbose && !isErr {
+					printToolOutput(result, 5)
+				}
 				messages = append(messages, aiclient.Message{
 					Role:       "tool",
 					ToolCallID: tc.ID,
 					Content:    result,
 				})
 			} else {
-				sp = startSpinner(fmt.Sprintf("calling %s...", name))
+				printToolStart(name, argsDisplay)
+				toolStart := time.Now()
 				result := executeChatTool(ctx, registry, name, tc.Function.Arguments, toolTimeout, rl)
-				sp.stop()
+				isErr := strings.HasPrefix(result, "error:")
+				printToolDone(name, argsDisplay, time.Since(toolStart), len(result), isErr)
+				if verbose && !isErr {
+					printToolOutput(result, 5)
+				}
 				messages = append(messages, aiclient.Message{
 					Role:       "tool",
 					ToolCallID: tc.ID,

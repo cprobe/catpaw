@@ -75,7 +75,7 @@ func handleSubcommand(args []string) bool {
 		handleInspectSubcommand(args)
 		return true
 	case "chat":
-		handleChatSubcommand()
+		handleChatSubcommand(args)
 		return true
 	case "selftest":
 		handleSelftestSubcommand(args)
@@ -157,13 +157,19 @@ func handleDiagnoseSubcommand(args []string) {
 	}
 }
 
-func handleChatSubcommand() {
+func handleChatSubcommand(args []string) {
+	fs := flag.NewFlagSet("chat", flag.ExitOnError)
+	verbose := fs.Bool("v", false, "Verbose: show tool output summaries")
+	fs.BoolVar(verbose, "verbose", false, "Verbose: show tool output summaries")
+	fs.Usage = printChatUsage
+	fs.Parse(args[1:])
+
 	if err := config.InitConfig(*configDir, false, 0, "", *loglevel); err != nil {
 		fmt.Fprintf(os.Stderr, "Error loading config: %v\n", err)
 		os.Exit(1)
 	}
 
-	if err := chat.Run(); err != nil {
+	if err := chat.Run(*verbose); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
 	}
@@ -284,7 +290,7 @@ Examples:
 }
 
 func printChatUsage() {
-	fmt.Println(`Usage: catpaw chat
+	fmt.Println(`Usage: catpaw chat [-v]
 
 Start an interactive AI-powered chat session for troubleshooting.
 The AI can use built-in diagnostic tools and execute shell commands
@@ -292,8 +298,12 @@ The AI can use built-in diagnostic tools and execute shell commands
 
 Requires [ai] enabled = true in config.toml.
 
+Flags:
+  -v, --verbose    Show tool output summaries (first 5 lines of each tool result)
+
 Examples:
   catpaw chat                             Start interactive chat
+  catpaw chat -v                          Verbose mode (show tool outputs)
   catpaw --configs /etc/catpaw/conf.d chat   Use custom config directory`)
 }
 
