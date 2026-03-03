@@ -147,9 +147,10 @@ repeat_number = 3
 # disabled = false
 # disable_recovery_notification = false
 
-## AI 智能诊断（需先在 config.toml 中启用 [ai]）
-# [instances.diagnose]
-# enabled = true                     # 是否对该实例启用 AI 诊断
-# min_severity = "Warning"           # 最低触发严重级别: Warning / Critical
+## AI 智能诊断（生效前提：config.toml 中已配置 [ai]）
+## Redis 有 8 个深度诊断工具（slowlog、内存分析、连接状态等）
+[instances.diagnose]
+enabled = true
+# min_severity = "Warning"           # 最低触发级别: Warning(默认) / Critical
 # timeout = "120s"                   # 单次诊断超时
 # cooldown = "10m"                   # 同目标诊断冷却时间

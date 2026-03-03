@@ -30,3 +30,8 @@ repeat_interval = "5m"
 repeat_number = 3
 # disabled = false
 # disable_recovery_notification = false
+
+## AI 智能诊断（生效前提：config.toml 中已配置 [ai]）
+## 服务挂掉时 AI 可查 journal 日志找原因
+[instances.diagnose]
+enabled = true

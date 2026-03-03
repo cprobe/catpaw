@@ -20,3 +20,8 @@ repeat_interval = "5m"
 repeat_number = 0
 # disabled = false
 # disable_recovery_notification = false
+
+## AI 智能诊断（生效前提：config.toml 中已配置 [ai]）
+## Listen 队列溢出时 AI 可查 backlog 配置和 TCP 调优
+[instances.diagnose]
+enabled = true
