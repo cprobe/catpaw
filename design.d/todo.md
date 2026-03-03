@@ -78,3 +78,25 @@ for _, registrar := range plugins.DiagnoseRegistrars {
 | `io_top` | `plugins/sysdiag/iotop.go` | 按进程统计 I/O 字节（/proc/*/io），支持按 read/write/total 排序 | ✅ |
 | `netstat_summary` | `plugins/sockstat/netstat.go` | TCP/UDP 核心指标（/proc/net/snmp），含 retrans/errors/resets 等 | ✅ |
 | `cgroup_usage` | `plugins/sysdiag/cgroup.go` | cgroup v1/v2 CPU/内存限制与用量，含 throttle 信息 | ✅ |
+
+### P4：Tier 2 中频排障工具 ✅ Done
+
+| 工具 | 文件 | 说明 | 状态 |
+| --- | --- | --- | --- |
+| `journal_query` | `plugins/systemd/journal.go` | 查询 systemd journal，按 unit/时间/优先级过滤，支持 --output short-iso | ✅ |
+| `mount_info` | `plugins/sysdiag/mount.go` | 显示挂载点信息，高亮只读文件系统，过滤伪 FS，支持 octal 转义 | ✅ |
+| `env_inspect` | `plugins/sysdiag/env.go` | 查看进程环境变量（/proc/pid/environ），自动掩码敏感值 | ✅ |
+| `open_files` | `plugins/sysdiag/openfiles.go` | 列出进程打开的文件描述符，分类统计 file/socket/pipe/anon | ✅ |
+| `ss_detail` | `plugins/sysdiag/ss.go` | 详细 TCP socket 信息（Send-Q/Recv-Q/RTT/cwnd/重传），内存安全 | ✅ |
+
+### P5：Tier 3 专项排障工具 ✅ Done
+
+| 工具 | 文件 | 说明 | 状态 |
+| --- | --- | --- | --- |
+| `psi_check` | `plugins/sysdiag/psi.go` | PSI 压力指标（CPU/内存/IO），avg10/60/300 百分比，Linux 4.20+ | ✅ |
+| `interrupts` | `plugins/sysdiag/interrupts.go` | 中断分布 Top N，检测中断不均衡（热点 CPU），按总数排序 | ✅ |
+| `conntrack_stat` | `plugins/sysdiag/conntrack_stat.go` | 连接追踪表用量+内核统计（drop/insert_failed/early_drop），hex 解析 | ✅ |
+| `coredump_list` | `plugins/sysdiag/coredump.go` | 列出 coredump 记录（coredumpctl 优先，回退扫描文件目录） | ✅ |
+| `numa_stat` | `plugins/sysdiag/numa.go` | NUMA 节点内存分布+跨节点访问统计，检测不对称内存和高 miss 率 | ✅ |
+| `thermal_zone` | `plugins/sysdiag/thermal.go` | 热区温度读取（毫摄氏度转换），含 trip point，高温告警 | ✅ |
+| `lvm_status` | `plugins/sysdiag/lvm.go` | LVM 卷组+逻辑卷状态（vgs/lvs），解析 attr 标志位检测异常 | ✅ |

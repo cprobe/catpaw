@@ -39,6 +39,8 @@ func (p *SystemdPlugin) RegisterDiagnoseTools(registry *diagnose.ToolRegistry) {
 		Scope:       diagnose.ToolScopeLocal,
 		Execute:     execServiceListFailed,
 	})
+
+	registerJournalQuery(registry)
 }
 
 func execServiceStatus(ctx context.Context, args map[string]string) (string, error) {
