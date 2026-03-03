@@ -3,6 +3,7 @@ package diagnose
 import (
 	"context"
 	"fmt"
+	"sort"
 	"strings"
 	"sync"
 )
@@ -160,6 +161,29 @@ func (r *ToolRegistry) ToolCount() int {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	return len(r.toolIndex)
+}
+
+// CategoriesWithTools returns all categories with their tools, sorted by category name.
+func (r *ToolRegistry) CategoriesWithTools() []ToolCategory {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	result := make([]ToolCategory, 0, len(r.categories))
+	for _, cat := range r.categories {
+		c := ToolCategory{
+			Name:        cat.Name,
+			Plugin:      cat.Plugin,
+			Description: cat.Description,
+			Scope:       cat.Scope,
+			Tools:       make([]DiagnoseTool, len(cat.Tools)),
+		}
+		copy(c.Tools, cat.Tools)
+		result = append(result, c)
+	}
+	sort.Slice(result, func(i, j int) bool {
+		return result[i].Name < result[j].Name
+	})
+	return result
 }
 
 // HasAccessorFactory reports whether a plugin has a registered accessor factory.
