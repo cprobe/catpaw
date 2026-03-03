@@ -331,11 +331,13 @@ func (ins *Instance) gather(q *safe.Queue[*types.Event], target string) {
 	resp, err := ins.client.Do(request)
 	responseTime := time.Since(start)
 
+	connAttrs := map[string]string{
+		"response_time":   responseTime.String(),
+		"threshold_desc": fmt.Sprintf("%s: connection failed", ins.Connectivity.Severity),
+	}
 	connEvent := types.BuildEvent(map[string]string{
 		"check": "http::connectivity",
-	}, labels).SetAttrs(map[string]string{
-		"response_time": responseTime.String(),
-	})
+	}, labels).SetAttrs(connAttrs)
 
 	if err != nil {
 		connEvent.SetEventStatus(ins.Connectivity.Severity)
@@ -354,13 +356,19 @@ func (ins *Instance) gather(q *safe.Queue[*types.Event], target string) {
 	defer resp.Body.Close()
 
 	if ins.ResponseTime.WarnGe > 0 || ins.ResponseTime.CriticalGe > 0 {
+		var rtParts []string
+		if ins.ResponseTime.WarnGe > 0 {
+			rtParts = append(rtParts, fmt.Sprintf("Warning ≥ %s", ins.ResponseTime.WarnGe.HumanString()))
+		}
+		if ins.ResponseTime.CriticalGe > 0 {
+			rtParts = append(rtParts, fmt.Sprintf("Critical ≥ %s", ins.ResponseTime.CriticalGe.HumanString()))
+		}
 		rtEvent := types.BuildEvent(map[string]string{
 			"check": "http::response_time",
 		}, labels).SetAttrs(map[string]string{
-			"response_time":      responseTime.String(),
-			"warn_threshold":     ins.ResponseTime.WarnGe.HumanString(),
-			"critical_threshold": ins.ResponseTime.CriticalGe.HumanString(),
-		})
+			"response_time":   responseTime.String(),
+			"threshold_desc": strings.Join(rtParts, ", "),
+		}).SetCurrentValue(responseTime.String())
 
 		if ins.ResponseTime.CriticalGe > 0 && responseTime >= time.Duration(ins.ResponseTime.CriticalGe) {
 			rtEvent.SetEventStatus(types.EventStatusCritical)
@@ -388,12 +396,18 @@ func (ins *Instance) gather(q *safe.Queue[*types.Event], target string) {
 			certEvent.SetEventStatus(types.EventStatusCritical)
 			certEvent.SetDescription("no peer certificates found in TLS connection")
 		} else {
+			var certParts []string
+			if ins.CertExpiry.WarnWithin > 0 {
+				certParts = append(certParts, fmt.Sprintf("Warning: expires within %s", ins.CertExpiry.WarnWithin.HumanString()))
+			}
+			if ins.CertExpiry.CriticalWithin > 0 {
+				certParts = append(certParts, fmt.Sprintf("Critical: within %s", ins.CertExpiry.CriticalWithin.HumanString()))
+			}
 			timeUntilExpiry := time.Until(certExpiry)
 			certEvent.SetAttrs(map[string]string{
-				"cert_expires_at":     certExpiry.Format("2006-01-02 15:04:05"),
-				"time_until_expiry":   timeUntilExpiry.Truncate(time.Minute).String(),
-				"warn_within":         ins.CertExpiry.WarnWithin.HumanString(),
-				"critical_within":     ins.CertExpiry.CriticalWithin.HumanString(),
+				"cert_expires_at":   certExpiry.Format("2006-01-02 15:04:05"),
+				"time_until_expiry": timeUntilExpiry.Truncate(time.Minute).String(),
+				"threshold_desc":    strings.Join(certParts, ", "),
 			})
 
 			if ins.CertExpiry.CriticalWithin > 0 && timeUntilExpiry <= time.Duration(ins.CertExpiry.CriticalWithin) {
@@ -430,8 +444,9 @@ func (ins *Instance) gather(q *safe.Queue[*types.Event], target string) {
 			"check": "http::status_code",
 		}, labels).SetAttrs(map[string]string{
 			"status_code":    statusCode,
-			"expect_code":    fmt.Sprintf("%v", ins.StatusCode.Expect),
-			"response_body":  truncateBody(body, maxBodyDisplaySize),
+			"expect_code":   fmt.Sprintf("%v", ins.StatusCode.Expect),
+			"response_body": truncateBody(body, maxBodyDisplaySize),
+			"threshold_desc": fmt.Sprintf("%s: status code does not match expected", ins.StatusCode.Severity),
 		})
 
 		if !ins.StatusCode.filter.Match(statusCode) {
@@ -446,8 +461,9 @@ func (ins *Instance) gather(q *safe.Queue[*types.Event], target string) {
 
 	if ins.ResponseBody.ExpectSubstring != "" || ins.ResponseBody.compiledRegex != nil {
 		rbAttrs := map[string]string{
-			"status_code":   statusCode,
-			"response_body": truncateBody(body, maxBodyDisplaySize),
+			"status_code":    statusCode,
+			"response_body":  truncateBody(body, maxBodyDisplaySize),
+			"threshold_desc": fmt.Sprintf("%s: response body does not match", ins.ResponseBody.Severity),
 		}
 		var matched bool
 		var expectDesc string

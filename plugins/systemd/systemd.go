@@ -191,6 +191,7 @@ func (ins *Instance) gatherUnit(q *safe.Queue[*types.Event], unit string) {
 		"check":  "systemd::state",
 		"target": unit,
 	}).SetAttrs(attrs).SetCurrentValue(activeState)
+	event.Attrs[types.AttrThresholdDesc] = fmt.Sprintf("%s: state ≠ %s", ins.State.Severity, ins.ExpectedActiveState)
 
 	// LoadState not-found: unit does not exist
 	if loadState == "not-found" {

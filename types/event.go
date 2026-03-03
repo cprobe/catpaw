@@ -13,6 +13,11 @@ const (
 	// that triggered an alert. Plugins should set this so that diagnosis records
 	// and AI prompts can display it consistently.
 	AttrCurrentValue = "current_value"
+
+	// AttrThresholdDesc is a human-readable description of the threshold(s)
+	// that define when this check fires. Plugins format it freely, e.g.
+	// "Warning ≥ 80.0%, Critical ≥ 95.0%" or "Critical: state ≠ active".
+	AttrThresholdDesc = "threshold_desc"
 )
 
 type Event struct {
@@ -66,6 +71,7 @@ func (e *Event) SetCurrentValue(v string) *Event {
 	e.Attrs[AttrCurrentValue] = v
 	return e
 }
+
 
 func (e *Event) SetDescription(desc string) *Event {
 	e.Description = desc

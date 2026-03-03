@@ -239,9 +239,12 @@ func (ins *Instance) gatherTarget(q *safe.Queue[*types.Event], target string) {
 }
 
 func (ins *Instance) checkResolution(q *safe.Queue[*types.Event], target string, ips []string, err error, rt time.Duration, baseLabels, attrLabels map[string]string) {
+	resAttrs := mergeMaps(attrLabels, map[string]string{
+		"threshold_desc": fmt.Sprintf("%s: resolve failed", ins.Resolution.Severity),
+	})
 	event := types.BuildEvent(mergeMaps(map[string]string{
 		"check": "dns::resolution",
-	}, baseLabels)).SetAttrs(attrLabels)
+	}, baseLabels)).SetAttrs(resAttrs)
 
 	if err != nil {
 		event.SetEventStatus(ins.Resolution.Severity)
@@ -256,7 +259,8 @@ func (ins *Instance) checkResolution(q *safe.Queue[*types.Event], target string,
 
 func (ins *Instance) checkExpectedIPs(q *safe.Queue[*types.Event], target string, ips []string, baseLabels, attrLabels map[string]string) {
 	extraAttrs := mergeMaps(attrLabels, map[string]string{
-		"expected_ips": strings.Join(ins.ExpectedIPs, ","),
+		"expected_ips":    strings.Join(ins.ExpectedIPs, ","),
+		"threshold_desc": fmt.Sprintf("%s: expected IP not found", ins.Resolution.Severity),
 	})
 
 	event := types.BuildEvent(mergeMaps(map[string]string{
@@ -288,17 +292,20 @@ func (ins *Instance) checkResponseTime(q *safe.Queue[*types.Event], target strin
 		return
 	}
 
-	extraAttrs := mergeMaps(attrLabels)
+	var parts []string
 	if ins.ResponseTime.WarnGe > 0 {
-		extraAttrs["warn_threshold"] = time.Duration(ins.ResponseTime.WarnGe).String()
+		parts = append(parts, fmt.Sprintf("Warning ≥ %s", time.Duration(ins.ResponseTime.WarnGe).String()))
 	}
 	if ins.ResponseTime.CriticalGe > 0 {
-		extraAttrs["critical_threshold"] = time.Duration(ins.ResponseTime.CriticalGe).String()
+		parts = append(parts, fmt.Sprintf("Critical ≥ %s", time.Duration(ins.ResponseTime.CriticalGe).String()))
 	}
+	extraAttrs := mergeMaps(attrLabels, map[string]string{
+		"threshold_desc": strings.Join(parts, ", "),
+	})
 
 	event := types.BuildEvent(mergeMaps(map[string]string{
 		"check": "dns::response_time",
-	}, baseLabels)).SetAttrs(extraAttrs)
+	}, baseLabels)).SetAttrs(extraAttrs).SetCurrentValue(responseTime.String())
 
 	if ins.ResponseTime.CriticalGe > 0 && responseTime >= time.Duration(ins.ResponseTime.CriticalGe) {
 		event.SetEventStatus(types.EventStatusCritical)

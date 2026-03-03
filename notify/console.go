@@ -6,7 +6,6 @@ import (
 	"sort"
 	"strings"
 	"time"
-	"unicode/utf8"
 
 	"github.com/cprobe/catpaw/types"
 )
@@ -91,14 +90,7 @@ func printEvent(event *types.Event) {
 		}
 	}
 
-	desc := event.Description
-	if len(desc) > 500 {
-		desc = desc[:500]
-		for len(desc) > 0 && !utf8.ValidString(desc) {
-			desc = desc[:len(desc)-1]
-		}
-		desc += "..."
-	}
+	desc := truncateHeadTail(event.Description, 500, 200)
 	if desc != "" {
 		sb.WriteString("    ")
 		sb.WriteString(desc)
@@ -106,6 +98,20 @@ func printEvent(event *types.Event) {
 	}
 
 	fmt.Print(sb.String())
+}
+
+// truncateHeadTail keeps the first headRunes and last tailRunes runes,
+// replacing the middle with an ellipsis showing how many runes were omitted.
+func truncateHeadTail(s string, headRunes, tailRunes int) string {
+	runes := []rune(s)
+	total := len(runes)
+	if total <= headRunes+tailRunes {
+		return s
+	}
+	omitted := total - headRunes - tailRunes
+	return string(runes[:headRunes]) +
+		fmt.Sprintf("\n... [省略 %d 字符] ...\n", omitted) +
+		string(runes[total-tailRunes:])
 }
 
 func sortedKeys(m map[string]string) []string {

@@ -268,9 +268,12 @@ func (ins *Instance) gather(q *safe.Queue[*types.Event], target string) {
 		"target": target,
 	}
 
+	connAttrs := map[string]string{
+		"threshold_desc": fmt.Sprintf("%s: ping failed", ins.Connectivity.Severity),
+	}
 	connEvent := types.BuildEvent(map[string]string{
 		"check": "ping::connectivity",
-	}, labels)
+	}, labels).SetAttrs(connAttrs)
 
 	stats, err := ins.ping(target)
 	if err != nil {
@@ -300,13 +303,19 @@ func (ins *Instance) gather(q *safe.Queue[*types.Event], target string) {
 	q.PushFront(connEvent)
 
 	if ins.PacketLoss.WarnGe > 0 || ins.PacketLoss.CriticalGe > 0 {
+		var plParts []string
+		if ins.PacketLoss.WarnGe > 0 {
+			plParts = append(plParts, fmt.Sprintf("Warning ≥ %.1f%%", ins.PacketLoss.WarnGe))
+		}
+		if ins.PacketLoss.CriticalGe > 0 {
+			plParts = append(plParts, fmt.Sprintf("Critical ≥ %.1f%%", ins.PacketLoss.CriticalGe))
+		}
 		plEvent := types.BuildEvent(map[string]string{
 			"check": "ping::packet_loss",
 		}, labels).SetAttrs(map[string]string{
-			"packet_loss":        fmt.Sprintf("%.2f%%", stats.PacketLoss),
-			"warn_threshold":     fmt.Sprintf("%.1f%%", ins.PacketLoss.WarnGe),
-			"critical_threshold": fmt.Sprintf("%.1f%%", ins.PacketLoss.CriticalGe),
-		})
+			"packet_loss":    fmt.Sprintf("%.2f%%", stats.PacketLoss),
+			"threshold_desc": strings.Join(plParts, ", "),
+		}).SetCurrentValue(fmt.Sprintf("%.2f%%", stats.PacketLoss))
 
 		if ins.PacketLoss.CriticalGe > 0 && stats.PacketLoss >= ins.PacketLoss.CriticalGe {
 			plEvent.SetEventStatus(types.EventStatusCritical)
@@ -322,15 +331,21 @@ func (ins *Instance) gather(q *safe.Queue[*types.Event], target string) {
 	}
 
 	if ins.Rtt.WarnGe > 0 || ins.Rtt.CriticalGe > 0 {
+		var rttParts []string
+		if ins.Rtt.WarnGe > 0 {
+			rttParts = append(rttParts, fmt.Sprintf("Warning ≥ %s", ins.Rtt.WarnGe.HumanString()))
+		}
+		if ins.Rtt.CriticalGe > 0 {
+			rttParts = append(rttParts, fmt.Sprintf("Critical ≥ %s", ins.Rtt.CriticalGe.HumanString()))
+		}
 		rttEvent := types.BuildEvent(map[string]string{
 			"check": "ping::rtt",
 		}, labels).SetAttrs(map[string]string{
-			"avg_rtt":            stats.AvgRtt.String(),
-			"min_rtt":            stats.MinRtt.String(),
-			"max_rtt":            stats.MaxRtt.String(),
-			"warn_threshold":     ins.Rtt.WarnGe.HumanString(),
-			"critical_threshold": ins.Rtt.CriticalGe.HumanString(),
-		})
+			"avg_rtt":        stats.AvgRtt.String(),
+			"min_rtt":        stats.MinRtt.String(),
+			"max_rtt":        stats.MaxRtt.String(),
+			"threshold_desc": strings.Join(rttParts, ", "),
+		}).SetCurrentValue(stats.AvgRtt.String())
 
 		if ins.Rtt.CriticalGe > 0 && stats.AvgRtt >= time.Duration(ins.Rtt.CriticalGe) {
 			rttEvent.SetEventStatus(types.EventStatusCritical)

@@ -8,6 +8,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/cprobe/catpaw/diagnose"
+	"github.com/cprobe/catpaw/diagnose/aiclient"
 )
 
 // --- spinner: animated progress for long-running phases (AI thinking) ---
@@ -162,6 +163,19 @@ func formatToolArgsDisplay(name, rawArgs string) string {
 	default:
 		return ""
 	}
+}
+
+func printTokenUsage(usage aiclient.Usage, inputPrice, outputPrice float64) {
+	if usage.TotalTokens == 0 {
+		return
+	}
+	fmt.Printf("\n  %s── token: in=%d out=%d total=%d",
+		colorGray, usage.PromptTokens, usage.CompletionTokens, usage.TotalTokens)
+	if inputPrice > 0 || outputPrice > 0 {
+		cost := float64(usage.PromptTokens)*inputPrice/1e6 + float64(usage.CompletionTokens)*outputPrice/1e6
+		fmt.Printf(" | cost=$%.4f", cost)
+	}
+	fmt.Printf(" ──%s\n", colorReset)
 }
 
 func fmtDur(d time.Duration) string {

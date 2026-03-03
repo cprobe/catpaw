@@ -2,6 +2,7 @@ package mem
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/cprobe/catpaw/config"
 	"github.com/cprobe/catpaw/pkg/conv"
@@ -108,6 +109,16 @@ func (ins *Instance) checkMemoryUsage(q *safe.Queue[*types.Event]) {
 		"buffers":      conv.HumanBytes(vm.Buffers),
 		"cached":       conv.HumanBytes(vm.Cached),
 	}).SetCurrentValue(fmt.Sprintf("%.1f%%", vm.UsedPercent)).SetDescription("everything is ok")
+	var memParts []string
+	if ins.MemoryUsage.WarnGe > 0 {
+		memParts = append(memParts, fmt.Sprintf("Warning ≥ %.1f%%", ins.MemoryUsage.WarnGe))
+	}
+	if ins.MemoryUsage.CriticalGe > 0 {
+		memParts = append(memParts, fmt.Sprintf("Critical ≥ %.1f%%", ins.MemoryUsage.CriticalGe))
+	}
+	if len(memParts) > 0 {
+		event.Attrs["threshold_desc"] = strings.Join(memParts, ", ")
+	}
 
 	status := types.EvaluateGeThreshold(vm.UsedPercent, ins.MemoryUsage.WarnGe, ins.MemoryUsage.CriticalGe)
 	if status != types.EventStatusOk {
@@ -155,6 +166,16 @@ func (ins *Instance) checkSwapUsage(q *safe.Queue[*types.Event]) {
 		"swap_free":         conv.HumanBytes(swap.Free),
 		"swap_used_percent": fmt.Sprintf("%.1f%%", swap.UsedPercent),
 	}).SetCurrentValue(fmt.Sprintf("%.1f%%", swap.UsedPercent)).SetDescription("everything is ok")
+	var swapParts []string
+	if ins.SwapUsage.WarnGe > 0 {
+		swapParts = append(swapParts, fmt.Sprintf("Warning ≥ %.1f%%", ins.SwapUsage.WarnGe))
+	}
+	if ins.SwapUsage.CriticalGe > 0 {
+		swapParts = append(swapParts, fmt.Sprintf("Critical ≥ %.1f%%", ins.SwapUsage.CriticalGe))
+	}
+	if len(swapParts) > 0 {
+		event.Attrs["threshold_desc"] = strings.Join(swapParts, ", ")
+	}
 
 	status := types.EvaluateGeThreshold(swap.UsedPercent, ins.SwapUsage.WarnGe, ins.SwapUsage.CriticalGe)
 	if status != types.EventStatusOk {

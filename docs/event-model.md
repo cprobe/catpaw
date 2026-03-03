@@ -61,7 +61,8 @@ Labels 分为两类：
 - `used_percent` — 磁盘使用率
 - `response_time` — 响应时间
 - `packet_loss` — 丢包率
-- `warn_threshold` / `critical_threshold` — 告警阈值
+- `current_value` — 触发告警的主要指标值
+- `threshold_desc` — 人类可读的阈值描述，如 `"Warning ≥ 80.0%, Critical ≥ 95.0%"` 或 `"Critical: state ≠ active"`
 - 等等
 
 插件通过 `event.SetAttrs(map[string]string{...})` 设置这些属性。这种设计的好处：

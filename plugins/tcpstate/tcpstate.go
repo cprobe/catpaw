@@ -3,6 +3,7 @@ package tcpstate
 import (
 	"fmt"
 	"runtime"
+	"strings"
 
 	"github.com/cprobe/catpaw/config"
 	"github.com/cprobe/catpaw/pkg/safe"
@@ -143,6 +144,16 @@ func (ins *Instance) emitStateEvent(q *safe.Queue[*types.Event], check, stateNam
 		"check":  check,
 		"target": "system",
 	}).SetAttrs(attrs).SetCurrentValue(fmt.Sprintf("%d", count))
+	var tdParts []string
+	if sc.WarnGe > 0 {
+		tdParts = append(tdParts, fmt.Sprintf("Warning ≥ %.0f", sc.WarnGe))
+	}
+	if sc.CriticalGe > 0 {
+		tdParts = append(tdParts, fmt.Sprintf("Critical ≥ %.0f", sc.CriticalGe))
+	}
+	if len(tdParts) > 0 {
+		event.Attrs["threshold_desc"] = strings.Join(tdParts, ", ")
+	}
 	fcount := float64(count)
 
 	status := types.EvaluateGeThreshold(fcount, sc.WarnGe, sc.CriticalGe)

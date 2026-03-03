@@ -3,6 +3,7 @@ package uptime
 import (
 	"fmt"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/cprobe/catpaw/config"
@@ -86,11 +87,15 @@ func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
 	if bootTimeSec > 0 {
 		attrs["boot_time"] = time.Unix(int64(bootTimeSec), 0).Format("2006-01-02 15:04:05 MST")
 	}
-	if criticalDur > 0 {
-		attrs["critical_lt"] = humanDuration(criticalDur)
-	}
-	if warnDur > 0 {
-		attrs["warn_lt"] = humanDuration(warnDur)
+	if criticalDur > 0 || warnDur > 0 {
+		var parts []string
+		if warnDur > 0 {
+			parts = append(parts, fmt.Sprintf("Warning < %s", humanDuration(warnDur)))
+		}
+		if criticalDur > 0 {
+			parts = append(parts, fmt.Sprintf("Critical < %s", humanDuration(criticalDur)))
+		}
+		attrs["threshold_desc"] = strings.Join(parts, ", ")
 	}
 
 	event := types.BuildEvent(map[string]string{

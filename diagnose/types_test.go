@@ -62,11 +62,11 @@ func TestDiagnoseRequestFields(t *testing.T) {
 		Target: "10.0.0.1:6379",
 		Checks: []CheckSnapshot{
 			{
-				Check:            "redis::used_memory",
-				Status:           "Warning",
-				CurrentValue:     "1.8GB",
-				WarningThreshold: "1GB",
-				Description:      "used_memory 1.8GB >= warning threshold 1GB",
+				Check:         "redis::used_memory",
+				Status:        "Warning",
+				CurrentValue:  "1.8GB",
+				ThresholdDesc: "Warning ≥ 1GB",
+				Description:   "used_memory 1.8GB >= warning threshold 1GB",
 			},
 		},
 		Timeout:  60 * time.Second,

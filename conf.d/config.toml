@@ -56,6 +56,10 @@ enabled = true
 # queue_full_policy = "drop"         # 并发满时策略: drop(丢弃) 或 wait(等待)
 # daily_token_limit = 500000         # 每日 token 消耗上限（0=不限）
 #
+## Token 价格（用于 chat 模式展示预估成本，单位：美元/百万 token，0=不显示）
+# input_price = 2.50                   # 例：GPT-4o $2.50/1M input tokens
+# output_price = 10.00                  # 例：GPT-4o $10.00/1M output tokens
+#
 ## 工具与聚合
 # tool_timeout = "10s"               # 单个诊断工具执行超时
 # aggregate_window = "5s"            # 同目标告警聚合窗口

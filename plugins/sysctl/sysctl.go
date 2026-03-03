@@ -22,6 +22,12 @@ var validOps = map[string]bool{
 	"gt": true, "lt": true,
 }
 
+var opSymbol = map[string]string{
+	"eq": "=", "ne": "≠",
+	"ge": "≥", "le": "≤",
+	"gt": ">", "lt": "<",
+}
+
 type ParamSpec struct {
 	Key      string `toml:"key"`
 	Op       string `toml:"op"`
@@ -162,14 +168,14 @@ func (ins *Instance) checkParam(q *safe.Queue[*types.Event], p *ParamSpec) {
 
 	matched, err := compareValues(actual, p.Value, p.Op)
 	if err != nil {
-		event := buildEvent(p).SetAttrs(map[string]string{"actual": actual})
+		event := buildEvent(p).SetAttrs(map[string]string{"actual": actual}).SetCurrentValue(actual)
 		event.SetEventStatus(types.EventStatusCritical).
 			SetDescription(fmt.Sprintf("%s: comparison error: %v", p.Key, err))
 		q.PushFront(event)
 		return
 	}
 
-	event := buildEvent(p).SetAttrs(map[string]string{"actual": actual})
+	event := buildEvent(p).SetAttrs(map[string]string{"actual": actual}).SetCurrentValue(actual)
 
 	if matched {
 		event.SetEventStatus(types.EventStatusOk).
@@ -183,10 +189,17 @@ func (ins *Instance) checkParam(q *safe.Queue[*types.Event], p *ParamSpec) {
 }
 
 func buildEvent(p *ParamSpec) *types.Event {
+	sym := opSymbol[p.Op]
+	if sym == "" {
+		sym = p.Op
+	}
 	return types.BuildEvent(map[string]string{
 		"check":  "sysctl::param_check",
 		"target": p.Key,
-	}).SetAttrs(map[string]string{"expect": p.Op + " " + p.Value})
+	}).SetAttrs(map[string]string{
+		"expect":         p.Op + " " + p.Value,
+		"threshold_desc": fmt.Sprintf("%s: %s %s %s", p.Severity, p.Key, sym, p.Value),
+	})
 }
 
 func keyToPath(key string) string {

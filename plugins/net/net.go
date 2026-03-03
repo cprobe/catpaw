@@ -183,11 +183,13 @@ func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
 			defer func() {
 				if r := recover(); r != nil {
 					logger.Logger.Errorw("panic in net gather goroutine", "target", target, "recover", r)
-					q.PushFront(types.BuildEvent(map[string]string{
+					ev := types.BuildEvent(map[string]string{
 						"check":  "net::connectivity",
 						"target": target,
 					}).SetEventStatus(types.EventStatusCritical).
-						SetDescription(fmt.Sprintf("panic during check: %v", r)))
+						SetDescription(fmt.Sprintf("panic during check: %v", r)).
+						SetAttrs(map[string]string{"threshold_desc": fmt.Sprintf("%s: unreachable", ins.Connectivity.Severity)})
+					q.PushFront(ev)
 				}
 				se.Release()
 				wg.Done()
@@ -224,6 +226,7 @@ func (ins *Instance) TCPGather(address string, labels map[string]string, q *safe
 	conn, err := net.DialTimeout("tcp", address, time.Duration(ins.Timeout))
 	if err != nil {
 		event.SetAttrs(map[string]string{"response_time": time.Since(start).String()})
+		event.Attrs["threshold_desc"] = fmt.Sprintf("%s: unreachable", ins.Connectivity.Severity)
 		q.PushFront(event.SetEventStatus(ins.Connectivity.Severity).
 			SetDescription(fmt.Sprintf("connection error: %v", err)))
 		logger.Logger.Errorw("failed to send tcp request", "error", err, "plugin", pluginName, "target", address)
@@ -235,6 +238,7 @@ func (ins *Instance) TCPGather(address string, labels map[string]string, q *safe
 	if ins.Send != "" {
 		if _, err = conn.Write([]byte(ins.Send)); err != nil {
 			event.SetAttrs(map[string]string{"response_time": time.Since(start).String()})
+			event.Attrs["threshold_desc"] = fmt.Sprintf("%s: unreachable", ins.Connectivity.Severity)
 			q.PushFront(event.SetEventStatus(ins.Connectivity.Severity).
 				SetDescription(fmt.Sprintf("failed to send message: %s, error: %v", ins.Send, err)))
 			return
@@ -244,6 +248,7 @@ func (ins *Instance) TCPGather(address string, labels map[string]string, q *safe
 	if ins.Expect != "" {
 		if err := conn.SetReadDeadline(time.Now().Add(time.Duration(ins.ReadTimeout))); err != nil {
 			event.SetAttrs(map[string]string{"response_time": time.Since(start).String()})
+			event.Attrs["threshold_desc"] = fmt.Sprintf("%s: unreachable", ins.Connectivity.Severity)
 			q.PushFront(event.SetEventStatus(ins.Connectivity.Severity).
 				SetDescription(fmt.Sprintf("failed to set read deadline, error: %v", err)))
 			return
@@ -268,6 +273,7 @@ func (ins *Instance) TCPGather(address string, labels map[string]string, q *safe
 
 		if !strings.Contains(data, ins.Expect) {
 			event.SetAttrs(map[string]string{"response_time": time.Since(start).String()})
+			event.Attrs["threshold_desc"] = fmt.Sprintf("%s: unreachable", ins.Connectivity.Severity)
 			q.PushFront(event.SetEventStatus(ins.Connectivity.Severity).
 				SetDescription(fmt.Sprintf("response mismatch. expected: %s, real response: %s", ins.Expect, truncateStr(data, maxResponseDisplaySize))))
 			return
@@ -292,6 +298,7 @@ func (ins *Instance) UDPGather(address string, labels map[string]string, q *safe
 	udpAddr, err := net.ResolveUDPAddr("udp", address)
 	if err != nil {
 		event.SetAttrs(map[string]string{"response_time": time.Since(start).String()})
+		event.Attrs["threshold_desc"] = fmt.Sprintf("%s: unreachable", ins.Connectivity.Severity)
 		q.PushFront(event.SetEventStatus(ins.Connectivity.Severity).
 			SetDescription(fmt.Sprintf("resolve udp address(%s) error: %v", address, err)))
 		logger.Logger.Errorw("resolve udp address fail", "address", address, "error", err)
@@ -301,6 +308,7 @@ func (ins *Instance) UDPGather(address string, labels map[string]string, q *safe
 	conn, err := net.DialUDP("udp", nil, udpAddr)
 	if err != nil {
 		event.SetAttrs(map[string]string{"response_time": time.Since(start).String()})
+		event.Attrs["threshold_desc"] = fmt.Sprintf("%s: unreachable", ins.Connectivity.Severity)
 		q.PushFront(event.SetEventStatus(ins.Connectivity.Severity).
 			SetDescription(fmt.Sprintf("dial udp address(%s) error: %v", address, err)))
 		logger.Logger.Errorw("dial udp address fail", "address", address, "error", err)
@@ -311,6 +319,7 @@ func (ins *Instance) UDPGather(address string, labels map[string]string, q *safe
 
 	if _, err = conn.Write([]byte(ins.Send)); err != nil {
 		event.SetAttrs(map[string]string{"response_time": time.Since(start).String()})
+		event.Attrs["threshold_desc"] = fmt.Sprintf("%s: unreachable", ins.Connectivity.Severity)
 		q.PushFront(event.SetEventStatus(ins.Connectivity.Severity).
 			SetDescription(fmt.Sprintf("write string(%s) to udp address(%s) error: %v", ins.Send, address, err)))
 		logger.Logger.Errorw("write to udp address fail", "address", address, "send", ins.Send, "error", err)
@@ -319,6 +328,7 @@ func (ins *Instance) UDPGather(address string, labels map[string]string, q *safe
 
 	if err = conn.SetReadDeadline(time.Now().Add(time.Duration(ins.ReadTimeout))); err != nil {
 		event.SetAttrs(map[string]string{"response_time": time.Since(start).String()})
+		event.Attrs["threshold_desc"] = fmt.Sprintf("%s: unreachable", ins.Connectivity.Severity)
 		q.PushFront(event.SetEventStatus(ins.Connectivity.Severity).
 			SetDescription(fmt.Sprintf("set connection deadline to udp address(%s) error: %v", address, err)))
 		logger.Logger.Errorw("set udp read deadline fail", "address", address, "error", err)
@@ -329,6 +339,7 @@ func (ins *Instance) UDPGather(address string, labels map[string]string, q *safe
 	n, _, err := conn.ReadFromUDP(buf)
 	if err != nil {
 		event.SetAttrs(map[string]string{"response_time": time.Since(start).String()})
+		event.Attrs["threshold_desc"] = fmt.Sprintf("%s: unreachable", ins.Connectivity.Severity)
 		q.PushFront(event.SetEventStatus(ins.Connectivity.Severity).
 			SetDescription(fmt.Sprintf("read from udp address(%s) error: %v", address, err)))
 		logger.Logger.Errorw("read from udp address fail", "address", address, "error", err)
@@ -338,6 +349,7 @@ func (ins *Instance) UDPGather(address string, labels map[string]string, q *safe
 	data := string(buf[:n])
 	if !strings.Contains(data, ins.Expect) {
 		event.SetAttrs(map[string]string{"response_time": time.Since(start).String()})
+		event.Attrs["threshold_desc"] = fmt.Sprintf("%s: unreachable", ins.Connectivity.Severity)
 		q.PushFront(event.SetEventStatus(ins.Connectivity.Severity).
 			SetDescription(fmt.Sprintf("response mismatch. expect: %s, real: %s", ins.Expect, truncateStr(data, maxResponseDisplaySize))))
 		logger.Logger.Errorw("udp response mismatch", "address", address, "expect", ins.Expect, "actual", truncateStr(data, maxResponseDisplaySize))
@@ -358,12 +370,20 @@ func (ins *Instance) checkResponseTime(q *safe.Queue[*types.Event], address stri
 	}
 
 	rtEvent := types.BuildEvent(map[string]string{
-		"check":                                 "net::response_time",
+		"check": "net::response_time",
 	}, labels).SetAttrs(map[string]string{
-		"response_time":      responseTime.String(),
-		"warn_threshold":     ins.ResponseTime.WarnGe.HumanString(),
-		"critical_threshold": ins.ResponseTime.CriticalGe.HumanString(),
+		"response_time": responseTime.String(),
 	}).SetCurrentValue(responseTime.String())
+	var parts []string
+	if ins.ResponseTime.WarnGe > 0 {
+		parts = append(parts, fmt.Sprintf("Warning ≥ %s", ins.ResponseTime.WarnGe.HumanString()))
+	}
+	if ins.ResponseTime.CriticalGe > 0 {
+		parts = append(parts, fmt.Sprintf("Critical ≥ %s", ins.ResponseTime.CriticalGe.HumanString()))
+	}
+	if len(parts) > 0 {
+		rtEvent.Attrs["threshold_desc"] = strings.Join(parts, ", ")
+	}
 
 	if ins.ResponseTime.CriticalGe > 0 && responseTime >= time.Duration(ins.ResponseTime.CriticalGe) {
 		rtEvent.SetEventStatus(types.EventStatusCritical)

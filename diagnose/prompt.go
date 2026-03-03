@@ -33,14 +33,18 @@ catpaw 监控系统检测到以下告警：
 检查项: {{(index .Checks 0).Check}}
 严重级别: {{(index .Checks 0).Status}}
 当前值: {{(index .Checks 0).CurrentValue}}
-阈值: warning={{(index .Checks 0).WarningThreshold}}, critical={{(index .Checks 0).CriticalThreshold}}
+{{- if (index .Checks 0).ThresholdDesc}}
+阈值: {{(index .Checks 0).ThresholdDesc}}
+{{- end}}
 描述: {{(index .Checks 0).Description}}
 {{- else if gt (len .Checks) 1 -}}
 ### 告警详情（同一目标有 {{len .Checks}} 个异常检查项，可能存在关联）
 {{range $i, $c := .Checks}}
 [{{add $i 1}}] {{$c.Check}} - {{$c.Status}}
     当前值: {{$c.CurrentValue}}
-    阈值: warning={{$c.WarningThreshold}}, critical={{$c.CriticalThreshold}}
+    {{- if $c.ThresholdDesc}}
+    阈值: {{$c.ThresholdDesc}}
+    {{- end}}
     描述: {{$c.Description}}
 {{- end}}
 请特别关注这些异常之间是否存在共同根因。

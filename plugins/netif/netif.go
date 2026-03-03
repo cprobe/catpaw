@@ -226,6 +226,17 @@ func emitDeltaEvent(q *safe.Queue[*types.Event], checkLabel, kind, iface string,
 		"tx":    strconv.FormatUint(txDelta, 10),
 		"total": strconv.FormatUint(total, 10),
 	})
+	event.SetCurrentValue(strconv.FormatUint(delta, 10))
+	var tdParts []string
+	if dc.WarnGe > 0 {
+		tdParts = append(tdParts, fmt.Sprintf("Warning ≥ %.0f", dc.WarnGe))
+	}
+	if dc.CriticalGe > 0 {
+		tdParts = append(tdParts, fmt.Sprintf("Critical ≥ %.0f", dc.CriticalGe))
+	}
+	if len(tdParts) > 0 {
+		event.Attrs["threshold_desc"] = strings.Join(tdParts, ", ")
+	}
 
 	status := types.EvaluateGeThreshold(float64(delta), dc.WarnGe, dc.CriticalGe)
 	event.SetEventStatus(status)
@@ -262,7 +273,8 @@ func (ins *Instance) gatherLink(q *safe.Queue[*types.Event], spec *LinkSpec) {
 	}).SetAttrs(map[string]string{
 		"operstate": operstate,
 		"expect":    "up",
-	})
+	}).SetCurrentValue(operstate)
+	event.Attrs["threshold_desc"] = fmt.Sprintf("%s: link ≠ up", spec.Severity)
 
 	if operstate == "not_found" {
 		q.PushFront(event.SetEventStatus(spec.Severity).

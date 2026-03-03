@@ -155,8 +155,9 @@ func (ins *Instance) checkMount(q *safe.Queue[*types.Event], spec *MountSpec, mo
 			"check":  "mount::compliance",
 			"target": spec.Path,
 		}).SetAttrs(map[string]string{
-			"actual": "not mounted",
-			"expect": expect,
+			"actual":         "not mounted",
+			"expect":         expect,
+			"threshold_desc": fmt.Sprintf("%s: not mounted", spec.Severity),
 		}).
 			SetEventStatus(spec.Severity).
 			SetDescription(formatNotMounted(spec)))
@@ -168,6 +169,7 @@ func (ins *Instance) checkMount(q *safe.Queue[*types.Event], spec *MountSpec, mo
 	attrs := map[string]string{"actual": actual, "expect": expect}
 
 	if spec.FSType != "" && entry.fsType != spec.FSType {
+		attrs["threshold_desc"] = fmt.Sprintf("%s: fstype ≠ %s", spec.Severity, spec.FSType)
 		q.PushFront(types.BuildEvent(map[string]string{
 			"check":  "mount::compliance",
 			"target": spec.Path,
@@ -185,6 +187,7 @@ func (ins *Instance) checkMount(q *safe.Queue[*types.Event], spec *MountSpec, mo
 			}
 		}
 		if len(missing) > 0 {
+			attrs["threshold_desc"] = fmt.Sprintf("%s: missing mount options", spec.Severity)
 			q.PushFront(types.BuildEvent(map[string]string{
 				"check":  "mount::compliance",
 				"target": spec.Path,
@@ -200,6 +203,7 @@ func (ins *Instance) checkMount(q *safe.Queue[*types.Event], spec *MountSpec, mo
 	if len(spec.Options) > 0 {
 		desc += " with expected options (" + strings.Join(spec.Options, ", ") + ")"
 	}
+	attrs["threshold_desc"] = fmt.Sprintf("%s: mount compliance check", spec.Severity)
 	q.PushFront(types.BuildEvent(map[string]string{
 		"check":  "mount::compliance",
 		"target": spec.Path,

@@ -141,7 +141,8 @@ func Run(verbose bool) error {
 		msgCount := len(messages)
 
 		var reply string
-		reply, messages, err = runConversationTurn(ctx, client, retryCfg, registry, aiTools, messages, toolTimeout, rl, verbose)
+		var usage aiclient.Usage
+		reply, messages, usage, err = runConversationTurn(ctx, client, retryCfg, registry, aiTools, messages, toolTimeout, rl, verbose)
 		if err != nil {
 			fmt.Printf("\033[31merror: %v\033[0m\n\n", err)
 			messages = messages[:msgCount-1]
@@ -150,6 +151,7 @@ func Run(verbose bool) error {
 
 		fmt.Println()
 		fmt.Println(reply)
+		printTokenUsage(usage, cfg.InputPrice, cfg.OutputPrice)
 		fmt.Println()
 	}
 	return nil
@@ -215,8 +217,9 @@ func runConversationTurn(
 	toolTimeout time.Duration,
 	rl *readline.Instance,
 	verbose bool,
-) (string, []aiclient.Message, error) {
+) (string, []aiclient.Message, aiclient.Usage, error) {
 	const maxRounds = 20
+	var totalUsage aiclient.Usage
 
 	for round := 0; round < maxRounds; round++ {
 		roundNum := round + 1
@@ -227,11 +230,15 @@ func runConversationTurn(
 		sp.stop()
 		printThinkingDone(roundNum, time.Since(start))
 		if err != nil {
-			return "", messages, fmt.Errorf("AI API call failed: %w", err)
+			return "", messages, totalUsage, fmt.Errorf("AI API call failed: %w", err)
 		}
 
+		totalUsage.PromptTokens += resp.Usage.PromptTokens
+		totalUsage.CompletionTokens += resp.Usage.CompletionTokens
+		totalUsage.TotalTokens += resp.Usage.TotalTokens
+
 		if len(resp.Choices) == 0 {
-			return "", messages, fmt.Errorf("AI returned empty response")
+			return "", messages, totalUsage, fmt.Errorf("AI returned empty response")
 		}
 
 		choice := resp.Choices[0]
@@ -243,7 +250,7 @@ func runConversationTurn(
 				Role:    "assistant",
 				Content: content,
 			})
-			return content, messages, nil
+			return content, messages, totalUsage, nil
 		}
 
 		if content != "" {
@@ -290,7 +297,7 @@ func runConversationTurn(
 		}
 	}
 
-	return "[incomplete] max tool-calling rounds reached", messages, nil
+	return "[incomplete] max tool-calling rounds reached", messages, totalUsage, nil
 }
 
 func executeChatTool(ctx context.Context, registry *diagnose.ToolRegistry, name, rawArgs string, toolTimeout time.Duration, rl *readline.Instance) string {

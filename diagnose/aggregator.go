@@ -127,12 +127,11 @@ func shouldTrigger(cfg config.DiagnoseConfig, eventStatus string) bool {
 // ExtractCheckSnapshot builds a CheckSnapshot from an event's labels.
 func ExtractCheckSnapshot(event *types.Event) CheckSnapshot {
 	return CheckSnapshot{
-		Check:             event.Labels["check"],
-		Status:            event.EventStatus,
-		CurrentValue:      extractAttr(event, types.AttrCurrentValue, ""),
-		WarningThreshold:  extractAttr(event, "warn_ge", extractAttr(event, "warn_lt", "")),
-		CriticalThreshold: extractAttr(event, "critical_ge", extractAttr(event, "critical_lt", "")),
-		Description:       event.Description,
+		Check:         event.Labels["check"],
+		Status:        event.EventStatus,
+		CurrentValue:  extractAttr(event, types.AttrCurrentValue, ""),
+		ThresholdDesc: extractAttr(event, types.AttrThresholdDesc, ""),
+		Description:   event.Description,
 	}
 }
 

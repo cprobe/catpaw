@@ -2,6 +2,7 @@ package cpu
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/cprobe/catpaw/config"
@@ -141,6 +142,16 @@ func (ins *Instance) checkCpuUsage(q *safe.Queue[*types.Event]) {
 		"cpu_usage": fmt.Sprintf("%.1f%%", usage),
 		"cpu_cores": fmt.Sprintf("%d", ins.cpuCores),
 	}).SetCurrentValue(fmt.Sprintf("%.1f%%", usage)).SetDescription("everything is ok")
+	var parts []string
+	if ins.CpuUsage.WarnGe > 0 {
+		parts = append(parts, fmt.Sprintf("Warning ≥ %.1f%%", ins.CpuUsage.WarnGe))
+	}
+	if ins.CpuUsage.CriticalGe > 0 {
+		parts = append(parts, fmt.Sprintf("Critical ≥ %.1f%%", ins.CpuUsage.CriticalGe))
+	}
+	if len(parts) > 0 {
+		event.Attrs["threshold_desc"] = strings.Join(parts, ", ")
+	}
 
 	intervalHint := "interval avg"
 	if ins.Interval > 0 {
@@ -202,6 +213,16 @@ func (ins *Instance) checkLoadAverage(q *safe.Queue[*types.Event]) {
 		"cpu_cores":     fmt.Sprintf("%d", ins.cpuCores),
 		"period":        ins.LoadAverage.Period,
 	}).SetCurrentValue(fmt.Sprintf("%.2f", perCoreLoad)).SetDescription("everything is ok")
+	var loadParts []string
+	if ins.LoadAverage.WarnGe > 0 {
+		loadParts = append(loadParts, fmt.Sprintf("Warning ≥ %.2f", ins.LoadAverage.WarnGe))
+	}
+	if ins.LoadAverage.CriticalGe > 0 {
+		loadParts = append(loadParts, fmt.Sprintf("Critical ≥ %.2f", ins.LoadAverage.CriticalGe))
+	}
+	if len(loadParts) > 0 {
+		event.Attrs["threshold_desc"] = strings.Join(loadParts, ", ")
+	}
 
 	status := types.EvaluateGeThreshold(perCoreLoad, ins.LoadAverage.WarnGe, ins.LoadAverage.CriticalGe)
 	if status != types.EventStatusOk {

@@ -349,7 +349,7 @@ func isActiveState(state string) bool {
 
 func (ins *Instance) checkContainerRunning(q *safe.Queue[*types.Event], c containerListEntry, name, shortID string) {
 	event := ins.buildContainerEvent("docker::container_running", name, shortID, c.Image).
-		SetAttrs(map[string]string{"state": c.State, "status": c.Status}).
+		SetAttrs(map[string]string{"state": c.State, "status": c.Status, "threshold_desc": "Warning: paused/restarting, Critical: not running"}).
 		SetCurrentValue(c.State)
 
 	switch c.State {
@@ -431,7 +431,18 @@ func (ins *Instance) checkRestartDetected(q *safe.Queue[*types.Event], detail *c
 	if t := parseDockerTime(detail.State.FinishedAt); !t.IsZero() {
 		attrs["finished_at"] = t.Local().Format("2006-01-02 15:04:05 MST")
 	}
-	event := ins.buildContainerEvent("docker::restart_detected", name, shortID, image).SetAttrs(attrs)
+	event := ins.buildContainerEvent("docker::restart_detected", name, shortID, image).SetAttrs(attrs).
+		SetCurrentValue(strconv.Itoa(restartsInWindow))
+	var tdParts []string
+	if warnGe > 0 {
+		tdParts = append(tdParts, fmt.Sprintf("Warning ≥ %d", warnGe))
+	}
+	if criticalGe > 0 {
+		tdParts = append(tdParts, fmt.Sprintf("Critical ≥ %d", criticalGe))
+	}
+	if len(tdParts) > 0 {
+		event.Attrs["threshold_desc"] = strings.Join(tdParts, ", ")
+	}
 
 	if criticalGe > 0 && restartsInWindow >= criticalGe {
 		desc := fmt.Sprintf("container %q restarted %d times in last %s, above critical threshold %d",
@@ -469,7 +480,9 @@ func (ins *Instance) checkHealthStatus(q *safe.Queue[*types.Event], detail *cont
 			attrs["health_last_output"] = truncate(strings.TrimSpace(lastOutput), 200)
 		}
 	}
-	event := ins.buildContainerEvent("docker::health_status", name, shortID, image).SetAttrs(attrs)
+	attrs["threshold_desc"] = "Critical: health ≠ healthy"
+	event := ins.buildContainerEvent("docker::health_status", name, shortID, image).SetAttrs(attrs).
+		SetCurrentValue(health.Status)
 
 	switch health.Status {
 	case "healthy":
@@ -529,6 +542,16 @@ func (ins *Instance) checkCpuUsage(q *safe.Queue[*types.Event], stats *container
 		attrs["cpu_throttled_time"] = fmt.Sprintf("%.1fs", throttledSec)
 	}
 	event := ins.buildContainerEvent("docker::cpu_usage", name, shortID, image).SetAttrs(attrs).SetCurrentValue(fmt.Sprintf("%.1f%%", cpuPercent))
+	var cpuTdParts []string
+	if ins.CpuUsage.WarnGe > 0 {
+		cpuTdParts = append(cpuTdParts, fmt.Sprintf("Warning ≥ %.0f%%", ins.CpuUsage.WarnGe))
+	}
+	if ins.CpuUsage.CriticalGe > 0 {
+		cpuTdParts = append(cpuTdParts, fmt.Sprintf("Critical ≥ %.0f%%", ins.CpuUsage.CriticalGe))
+	}
+	if len(cpuTdParts) > 0 {
+		event.Attrs["threshold_desc"] = strings.Join(cpuTdParts, ", ")
+	}
 
 	status := types.EvaluateGeThreshold(cpuPercent, ins.CpuUsage.WarnGe, ins.CpuUsage.CriticalGe)
 	event.SetEventStatus(status)
@@ -576,6 +599,16 @@ func (ins *Instance) checkMemoryUsage(q *safe.Queue[*types.Event], stats *contai
 		"memory_used":    usedStr,
 		"memory_limit":  limitStr,
 	}).SetCurrentValue(fmt.Sprintf("%.1f%%", memPercent))
+	var memTdParts []string
+	if ins.MemoryUsage.WarnGe > 0 {
+		memTdParts = append(memTdParts, fmt.Sprintf("Warning ≥ %.0f%%", ins.MemoryUsage.WarnGe))
+	}
+	if ins.MemoryUsage.CriticalGe > 0 {
+		memTdParts = append(memTdParts, fmt.Sprintf("Critical ≥ %.0f%%", ins.MemoryUsage.CriticalGe))
+	}
+	if len(memTdParts) > 0 {
+		event.Attrs["threshold_desc"] = strings.Join(memTdParts, ", ")
+	}
 
 	status := types.EvaluateGeThreshold(memPercent, ins.MemoryUsage.WarnGe, ins.MemoryUsage.CriticalGe)
 	event.SetEventStatus(status)

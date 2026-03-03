@@ -223,7 +223,14 @@ func (ins *Instance) checkExistence(q *safe.Queue[*types.Event], missing []strin
 		"target": target,
 	})
 	if len(missing) > 0 {
-		event.SetAttrs(map[string]string{"missing_count": fmt.Sprintf("%d", len(missing))})
+		event.SetAttrs(map[string]string{
+			"missing_count":  fmt.Sprintf("%d", len(missing)),
+			"threshold_desc": fmt.Sprintf("%s: target files missing", ins.Existence.Severity),
+		})
+	} else {
+		event.SetAttrs(map[string]string{
+			"threshold_desc": fmt.Sprintf("%s: target files missing", ins.Existence.Severity),
+		})
 	}
 
 	var desc strings.Builder
@@ -292,13 +299,19 @@ func (ins *Instance) checkMtime(q *safe.Queue[*types.Event], files []string) {
 		return
 	}
 
+	timeSpanStr := timeSpan.String()
+	thresholdDesc := fmt.Sprintf("%s: file not updated within %s", ins.Mtime.Severity, timeSpanStr)
+	if ins.Mtime.Mode == "changed" {
+		thresholdDesc = fmt.Sprintf("%s: file changed within %s", ins.Mtime.Severity, timeSpanStr)
+	}
 	event := types.BuildEvent(map[string]string{
 		"check":  "filecheck::mtime",
 		"target": target,
 	}).SetAttrs(map[string]string{
-		"matched_count": fmt.Sprintf("%d", len(matched)),
-		"mode":          ins.Mtime.Mode,
-		"time_span":     timeSpan.String(),
+		"matched_count":   fmt.Sprintf("%d", len(matched)),
+		"mode":            ins.Mtime.Mode,
+		"time_span":       timeSpanStr,
+		"threshold_desc":  thresholdDesc,
 	})
 
 	var desc strings.Builder
@@ -375,7 +388,8 @@ func (ins *Instance) checkChecksum(q *safe.Queue[*types.Event], files []string) 
 		"check":  "filecheck::checksum",
 		"target": target,
 	}).SetAttrs(map[string]string{
-		"changed_count": fmt.Sprintf("%d", len(changedFiles)),
+		"changed_count":  fmt.Sprintf("%d", len(changedFiles)),
+		"threshold_desc": fmt.Sprintf("%s: file checksum changed", ins.Checksum.Severity),
 	})
 
 	var desc strings.Builder

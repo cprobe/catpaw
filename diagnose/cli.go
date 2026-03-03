@@ -148,11 +148,8 @@ func printRecordDetail(r *DiagnoseRecord) {
 	fmt.Printf("Target: %s\n", r.Alert.Target)
 	for i, c := range r.Alert.Checks {
 		fmt.Printf("Check[%d]: %s status=%s value=%s", i, c.Check, c.Status, c.CurrentValue)
-		if c.WarningThreshold != "" {
-			fmt.Printf(" warn=%s", c.WarningThreshold)
-		}
-		if c.CriticalThreshold != "" {
-			fmt.Printf(" crit=%s", c.CriticalThreshold)
+		if c.ThresholdDesc != "" {
+			fmt.Printf(" threshold=%q", c.ThresholdDesc)
 		}
 		fmt.Println()
 	}

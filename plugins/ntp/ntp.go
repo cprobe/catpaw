@@ -402,6 +402,13 @@ func (ins *Instance) checkSync(q *safe.Queue[*types.Event], r *ntpResult) {
 		"target": "ntp",
 	}).SetAttrs(ins.attrLabels(r))
 
+	event.Attrs["threshold_desc"] = fmt.Sprintf("%s: NTP not synchronized", ins.Sync.Severity)
+	if r.synced {
+		event.SetCurrentValue("synced")
+	} else {
+		event.SetCurrentValue("not synced")
+	}
+
 	if r.synced {
 		desc := fmt.Sprintf("NTP synchronized (mode: %s", ins.detectedMode)
 		if r.source != "" {
@@ -439,7 +446,18 @@ func (ins *Instance) checkOffset(q *safe.Queue[*types.Event], r *ntpResult) {
 	event := types.BuildEvent(map[string]string{
 		"check":  "ntp::offset",
 		"target": "ntp",
-	}).SetAttrs(attrs)
+	}).SetAttrs(attrs).SetCurrentValue(absOffset.String())
+
+	var tdParts []string
+	if ins.Offset.WarnGe > 0 {
+		tdParts = append(tdParts, fmt.Sprintf("Warning ≥ %s", time.Duration(ins.Offset.WarnGe)))
+	}
+	if ins.Offset.CriticalGe > 0 {
+		tdParts = append(tdParts, fmt.Sprintf("Critical ≥ %s", time.Duration(ins.Offset.CriticalGe)))
+	}
+	if len(tdParts) > 0 {
+		event.Attrs["threshold_desc"] = strings.Join(tdParts, ", ")
+	}
 
 	if ins.Offset.CriticalGe > 0 && absOffset >= time.Duration(ins.Offset.CriticalGe) {
 		q.PushFront(event.SetEventStatus(types.EventStatusCritical).
@@ -473,7 +491,18 @@ func (ins *Instance) checkStratum(q *safe.Queue[*types.Event], r *ntpResult) {
 	event := types.BuildEvent(map[string]string{
 		"check":  "ntp::stratum",
 		"target": "ntp",
-	}).SetAttrs(attrs)
+	}).SetAttrs(attrs).SetCurrentValue(fmt.Sprintf("%d", r.stratum))
+
+	var tdParts []string
+	if ins.Stratum.WarnGe > 0 {
+		tdParts = append(tdParts, fmt.Sprintf("Warning ≥ %d", ins.Stratum.WarnGe))
+	}
+	if ins.Stratum.CriticalGe > 0 {
+		tdParts = append(tdParts, fmt.Sprintf("Critical ≥ %d", ins.Stratum.CriticalGe))
+	}
+	if len(tdParts) > 0 {
+		event.Attrs["threshold_desc"] = strings.Join(tdParts, ", ")
+	}
 
 	if ins.Stratum.CriticalGe > 0 && r.stratum >= ins.Stratum.CriticalGe {
 		q.PushFront(event.SetEventStatus(types.EventStatusCritical).

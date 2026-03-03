@@ -424,6 +424,13 @@ func (ins *Instance) evaluateExpiry(event *types.Event, cert *x509.Certificate, 
 	timeUntil := time.Until(expiry)
 	now := time.Now()
 
+	var certParts []string
+	if check.WarnWithin > 0 {
+		certParts = append(certParts, fmt.Sprintf("Warning: expires within %s", humanDuration(time.Duration(check.WarnWithin))))
+	}
+	if check.CriticalWithin > 0 {
+		certParts = append(certParts, fmt.Sprintf("Critical: within %s", humanDuration(time.Duration(check.CriticalWithin))))
+	}
 	attrs := map[string]string{
 		"cert_subject":     cert.Subject.String(),
 		"cert_issuer":      cert.Issuer.String(),
@@ -432,8 +439,7 @@ func (ins *Instance) evaluateExpiry(event *types.Event, cert *x509.Certificate, 
 		"cert_not_before":  cert.NotBefore.UTC().Format("2006-01-02 15:04:05"),
 		"cert_expires_at":  expiry.UTC().Format("2006-01-02 15:04:05"),
 		"cert_chain_count": strconv.Itoa(chainLen),
-		"warn_within":      humanDuration(time.Duration(check.WarnWithin)),
-		"critical_within":  humanDuration(time.Duration(check.CriticalWithin)),
+		"threshold_desc":   strings.Join(certParts, ", "),
 	}
 	if timeUntil >= 0 {
 		attrs["time_until_expiry"] = humanDuration(timeUntil)

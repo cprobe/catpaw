@@ -193,18 +193,22 @@ func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
 	logger.Logger.Debugw("search result", "target", ins.searchLabel, "count", count)
 
 	pc := ins.ProcessCount
-	attrs := map[string]string{"process_count": fmt.Sprintf("%d", count)}
+	var parts []string
 	if pc.WarnLt != nil {
-		attrs["warn_lt"] = fmt.Sprintf("%d", *pc.WarnLt)
+		parts = append(parts, fmt.Sprintf("Warning < %d", *pc.WarnLt))
 	}
 	if pc.CriticalLt != nil {
-		attrs["critical_lt"] = fmt.Sprintf("%d", *pc.CriticalLt)
+		parts = append(parts, fmt.Sprintf("Critical < %d", *pc.CriticalLt))
 	}
 	if pc.WarnGt != nil {
-		attrs["warn_gt"] = fmt.Sprintf("%d", *pc.WarnGt)
+		parts = append(parts, fmt.Sprintf("Warning > %d", *pc.WarnGt))
 	}
 	if pc.CriticalGt != nil {
-		attrs["critical_gt"] = fmt.Sprintf("%d", *pc.CriticalGt)
+		parts = append(parts, fmt.Sprintf("Critical > %d", *pc.CriticalGt))
+	}
+	attrs := map[string]string{
+		"process_count":  fmt.Sprintf("%d", count),
+		"threshold_desc": strings.Join(parts, ", "),
 	}
 	event := ins.newEvent().SetAttrs(attrs)
 

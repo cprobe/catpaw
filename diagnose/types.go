@@ -60,12 +60,11 @@ type ToolCategory struct {
 // CheckSnapshot captures the current state of one alerting check at the moment
 // the diagnosis is triggered. Produced by Gather(), consumed by the DiagnoseEngine.
 type CheckSnapshot struct {
-	Check             string `json:"check"`
-	Status            string `json:"status"`
-	CurrentValue      string `json:"current_value"`
-	WarningThreshold  string `json:"warning_threshold,omitempty"`
-	CriticalThreshold string `json:"critical_threshold,omitempty"`
-	Description       string `json:"description"`
+	Check         string `json:"check"`
+	Status        string `json:"status"`
+	CurrentValue  string `json:"current_value"`
+	ThresholdDesc string `json:"threshold_desc,omitempty"`
+	Description   string `json:"description"`
 }
 
 const (

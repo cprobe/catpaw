@@ -202,6 +202,16 @@ func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
 		"check":  "procfd::fd_usage",
 		"target": ins.searchLabel,
 	}).SetAttrs(attrs).SetCurrentValue(fmt.Sprintf("%.1f%%", worst.usagePercent))
+	var parts []string
+	if ins.FdUsage.WarnGe > 0 {
+		parts = append(parts, fmt.Sprintf("Warning ≥ %.0f%%", ins.FdUsage.WarnGe))
+	}
+	if ins.FdUsage.CriticalGe > 0 {
+		parts = append(parts, fmt.Sprintf("Critical ≥ %.0f%%", ins.FdUsage.CriticalGe))
+	}
+	if len(parts) > 0 {
+		event.Attrs["threshold_desc"] = strings.Join(parts, ", ")
+	}
 
 	status := types.EvaluateGeThreshold(worst.usagePercent, ins.FdUsage.WarnGe, ins.FdUsage.CriticalGe)
 	event.SetEventStatus(status)

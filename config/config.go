@@ -87,6 +87,9 @@ type AIConfig struct {
 
 	Language string `toml:"language"` // output language: "zh", "en", etc. Default: "zh"
 
+	InputPrice  float64 `toml:"input_price"`  // USD per 1M input tokens (0 = don't show cost)
+	OutputPrice float64 `toml:"output_price"` // USD per 1M output tokens
+
 	MCP MCPConfig `toml:"mcp"`
 }
 

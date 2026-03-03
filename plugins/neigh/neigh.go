@@ -106,7 +106,18 @@ func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
 		"entries":       entriesStr,
 		"gc_thresh3":    gcThresh3Str,
 		"usage_percent": fmt.Sprintf("%.1f%%", usagePercent),
-	})
+	}).SetCurrentValue(fmt.Sprintf("%.1f%%", usagePercent))
+
+	var tdParts []string
+	if ins.NeighUsage.WarnGe > 0 {
+		tdParts = append(tdParts, fmt.Sprintf("Warning ≥ %.0f%%", ins.NeighUsage.WarnGe))
+	}
+	if ins.NeighUsage.CriticalGe > 0 {
+		tdParts = append(tdParts, fmt.Sprintf("Critical ≥ %.0f%%", ins.NeighUsage.CriticalGe))
+	}
+	if len(tdParts) > 0 {
+		event.Attrs["threshold_desc"] = strings.Join(tdParts, ", ")
+	}
 
 	status := types.EvaluateGeThreshold(usagePercent, ins.NeighUsage.WarnGe, ins.NeighUsage.CriticalGe)
 	event.SetEventStatus(status)

@@ -2,6 +2,7 @@ package zombie
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/cprobe/catpaw/config"
 	"github.com/cprobe/catpaw/logger"
@@ -69,13 +70,17 @@ func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
 	logger.Logger.Debugw("zombie count", "count", count)
 
 	attrs := map[string]string{"zombie_count": fmt.Sprintf("%d", count)}
-	if ins.CriticalGt != nil {
-		attrs["critical_gt"] = fmt.Sprintf("%d", *ins.CriticalGt)
-	}
+	var tdParts []string
 	if ins.WarnGt != nil {
-		attrs["warn_gt"] = fmt.Sprintf("%d", *ins.WarnGt)
+		tdParts = append(tdParts, fmt.Sprintf("Warning > %d", *ins.WarnGt))
 	}
-	event := ins.newEvent().SetAttrs(attrs)
+	if ins.CriticalGt != nil {
+		tdParts = append(tdParts, fmt.Sprintf("Critical > %d", *ins.CriticalGt))
+	}
+	if len(tdParts) > 0 {
+		attrs["threshold_desc"] = strings.Join(tdParts, ", ")
+	}
+	event := ins.newEvent().SetAttrs(attrs).SetCurrentValue(fmt.Sprintf("%d", count))
 
 	if ins.CriticalGt != nil && count > *ins.CriticalGt {
 		q.PushFront(event.SetEventStatus(types.EventStatusCritical).

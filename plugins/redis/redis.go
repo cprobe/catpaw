@@ -561,7 +561,10 @@ func (ins *Instance) gatherTarget(q *safe.Queue[*types.Event], target string) {
 
 	acc, err := ins.newAccessor(target)
 	if err != nil {
-		connEvent.SetAttrs(map[string]string{"response_time": time.Since(start).String()})
+		connEvent.SetAttrs(map[string]string{
+			"response_time":   time.Since(start).String(),
+			"threshold_desc": fmt.Sprintf("%s: redis ping failed", ins.Connectivity.Severity),
+		})
 		q.PushFront(connEvent.SetEventStatus(ins.Connectivity.Severity).
 			SetDescription(fmt.Sprintf("redis ping failed: %v", err)))
 		return
@@ -569,14 +572,20 @@ func (ins *Instance) gatherTarget(q *safe.Queue[*types.Event], target string) {
 	defer acc.Close()
 
 	if err := acc.Ping(); err != nil {
-		connEvent.SetAttrs(map[string]string{"response_time": time.Since(start).String()})
+		connEvent.SetAttrs(map[string]string{
+			"response_time":   time.Since(start).String(),
+			"threshold_desc": fmt.Sprintf("%s: redis ping failed", ins.Connectivity.Severity),
+		})
 		q.PushFront(connEvent.SetEventStatus(ins.Connectivity.Severity).
 			SetDescription(fmt.Sprintf("redis ping failed: %v", err)))
 		return
 	}
 
 	responseTime := time.Since(start)
-	connEvent.SetAttrs(map[string]string{"response_time": responseTime.String()})
+	connEvent.SetAttrs(map[string]string{
+		"response_time":   responseTime.String(),
+		"threshold_desc": fmt.Sprintf("%s: redis ping failed", ins.Connectivity.Severity),
+	})
 	q.PushFront(connEvent.SetDescription("redis ping ok"))
 
 	ins.checkResponseTime(q, target, responseTime)
@@ -722,12 +731,16 @@ func (ins *Instance) checkResponseTime(q *safe.Queue[*types.Event], target strin
 		return
 	}
 
-	attrs := map[string]string{"response_time": responseTime.String()}
+	var parts []string
 	if ins.ResponseTime.WarnGe > 0 {
-		attrs["warn_ge"] = time.Duration(ins.ResponseTime.WarnGe).String()
+		parts = append(parts, fmt.Sprintf("Warning ≥ %s", time.Duration(ins.ResponseTime.WarnGe).String()))
 	}
 	if ins.ResponseTime.CriticalGe > 0 {
-		attrs["critical_ge"] = time.Duration(ins.ResponseTime.CriticalGe).String()
+		parts = append(parts, fmt.Sprintf("Critical ≥ %s", time.Duration(ins.ResponseTime.CriticalGe).String()))
+	}
+	attrs := map[string]string{
+		"response_time":   responseTime.String(),
+		"threshold_desc": strings.Join(parts, ", "),
 	}
 	event := ins.newEvent("redis::response_time", target).SetAttrs(attrs).SetCurrentValue(responseTime.String())
 
@@ -756,7 +769,11 @@ func (ins *Instance) checkRole(q *safe.Queue[*types.Event], target string, info 
 	}
 
 	actual = strings.ToLower(strings.TrimSpace(actual))
-	event.SetAttrs(map[string]string{"actual": actual, "expect": ins.Role.Expect}).SetCurrentValue(actual)
+	event.SetAttrs(map[string]string{
+		"actual":         actual,
+		"expect":         ins.Role.Expect,
+		"threshold_desc": fmt.Sprintf("%s: role ≠ %s", ins.Role.Severity, ins.Role.Expect),
+	}).SetCurrentValue(actual)
 
 	if actual == ins.Role.Expect {
 		q.PushFront(event.SetDescription(fmt.Sprintf("redis role is %s, matches expectation", actual)))
@@ -769,7 +786,9 @@ func (ins *Instance) checkRole(q *safe.Queue[*types.Event], target string, info 
 
 func (ins *Instance) checkMasterLink(q *safe.Queue[*types.Event], target string, info map[string]string) {
 	event := ins.newEvent("redis::master_link_status", target)
-	attrs := make(map[string]string)
+	attrs := map[string]string{
+		"threshold_desc": fmt.Sprintf("%s: master link status does not match expected", ins.MasterLink.Severity),
+	}
 	if role, ok := info["role"]; ok {
 		attrs["role"] = role
 	}
@@ -802,12 +821,16 @@ func (ins *Instance) checkMasterLink(q *safe.Queue[*types.Event], target string,
 
 func (ins *Instance) checkCount(q *safe.Queue[*types.Event], target, check string, value int, thresholds CountCheck, metricName string) {
 	labelKey := strings.TrimPrefix(check, "redis::")
-	attrs := map[string]string{labelKey: strconv.Itoa(value)}
+	var parts []string
 	if thresholds.WarnGe > 0 {
-		attrs["warn_ge"] = strconv.Itoa(thresholds.WarnGe)
+		parts = append(parts, fmt.Sprintf("Warning ≥ %d", thresholds.WarnGe))
 	}
 	if thresholds.CriticalGe > 0 {
-		attrs["critical_ge"] = strconv.Itoa(thresholds.CriticalGe)
+		parts = append(parts, fmt.Sprintf("Critical ≥ %d", thresholds.CriticalGe))
+	}
+	attrs := map[string]string{
+		labelKey:         strconv.Itoa(value),
+		"threshold_desc": strings.Join(parts, ", "),
 	}
 	event := ins.newEvent(check, target).SetAttrs(attrs).SetCurrentValue(strconv.Itoa(value))
 
@@ -860,12 +883,16 @@ func (ins *Instance) checkMinCountFromInfo(q *safe.Queue[*types.Event], target, 
 
 func (ins *Instance) checkMinCount(q *safe.Queue[*types.Event], target, check string, value int, thresholds MinCountCheck, metricName string) {
 	labelKey := strings.TrimPrefix(check, "redis::")
-	attrs := map[string]string{labelKey: strconv.Itoa(value)}
+	var parts []string
 	if thresholds.WarnLt > 0 {
-		attrs["warn_lt"] = strconv.Itoa(thresholds.WarnLt)
+		parts = append(parts, fmt.Sprintf("Warning < %d", thresholds.WarnLt))
 	}
 	if thresholds.CriticalLt > 0 {
-		attrs["critical_lt"] = strconv.Itoa(thresholds.CriticalLt)
+		parts = append(parts, fmt.Sprintf("Critical < %d", thresholds.CriticalLt))
+	}
+	attrs := map[string]string{
+		labelKey:         strconv.Itoa(value),
+		"threshold_desc": strings.Join(parts, ", "),
 	}
 	event := ins.newEvent(check, target).SetAttrs(attrs).SetCurrentValue(strconv.Itoa(value))
 
@@ -1002,15 +1029,17 @@ func (ins *Instance) checkCounterDeltas(q *safe.Queue[*types.Event], target stri
 }
 
 func (ins *Instance) checkDeltaCount(q *safe.Queue[*types.Event], target, check string, delta, total uint64, thresholds CountCheck, metricName string) {
-	attrs := map[string]string{
-		"delta": strconv.FormatUint(delta, 10),
-		"total": strconv.FormatUint(total, 10),
-	}
+	var parts []string
 	if thresholds.WarnGe > 0 {
-		attrs["warn_ge"] = strconv.Itoa(thresholds.WarnGe)
+		parts = append(parts, fmt.Sprintf("Warning ≥ %d", thresholds.WarnGe))
 	}
 	if thresholds.CriticalGe > 0 {
-		attrs["critical_ge"] = strconv.Itoa(thresholds.CriticalGe)
+		parts = append(parts, fmt.Sprintf("Critical ≥ %d", thresholds.CriticalGe))
+	}
+	attrs := map[string]string{
+		"delta":          strconv.FormatUint(delta, 10),
+		"total":          strconv.FormatUint(total, 10),
+		"threshold_desc": strings.Join(parts, ", "),
 	}
 	event := ins.newEvent(check, target).SetAttrs(attrs).SetCurrentValue(strconv.FormatUint(delta, 10))
 
@@ -1041,15 +1070,17 @@ func (ins *Instance) checkUsedMemory(q *safe.Queue[*types.Event], target string,
 		return
 	}
 
-	attrs := map[string]string{
-		"used_memory":      conv.HumanBytes(uint64(usedMemory)),
-		"used_memory_bytes": strconv.FormatInt(usedMemory, 10),
-	}
+	var memParts []string
 	if ins.UsedMemory.WarnGe > 0 {
-		attrs["warn_ge"] = ins.UsedMemory.WarnGe.String()
+		memParts = append(memParts, fmt.Sprintf("Warning ≥ %s", ins.UsedMemory.WarnGe.String()))
 	}
 	if ins.UsedMemory.CriticalGe > 0 {
-		attrs["critical_ge"] = ins.UsedMemory.CriticalGe.String()
+		memParts = append(memParts, fmt.Sprintf("Critical ≥ %s", ins.UsedMemory.CriticalGe.String()))
+	}
+	attrs := map[string]string{
+		"used_memory":     conv.HumanBytes(uint64(usedMemory)),
+		"used_memory_bytes": strconv.FormatInt(usedMemory, 10),
+		"threshold_desc":  strings.Join(memParts, ", "),
 	}
 	if maxmemory, ok, err := infoGetInt64(info, "maxmemory"); err == nil && ok && maxmemory > 0 {
 		attrs["maxmemory"] = conv.HumanBytes(uint64(maxmemory))
@@ -1104,6 +1135,7 @@ func (ins *Instance) checkPersistence(q *safe.Queue[*types.Event], target string
 	if v, ok := info["aof_rewrite_in_progress"]; ok {
 		attrs["aof_rewrite_in_progress"] = v
 	}
+	attrs["threshold_desc"] = fmt.Sprintf("%s: persistence not healthy", ins.Persistence.Severity)
 	event.SetAttrs(attrs)
 
 	if loading == 1 {

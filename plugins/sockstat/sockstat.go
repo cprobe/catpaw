@@ -124,6 +124,16 @@ func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
 		"total_overflows": overflowsStr,
 		"total_drops":     dropsStr,
 	}).SetCurrentValue(deltaStr)
+	var tdParts []string
+	if ins.ListenOverflow.WarnGe > 0 {
+		tdParts = append(tdParts, fmt.Sprintf("Warning ≥ %.0f", ins.ListenOverflow.WarnGe))
+	}
+	if ins.ListenOverflow.CriticalGe > 0 {
+		tdParts = append(tdParts, fmt.Sprintf("Critical ≥ %.0f", ins.ListenOverflow.CriticalGe))
+	}
+	if len(tdParts) > 0 {
+		event.Attrs["threshold_desc"] = strings.Join(tdParts, ", ")
+	}
 
 	status := types.EvaluateGeThreshold(float64(delta), ins.ListenOverflow.WarnGe, ins.ListenOverflow.CriticalGe)
 	event.SetEventStatus(status)

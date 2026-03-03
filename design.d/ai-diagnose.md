@@ -528,12 +528,11 @@ type DiagnoseRequest struct {
 }
 
 type CheckSnapshot struct {
-    Check             string  // "redis::used_memory"
-    Status            string  // "Warning" / "Critical"
-    CurrentValue      string  // "1.8GB"
-    WarningThreshold  string  // "1GB"
-    CriticalThreshold string  // "2GB"
-    Description       string  // "used_memory 1.8GB >= warning threshold 1GB"
+    Check         string  // "redis::used_memory"
+    Status        string  // "Warning" / "Critical"
+    CurrentValue  string  // "1.8GB"
+    ThresholdDesc string  // "Warning ≥ 1GB, Critical ≥ 2GB"
+    Description   string  // "used_memory 1.8GB >= warning threshold 1GB"
 }
 ```
 
@@ -1166,14 +1165,14 @@ AI 模型有上下文窗口限制（如 GPT-4o 为 128K tokens）。Agent loop �
 检查项: {{(index .Checks 0).Check}}
 严重级别: {{(index .Checks 0).Status}}
 当前值: {{(index .Checks 0).CurrentValue}}
-阈值: warning={{(index .Checks 0).WarningThreshold}}, critical={{(index .Checks 0).CriticalThreshold}}
+阈值: {{(index .Checks 0).ThresholdDesc}}
 描述: {{(index .Checks 0).Description}}
 {{else}}
 ### 告警详情（同一目标有 {{len .Checks}} 个异常检查项，可能存在关联）
 {{range $i, $c := .Checks}}
 [{{add $i 1}}] {{$c.Check}} - {{$c.Status}}
     当前值: {{$c.CurrentValue}}
-    阈值: warning={{$c.WarningThreshold}}, critical={{$c.CriticalThreshold}}
+    阈值: {{$c.ThresholdDesc}}
     描述: {{$c.Description}}
 {{end}}
 请特别关注这些异常之间是否存在共同根因。

@@ -241,6 +241,16 @@ func (ins *Instance) checkUsage(q *safe.Queue[*types.Event], mountPoint, device,
 		"available":    conv.HumanBytes(usage.Free),
 		"used_percent": fmt.Sprintf("%.1f%%", usage.UsedPercent),
 	}).SetCurrentValue(fmt.Sprintf("%.1f%%", usage.UsedPercent)).SetDescription("everything is ok")
+	var spaceParts []string
+	if ins.SpaceUsage.WarnGe > 0 {
+		spaceParts = append(spaceParts, fmt.Sprintf("Warning ≥ %.1f%%", ins.SpaceUsage.WarnGe))
+	}
+	if ins.SpaceUsage.CriticalGe > 0 {
+		spaceParts = append(spaceParts, fmt.Sprintf("Critical ≥ %.1f%%", ins.SpaceUsage.CriticalGe))
+	}
+	if len(spaceParts) > 0 {
+		event.Attrs["threshold_desc"] = strings.Join(spaceParts, ", ")
+	}
 
 	if ins.SpaceUsage.CriticalGe > 0 && usage.UsedPercent >= ins.SpaceUsage.CriticalGe {
 		q.PushFront(event.SetEventStatus(types.EventStatusCritical).
@@ -277,6 +287,16 @@ func (ins *Instance) checkInodes(q *safe.Queue[*types.Event], mountPoint, device
 		"inodes_free":         fmt.Sprintf("%d", usage.InodesFree),
 		"inodes_used_percent": fmt.Sprintf("%.1f%%", usage.InodesUsedPercent),
 	}).SetCurrentValue(fmt.Sprintf("%.1f%%", usage.InodesUsedPercent)).SetDescription("everything is ok")
+	var inodeParts []string
+	if ins.InodeUsage.WarnGe > 0 {
+		inodeParts = append(inodeParts, fmt.Sprintf("Warning ≥ %.1f%%", ins.InodeUsage.WarnGe))
+	}
+	if ins.InodeUsage.CriticalGe > 0 {
+		inodeParts = append(inodeParts, fmt.Sprintf("Critical ≥ %.1f%%", ins.InodeUsage.CriticalGe))
+	}
+	if len(inodeParts) > 0 {
+		event.Attrs["threshold_desc"] = strings.Join(inodeParts, ", ")
+	}
 
 	if ins.InodeUsage.CriticalGe > 0 && usage.InodesUsedPercent >= ins.InodeUsage.CriticalGe {
 		q.PushFront(event.SetEventStatus(types.EventStatusCritical).
