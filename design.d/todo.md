@@ -131,3 +131,14 @@ for _, registrar := range plugins.DiagnoseRegistrars {
 | `conn_latency_summary` | `plugins/sysdiag/connlatency.go` | 按远端 IP:port 聚合 TCP RTT 分布：count/avg/p99/max，定位慢下游服务 | ✅ |
 | `proc_threads` 增强 | `plugins/sysdiag/threads.go` | 新增 wchan 字段：显示线程在内核中的等待函数，D 状态线程排障关键信息 | ✅ |
 | `softnet_stat` | `plugins/sysdiag/softnet.go` | 每 CPU softnet 统计：processed/dropped/time_squeeze，网卡层丢包检测 | ✅ |
+
+### P9：MCP 外部数据源集成 ✅ Done
+
+| 模块 | 文件 | 说明 | 状态 |
+| --- | --- | --- | --- |
+| 配置结构 | `config/mcp_config.go` | MCPConfig/MCPServerConfig、identity 变量替换（${HOSTNAME}/${IP}等）、白名单 | ✅ |
+| 协议客户端 | `mcp/types.go` + `mcp/client.go` | JSON-RPC 2.0 over stdio、initialize/tools-list/tools-call | ✅ |
+| Manager | `mcp/manager.go` | 多 Server 生命周期管理、工具发现/过滤、注册到 ToolRegistry（mcp:xxx 类别） | ✅ |
+| Chat 集成 | `chat/chat.go` + `chat/prompt.go` | MCP 启动/关闭、identity 注入 prompt、工具自动出现在 catalog | ✅ |
+| 配置示例 | `conf.d/config.toml` | Prometheus/Jaeger MCP 配置示例 | ✅ |
+| 测试 | `config/mcp_config_test.go` + `mcp/types_test.go` | identity 解析、参数提取、白名单过滤 | ✅ |

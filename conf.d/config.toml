@@ -48,3 +48,23 @@ integration_key = "your-flashduty-integration-key"
 ## 诊断记录保留策略（保存在 state.d/diagnoses/）
 # diagnose_retention = "168h"        # 7 天
 # diagnose_max_count = 1000
+#
+## MCP 外部数据源（连接 Prometheus/Jaeger/CMDB 等）
+# [ai.mcp]
+# enabled = true
+# default_identity = "${HOSTNAME}"   # 全局默认标识, 支持 ${HOSTNAME} ${SHORT_HOSTNAME} ${IP}
+#
+# [[ai.mcp.servers]]
+# name = "prometheus"
+# command = "npx"
+# args = ["-y", "@anthropic/mcp-server-prometheus"]
+# identity = "instance=\"${IP}:9100\""   # 本 server 专用标识(覆盖 default)
+# tools_allow = ["query_range", "query"] # 白名单(空=全放行)
+# [ai.mcp.servers.env]
+# PROMETHEUS_URL = "http://prometheus.internal:9090"
+#
+# [[ai.mcp.servers]]
+# name = "jaeger"
+# command = "jaeger-mcp-server"
+# args = ["--endpoint", "http://jaeger.internal:16686"]
+# identity = "service.instance.id=\"${HOSTNAME}\""

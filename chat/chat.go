@@ -14,6 +14,7 @@ import (
 	"github.com/cprobe/catpaw/config"
 	"github.com/cprobe/catpaw/diagnose"
 	"github.com/cprobe/catpaw/diagnose/aiclient"
+	"github.com/cprobe/catpaw/mcp"
 	"github.com/cprobe/catpaw/plugins"
 )
 
@@ -40,6 +41,20 @@ func Run(verbose bool) error {
 		r(registry)
 	}
 
+	// Start MCP servers if configured
+	mcpMgr := mcp.NewManager()
+	if cfg.MCP.Enabled && len(cfg.MCP.Servers) > 0 {
+		mcpCtx, mcpCancel := context.WithCancel(context.Background())
+		mcpMgr.StartAll(mcpCtx, cfg.MCP, registry)
+		defer func() {
+			mcpCancel()
+			mcpMgr.Close()
+		}()
+		if n := mcpMgr.ServerCount(); n > 0 {
+			fmt.Printf("MCP: %d server(s) connected\n", n)
+		}
+	}
+
 	client := aiclient.NewClient(aiclient.ClientConfig{
 		BaseURL:        cfg.BaseURL,
 		APIKey:         cfg.APIKey,
@@ -49,7 +64,8 @@ func Run(verbose bool) error {
 	})
 
 	snapshot := collectSnapshot(registry)
-	systemPrompt := buildChatSystemPrompt(registry, snapshot, cfg.Language)
+	mcpIdentity := mcpMgr.IdentitySummary(cfg.MCP.DefaultIdentity)
+	systemPrompt := buildChatSystemPrompt(registry, snapshot, mcpIdentity, cfg.Language)
 	aiTools := buildChatToolSet()
 	toolTimeout := time.Duration(cfg.ToolTimeout)
 	retryCfg := aiclient.RetryConfig{

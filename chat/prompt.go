@@ -27,6 +27,14 @@ const chatPromptRaw = `你是 catpaw 运维助手，运行在主机 {{.Hostname}
 
 {{.SystemSnapshot}}
 {{- end}}
+{{- if .MCPIdentity}}
+
+## 外部数据源（MCP）
+
+已连接的 MCP 服务器及本机标识：
+{{.MCPIdentity}}
+查询外部数据时，请使用上述标识来定位本机的指标/数据。
+{{- end}}
 
 ## 可用诊断工具
 
@@ -58,10 +66,11 @@ type chatPromptData struct {
 	Kernel         string
 	ToolCatalog    string
 	SystemSnapshot string
+	MCPIdentity    string
 	Language       string
 }
 
-func buildChatSystemPrompt(registry *diagnose.ToolRegistry, snapshot, language string) string {
+func buildChatSystemPrompt(registry *diagnose.ToolRegistry, snapshot, mcpIdentity, language string) string {
 	hostname, _ := os.Hostname()
 	ip := getLocalIP()
 	kernel := getKernelVersion()
@@ -74,6 +83,7 @@ func buildChatSystemPrompt(registry *diagnose.ToolRegistry, snapshot, language s
 		Kernel:         kernel,
 		ToolCatalog:    registry.ListAllTools(),
 		SystemSnapshot: snapshot,
+		MCPIdentity:    mcpIdentity,
 		Language:       language,
 	}
 

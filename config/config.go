@@ -71,6 +71,8 @@ type AIConfig struct {
 	DiagnoseMaxCount  int      `toml:"diagnose_max_count"`
 
 	Language string `toml:"language"` // output language: "zh", "en", etc. Default: "zh"
+
+	MCP MCPConfig `toml:"mcp"`
 }
 
 type ConfigType struct {

@@ -1,0 +1,111 @@
+package config
+
+import (
+	"net"
+	"os"
+	"strings"
+)
+
+// MCPConfig holds configuration for MCP (Model Context Protocol) server connections.
+type MCPConfig struct {
+	Enabled         bool              `toml:"enabled"`
+	DefaultIdentity string            `toml:"default_identity"`
+	Servers         []MCPServerConfig `toml:"servers"`
+}
+
+// MCPServerConfig defines one MCP server connection.
+type MCPServerConfig struct {
+	Name       string            `toml:"name"`
+	Command    string            `toml:"command"`
+	Args       []string          `toml:"args"`
+	Env        map[string]string `toml:"env"`
+	Identity   string            `toml:"identity"`
+	ToolsAllow []string          `toml:"tools_allow"`
+}
+
+// ResolvedIdentity returns the identity string for this server,
+// falling back to defaultIdentity, then auto-detected host info.
+// Variables ${HOSTNAME}, ${SHORT_HOSTNAME}, ${IP}, and ${ENV_VAR} are expanded.
+func (s *MCPServerConfig) ResolvedIdentity(defaultIdentity string) string {
+	raw := s.Identity
+	if raw == "" {
+		raw = defaultIdentity
+	}
+	if raw == "" {
+		return autoIdentity()
+	}
+	return expandIdentityVars(raw)
+}
+
+// IsToolAllowed checks whether a tool name passes the whitelist filter.
+// If ToolsAllow is empty, all tools are allowed.
+func (s *MCPServerConfig) IsToolAllowed(toolName string) bool {
+	if len(s.ToolsAllow) == 0 {
+		return true
+	}
+	for _, allowed := range s.ToolsAllow {
+		if allowed == toolName {
+			return true
+		}
+	}
+	return false
+}
+
+func expandIdentityVars(raw string) string {
+	hostname, _ := os.Hostname()
+	short := hostname
+	if idx := strings.IndexByte(short, '.'); idx > 0 {
+		short = short[:idx]
+	}
+	ip := detectIP()
+
+	builtins := map[string]string{
+		"HOSTNAME":       hostname,
+		"SHORT_HOSTNAME": short,
+		"IP":             ip,
+	}
+
+	return os.Expand(raw, func(key string) string {
+		if v, ok := builtins[key]; ok {
+			return v
+		}
+		return os.Getenv(key)
+	})
+}
+
+func autoIdentity() string {
+	hostname, _ := os.Hostname()
+	ip := detectIP()
+	parts := make([]string, 0, 2)
+	if hostname != "" {
+		parts = append(parts, "hostname="+hostname)
+	}
+	if ip != "" {
+		parts = append(parts, "ip="+ip)
+	}
+	if len(parts) == 0 {
+		return ""
+	}
+	return strings.Join(parts, ", ")
+}
+
+func detectIP() string {
+	ip, err := GetOutboundIP()
+	if err != nil {
+		return detectIPFallback()
+	}
+	return ip.String()
+}
+
+func detectIPFallback() string {
+	addrs, err := net.InterfaceAddrs()
+	if err != nil {
+		return ""
+	}
+	for _, addr := range addrs {
+		if ipNet, ok := addr.(*net.IPNet); ok && !ipNet.IP.IsLoopback() && ipNet.IP.To4() != nil {
+			return ipNet.IP.String()
+		}
+	}
+	return ""
+}
