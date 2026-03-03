@@ -201,7 +201,7 @@ func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
 	event := types.BuildEvent(map[string]string{
 		"check":  "procfd::fd_usage",
 		"target": ins.searchLabel,
-	}).SetAttrs(attrs)
+	}).SetAttrs(attrs).SetCurrentValue(fmt.Sprintf("%.1f%%", worst.usagePercent))
 
 	status := types.EvaluateGeThreshold(worst.usagePercent, ins.FdUsage.WarnGe, ins.FdUsage.CriticalGe)
 	event.SetEventStatus(status)

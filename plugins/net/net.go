@@ -275,7 +275,7 @@ func (ins *Instance) TCPGather(address string, labels map[string]string, q *safe
 	}
 
 	responseTime := time.Since(start)
-	event.SetAttrs(map[string]string{"response_time": responseTime.String()})
+	event.SetAttrs(map[string]string{"response_time": responseTime.String()}).SetCurrentValue(responseTime.String())
 	event.SetDescription("everything is ok")
 	q.PushFront(event)
 
@@ -363,7 +363,7 @@ func (ins *Instance) checkResponseTime(q *safe.Queue[*types.Event], address stri
 		"response_time":      responseTime.String(),
 		"warn_threshold":     ins.ResponseTime.WarnGe.HumanString(),
 		"critical_threshold": ins.ResponseTime.CriticalGe.HumanString(),
-	})
+	}).SetCurrentValue(responseTime.String())
 
 	if ins.ResponseTime.CriticalGe > 0 && responseTime >= time.Duration(ins.ResponseTime.CriticalGe) {
 		rtEvent.SetEventStatus(types.EventStatusCritical)

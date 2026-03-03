@@ -8,6 +8,11 @@ const (
 
 	DescFormatText     = ""
 	DescFormatMarkdown = "markdown"
+
+	// AttrCurrentValue is the standard Attrs key for the primary metric value
+	// that triggered an alert. Plugins should set this so that diagnosis records
+	// and AI prompts can display it consistently.
+	AttrCurrentValue = "current_value"
 )
 
 type Event struct {
@@ -51,6 +56,14 @@ func (e *Event) SetAttrs(attrs map[string]string) *Event {
 	for k, v := range attrs {
 		e.Attrs[k] = v
 	}
+	return e
+}
+
+func (e *Event) SetCurrentValue(v string) *Event {
+	if e.Attrs == nil {
+		e.Attrs = make(map[string]string, 1)
+	}
+	e.Attrs[AttrCurrentValue] = v
 	return e
 }
 

@@ -107,7 +107,7 @@ func (ins *Instance) checkMemoryUsage(q *safe.Queue[*types.Event]) {
 		"used_percent": fmt.Sprintf("%.1f%%", vm.UsedPercent),
 		"buffers":      conv.HumanBytes(vm.Buffers),
 		"cached":       conv.HumanBytes(vm.Cached),
-	}).SetDescription("everything is ok")
+	}).SetCurrentValue(fmt.Sprintf("%.1f%%", vm.UsedPercent)).SetDescription("everything is ok")
 
 	status := types.EvaluateGeThreshold(vm.UsedPercent, ins.MemoryUsage.WarnGe, ins.MemoryUsage.CriticalGe)
 	if status != types.EventStatusOk {
@@ -154,7 +154,7 @@ func (ins *Instance) checkSwapUsage(q *safe.Queue[*types.Event]) {
 		"swap_used":         conv.HumanBytes(swap.Used),
 		"swap_free":         conv.HumanBytes(swap.Free),
 		"swap_used_percent": fmt.Sprintf("%.1f%%", swap.UsedPercent),
-	}).SetDescription("everything is ok")
+	}).SetCurrentValue(fmt.Sprintf("%.1f%%", swap.UsedPercent)).SetDescription("everything is ok")
 
 	status := types.EvaluateGeThreshold(swap.UsedPercent, ins.SwapUsage.WarnGe, ins.SwapUsage.CriticalGe)
 	if status != types.EventStatusOk {

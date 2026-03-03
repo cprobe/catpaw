@@ -240,7 +240,7 @@ func (ins *Instance) checkUsage(q *safe.Queue[*types.Event], mountPoint, device,
 		"used":         conv.HumanBytes(usage.Used),
 		"available":    conv.HumanBytes(usage.Free),
 		"used_percent": fmt.Sprintf("%.1f%%", usage.UsedPercent),
-	}).SetDescription("everything is ok")
+	}).SetCurrentValue(fmt.Sprintf("%.1f%%", usage.UsedPercent)).SetDescription("everything is ok")
 
 	if ins.SpaceUsage.CriticalGe > 0 && usage.UsedPercent >= ins.SpaceUsage.CriticalGe {
 		q.PushFront(event.SetEventStatus(types.EventStatusCritical).
@@ -276,7 +276,7 @@ func (ins *Instance) checkInodes(q *safe.Queue[*types.Event], mountPoint, device
 		"inodes_used":         fmt.Sprintf("%d", usage.InodesUsed),
 		"inodes_free":         fmt.Sprintf("%d", usage.InodesFree),
 		"inodes_used_percent": fmt.Sprintf("%.1f%%", usage.InodesUsedPercent),
-	}).SetDescription("everything is ok")
+	}).SetCurrentValue(fmt.Sprintf("%.1f%%", usage.InodesUsedPercent)).SetDescription("everything is ok")
 
 	if ins.InodeUsage.CriticalGe > 0 && usage.InodesUsedPercent >= ins.InodeUsage.CriticalGe {
 		q.PushFront(event.SetEventStatus(types.EventStatusCritical).

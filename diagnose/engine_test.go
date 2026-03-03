@@ -511,6 +511,39 @@ func TestParseArgs(t *testing.T) {
 	if m4["_raw"] != "not-json" {
 		t.Fatalf("invalid json should fallback: %v", m4)
 	}
+
+	// Nested object in tool_args should be re-serialized as JSON, not Go map format
+	m5 := ParseArgs(`{"name":"process_detail","tool_args":{"pid":3846}}`)
+	if m5["name"] != "process_detail" {
+		t.Fatalf("nested object: name mismatch: %v", m5)
+	}
+	toolArgs := ParseToolArgs(m5["tool_args"])
+	if toolArgs["pid"] != "3846" {
+		t.Fatalf("nested object: tool_args pid should be '3846', got %q (raw tool_args=%q)", toolArgs["pid"], m5["tool_args"])
+	}
+
+	// ParseToolArgs should handle mixed-type values directly
+	m6 := ParseToolArgs(`{"pid": 3846}`)
+	if m6["pid"] != "3846" {
+		t.Fatalf("ParseToolArgs numeric: pid should be '3846', got %q", m6["pid"])
+	}
+
+	// null value should produce empty string so "required" checks fire
+	m7 := ParseArgs(`{"pid": null}`)
+	if m7["pid"] != "" {
+		t.Fatalf("null should become empty string, got %q", m7["pid"])
+	}
+
+	// Large float64 should use decimal notation, not scientific notation
+	m8 := ParseArgs(`{"big": 100000000000}`)
+	if m8["big"] != "100000000000" {
+		t.Fatalf("large number should be decimal, got %q", m8["big"])
+	}
+
+	// ParseToolArgs empty returns nil
+	if ParseToolArgs("") != nil {
+		t.Fatal("ParseToolArgs empty should return nil")
+	}
 }
 
 func TestBuildToolSet(t *testing.T) {

@@ -190,7 +190,7 @@ func (ins *Instance) gatherUnit(q *safe.Queue[*types.Event], unit string) {
 	event := types.BuildEvent(map[string]string{
 		"check":  "systemd::state",
 		"target": unit,
-	}).SetAttrs(attrs)
+	}).SetAttrs(attrs).SetCurrentValue(activeState)
 
 	// LoadState not-found: unit does not exist
 	if loadState == "not-found" {

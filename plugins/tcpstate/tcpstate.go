@@ -142,7 +142,7 @@ func (ins *Instance) emitStateEvent(q *safe.Queue[*types.Event], check, stateNam
 	event := types.BuildEvent(map[string]string{
 		"check":  check,
 		"target": "system",
-	}).SetAttrs(attrs)
+	}).SetAttrs(attrs).SetCurrentValue(fmt.Sprintf("%d", count))
 	fcount := float64(count)
 
 	status := types.EvaluateGeThreshold(fcount, sc.WarnGe, sc.CriticalGe)

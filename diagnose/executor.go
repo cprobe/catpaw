@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strconv"
 )
 
 const (
@@ -68,36 +69,71 @@ func executeToolImpl(ctx context.Context, session *DiagnoseSession, tool Diagnos
 }
 
 // ParseArgs parses the AI's function call arguments JSON into a flat string map.
-// Exported for reuse by chat/ and other callers.
+// Returns a non-nil empty map for empty input so callers can safely read keys.
 func ParseArgs(raw string) map[string]string {
 	if raw == "" {
 		return make(map[string]string)
 	}
-	var m map[string]string
-	if err := json.Unmarshal([]byte(raw), &m); err != nil {
-		var anyMap map[string]any
-		if err2 := json.Unmarshal([]byte(raw), &anyMap); err2 != nil {
-			return map[string]string{"_raw": raw}
-		}
-		m = make(map[string]string, len(anyMap))
-		for k, v := range anyMap {
-			m[k] = fmt.Sprint(v)
-		}
+	m := unmarshalStringMap(raw)
+	if m == nil {
+		return map[string]string{"_raw": raw}
 	}
 	return m
 }
 
 // ParseToolArgs parses the nested tool_args JSON string (from call_tool).
-// Exported for reuse by chat/ and other callers.
+// Returns nil for empty input; callers should check for nil.
 func ParseToolArgs(raw string) map[string]string {
 	if raw == "" {
 		return nil
 	}
-	var m map[string]string
-	if err := json.Unmarshal([]byte(raw), &m); err != nil {
+	m := unmarshalStringMap(raw)
+	if m == nil {
 		return map[string]string{"_raw": raw}
 	}
 	return m
+}
+
+// unmarshalStringMap attempts to parse a JSON object into map[string]string.
+// First tries direct string-valued map; on failure, falls back to map[string]any
+// and coerces each value via anyToString. Returns nil if the input is not a
+// valid JSON object at all.
+func unmarshalStringMap(raw string) map[string]string {
+	var m map[string]string
+	if err := json.Unmarshal([]byte(raw), &m); err == nil {
+		return m
+	}
+	var anyMap map[string]any
+	if err := json.Unmarshal([]byte(raw), &anyMap); err != nil {
+		return nil
+	}
+	m = make(map[string]string, len(anyMap))
+	for k, v := range anyMap {
+		m[k] = anyToString(v)
+	}
+	return m
+}
+
+// anyToString converts an arbitrary JSON-decoded value to a string.
+//   - nil        → "" (so "required" checks fire cleanly)
+//   - float64    → decimal notation via strconv (avoids scientific notation)
+//   - object/arr → re-serialized as JSON for downstream parsing
+//   - others     → fmt.Sprint
+func anyToString(v any) string {
+	switch val := v.(type) {
+	case nil:
+		return ""
+	case float64:
+		return strconv.FormatFloat(val, 'f', -1, 64)
+	case map[string]any, []any:
+		b, err := json.Marshal(v)
+		if err != nil {
+			return fmt.Sprint(v)
+		}
+		return string(b)
+	default:
+		return fmt.Sprint(val)
+	}
 }
 
 // TruncateOutput ensures a tool's output doesn't exceed the maximum size

@@ -140,7 +140,7 @@ func (ins *Instance) checkCpuUsage(q *safe.Queue[*types.Event]) {
 	}).SetAttrs(map[string]string{
 		"cpu_usage": fmt.Sprintf("%.1f%%", usage),
 		"cpu_cores": fmt.Sprintf("%d", ins.cpuCores),
-	}).SetDescription("everything is ok")
+	}).SetCurrentValue(fmt.Sprintf("%.1f%%", usage)).SetDescription("everything is ok")
 
 	intervalHint := "interval avg"
 	if ins.Interval > 0 {
@@ -201,7 +201,7 @@ func (ins *Instance) checkLoadAverage(q *safe.Queue[*types.Event]) {
 		"per_core_load": fmt.Sprintf("%.2f", perCoreLoad),
 		"cpu_cores":     fmt.Sprintf("%d", ins.cpuCores),
 		"period":        ins.LoadAverage.Period,
-	}).SetDescription("everything is ok")
+	}).SetCurrentValue(fmt.Sprintf("%.2f", perCoreLoad)).SetDescription("everything is ok")
 
 	status := types.EvaluateGeThreshold(perCoreLoad, ins.LoadAverage.WarnGe, ins.LoadAverage.CriticalGe)
 	if status != types.EventStatusOk {

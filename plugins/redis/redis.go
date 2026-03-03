@@ -729,7 +729,7 @@ func (ins *Instance) checkResponseTime(q *safe.Queue[*types.Event], target strin
 	if ins.ResponseTime.CriticalGe > 0 {
 		attrs["critical_ge"] = time.Duration(ins.ResponseTime.CriticalGe).String()
 	}
-	event := ins.newEvent("redis::response_time", target).SetAttrs(attrs)
+	event := ins.newEvent("redis::response_time", target).SetAttrs(attrs).SetCurrentValue(responseTime.String())
 
 	status := types.EvaluateGeThreshold(float64(responseTime), float64(ins.ResponseTime.WarnGe), float64(ins.ResponseTime.CriticalGe))
 	switch status {
@@ -756,7 +756,7 @@ func (ins *Instance) checkRole(q *safe.Queue[*types.Event], target string, info 
 	}
 
 	actual = strings.ToLower(strings.TrimSpace(actual))
-	event.SetAttrs(map[string]string{"actual": actual, "expect": ins.Role.Expect})
+	event.SetAttrs(map[string]string{"actual": actual, "expect": ins.Role.Expect}).SetCurrentValue(actual)
 
 	if actual == ins.Role.Expect {
 		q.PushFront(event.SetDescription(fmt.Sprintf("redis role is %s, matches expectation", actual)))
@@ -789,7 +789,7 @@ func (ins *Instance) checkMasterLink(q *safe.Queue[*types.Event], target string,
 	if v, ok := info["master_port"]; ok && v != "" {
 		attrs["master_port"] = v
 	}
-	event.SetAttrs(attrs)
+	event.SetAttrs(attrs).SetCurrentValue(actual)
 
 	if actual == ins.MasterLink.Expect {
 		q.PushFront(event.SetDescription(fmt.Sprintf("redis master link status is %s, matches expectation", actual)))
@@ -809,7 +809,7 @@ func (ins *Instance) checkCount(q *safe.Queue[*types.Event], target, check strin
 	if thresholds.CriticalGe > 0 {
 		attrs["critical_ge"] = strconv.Itoa(thresholds.CriticalGe)
 	}
-	event := ins.newEvent(check, target).SetAttrs(attrs)
+	event := ins.newEvent(check, target).SetAttrs(attrs).SetCurrentValue(strconv.Itoa(value))
 
 	status := types.EvaluateGeThreshold(float64(value), float64(thresholds.WarnGe), float64(thresholds.CriticalGe))
 	switch status {
@@ -867,7 +867,7 @@ func (ins *Instance) checkMinCount(q *safe.Queue[*types.Event], target, check st
 	if thresholds.CriticalLt > 0 {
 		attrs["critical_lt"] = strconv.Itoa(thresholds.CriticalLt)
 	}
-	event := ins.newEvent(check, target).SetAttrs(attrs)
+	event := ins.newEvent(check, target).SetAttrs(attrs).SetCurrentValue(strconv.Itoa(value))
 
 	if thresholds.CriticalLt > 0 && value < thresholds.CriticalLt {
 		q.PushFront(event.SetEventStatus(types.EventStatusCritical).
@@ -1012,7 +1012,7 @@ func (ins *Instance) checkDeltaCount(q *safe.Queue[*types.Event], target, check 
 	if thresholds.CriticalGe > 0 {
 		attrs["critical_ge"] = strconv.Itoa(thresholds.CriticalGe)
 	}
-	event := ins.newEvent(check, target).SetAttrs(attrs)
+	event := ins.newEvent(check, target).SetAttrs(attrs).SetCurrentValue(strconv.FormatUint(delta, 10))
 
 	status := types.EvaluateGeThreshold(float64(delta), float64(thresholds.WarnGe), float64(thresholds.CriticalGe))
 	switch status {
@@ -1056,7 +1056,7 @@ func (ins *Instance) checkUsedMemory(q *safe.Queue[*types.Event], target string,
 		attrs["maxmemory_bytes"] = strconv.FormatInt(maxmemory, 10)
 		attrs["used_percent_of_maxmemory"] = fmt.Sprintf("%.1f%%", float64(usedMemory)*100/float64(maxmemory))
 	}
-	event.SetAttrs(attrs)
+	event.SetAttrs(attrs).SetCurrentValue(conv.HumanBytes(uint64(usedMemory)))
 
 	status := types.EvaluateGeThreshold(float64(usedMemory), float64(ins.UsedMemory.WarnGe), float64(ins.UsedMemory.CriticalGe))
 	switch status {

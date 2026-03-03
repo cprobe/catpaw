@@ -100,7 +100,7 @@ func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
 			"delta":           "0",
 			"total_overflows": overflowsStr,
 			"total_drops":     dropsStr,
-		}).
+		}).SetCurrentValue("0").
 			SetEventStatus(types.EventStatusOk).
 			SetDescription(fmt.Sprintf("listen overflow baseline established (total overflows: %s)", overflowsStr)))
 		return
@@ -123,7 +123,7 @@ func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
 		"delta":           deltaStr,
 		"total_overflows": overflowsStr,
 		"total_drops":     dropsStr,
-	})
+	}).SetCurrentValue(deltaStr)
 
 	status := types.EvaluateGeThreshold(float64(delta), ins.ListenOverflow.WarnGe, ins.ListenOverflow.CriticalGe)
 	event.SetEventStatus(status)

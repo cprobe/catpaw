@@ -349,7 +349,8 @@ func isActiveState(state string) bool {
 
 func (ins *Instance) checkContainerRunning(q *safe.Queue[*types.Event], c containerListEntry, name, shortID string) {
 	event := ins.buildContainerEvent("docker::container_running", name, shortID, c.Image).
-		SetAttrs(map[string]string{"state": c.State, "status": c.Status})
+		SetAttrs(map[string]string{"state": c.State, "status": c.Status}).
+		SetCurrentValue(c.State)
 
 	switch c.State {
 	case "running":
@@ -527,7 +528,7 @@ func (ins *Instance) checkCpuUsage(q *safe.Queue[*types.Event], stats *container
 		throttledSec := float64(td.ThrottledTime) / 1e9
 		attrs["cpu_throttled_time"] = fmt.Sprintf("%.1fs", throttledSec)
 	}
-	event := ins.buildContainerEvent("docker::cpu_usage", name, shortID, image).SetAttrs(attrs)
+	event := ins.buildContainerEvent("docker::cpu_usage", name, shortID, image).SetAttrs(attrs).SetCurrentValue(fmt.Sprintf("%.1f%%", cpuPercent))
 
 	status := types.EvaluateGeThreshold(cpuPercent, ins.CpuUsage.WarnGe, ins.CpuUsage.CriticalGe)
 	event.SetEventStatus(status)
@@ -574,7 +575,7 @@ func (ins *Instance) checkMemoryUsage(q *safe.Queue[*types.Event], stats *contai
 		"memory_percent": fmt.Sprintf("%.1f%%", memPercent),
 		"memory_used":    usedStr,
 		"memory_limit":  limitStr,
-	})
+	}).SetCurrentValue(fmt.Sprintf("%.1f%%", memPercent))
 
 	status := types.EvaluateGeThreshold(memPercent, ins.MemoryUsage.WarnGe, ins.MemoryUsage.CriticalGe)
 	event.SetEventStatus(status)

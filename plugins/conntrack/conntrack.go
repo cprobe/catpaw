@@ -110,7 +110,7 @@ func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
 		"count":         countStr,
 		"max":           maxStr,
 		"usage_percent": fmt.Sprintf("%.1f%%", usagePercent),
-	})
+	}).SetCurrentValue(fmt.Sprintf("%.1f%%", usagePercent))
 
 	status := types.EvaluateGeThreshold(usagePercent, ins.ConntrackUsage.WarnGe, ins.ConntrackUsage.CriticalGe)
 	event.SetEventStatus(status)
