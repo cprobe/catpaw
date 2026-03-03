@@ -94,7 +94,7 @@ enabled = true
 # name = "prometheus"
 # command = "/usr/local/bin/mcp-prometheus"
 # args = ["serve"]
-# identity = "ident=\"dev-n9e-02\""  # 本机过滤条件, AI查询时用它筛选本机数据
+# identity = 'ident="${HOSTNAME}"'  # 本机过滤条件, AI查询时用它筛选本机数据
 # tools_allow = []                   # 白名单(空=全放行)
 # [ai.mcp.servers.env]
 # PROMETHEUS_URL = "http://127.0.0.1:9090"
@@ -103,4 +103,4 @@ enabled = true
 # name = "jaeger"
 # command = "jaeger-mcp-server"
 # args = ["--endpoint", "http://jaeger.internal:16686"]
-# identity = "service.instance.id=\"${HOSTNAME}\""  # 支持变量替换
+# identity = 'service.instance.id="${HOSTNAME}"'  # 支持变量替换
