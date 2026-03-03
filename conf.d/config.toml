@@ -56,15 +56,15 @@ integration_key = "your-flashduty-integration-key"
 #
 # [[ai.mcp.servers]]
 # name = "prometheus"
-# command = "npx"
-# args = ["-y", "@anthropic/mcp-server-prometheus"]
-# identity = "instance=\"${IP}:9100\""   # 本 server 专用标识(覆盖 default)
-# tools_allow = ["query_range", "query"] # 白名单(空=全放行)
+# command = "/usr/local/bin/mcp-prometheus"
+# args = ["serve"]
+# identity = "ident=\"dev-n9e-02\""  # 本机过滤条件, AI查询时用它筛选本机数据
+# tools_allow = []                   # 白名单(空=全放行)
 # [ai.mcp.servers.env]
-# PROMETHEUS_URL = "http://prometheus.internal:9090"
+# PROMETHEUS_URL = "http://127.0.0.1:9090"
 #
 # [[ai.mcp.servers]]
 # name = "jaeger"
 # command = "jaeger-mcp-server"
 # args = ["--endpoint", "http://jaeger.internal:16686"]
-# identity = "service.instance.id=\"${HOSTNAME}\""
+# identity = "service.instance.id=\"${HOSTNAME}\""  # 支持变量替换

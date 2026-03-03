@@ -89,25 +89,20 @@ func (m *Manager) startServer(ctx context.Context, srv *config.MCPServerConfig, 
 
 func (m *Manager) registerTools(srv *config.MCPServerConfig, tools []Tool, client *Client, identity string, registry *diagnose.ToolRegistry) int {
 	catName := categoryPrefix + srv.Name
-	desc := fmt.Sprintf("External data via MCP server %q", srv.Name)
-	if identity != "" {
-		desc += fmt.Sprintf(" (this host: %s)", identity)
-	}
-	registry.RegisterCategory(catName, catName, desc, diagnose.ToolScopeLocal)
 
-	count := 0
+	// Build the tool list first; only register the category if at least one tool passes the filter.
+	var toRegister []diagnose.DiagnoseTool
 	for _, mcpTool := range tools {
 		if !srv.IsToolAllowed(mcpTool.Name) {
 			continue
 		}
 
 		params := convertParams(mcpTool.ExtractParams())
-
 		toolName := srv.Name + "_" + mcpTool.Name
 		captured := mcpTool.Name
 		capturedClient := client
 
-		dt := diagnose.DiagnoseTool{
+		toRegister = append(toRegister, diagnose.DiagnoseTool{
 			Name:        toolName,
 			Description: mcpTool.Description,
 			Parameters:  params,
@@ -115,10 +110,23 @@ func (m *Manager) registerTools(srv *config.MCPServerConfig, tools []Tool, clien
 			Execute: func(ctx context.Context, args map[string]string) (string, error) {
 				return capturedClient.CallTool(ctx, captured, toAnyMap(args))
 			},
-		}
+		})
+	}
 
+	if len(toRegister) == 0 {
+		return 0
+	}
+
+	desc := fmt.Sprintf("External data via MCP server %q", srv.Name)
+	if identity != "" {
+		desc += fmt.Sprintf(" (this host: %s)", identity)
+	}
+	registry.RegisterCategory(catName, catName, desc, diagnose.ToolScopeLocal)
+
+	count := 0
+	for _, dt := range toRegister {
 		if err := registry.Register(catName, dt); err != nil {
-			log.Printf("[mcp] %s: skip tool %s: %v", srv.Name, toolName, err)
+			log.Printf("[mcp] %s: skip tool %s: %v", srv.Name, dt.Name, err)
 			continue
 		}
 		count++

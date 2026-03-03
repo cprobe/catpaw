@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -50,6 +51,9 @@ func NewClient(ctx context.Context, name, command string, args []string, env map
 
 	if err := cmd.Start(); err != nil {
 		stdin.Close()
+		if errors.Is(err, exec.ErrNotFound) {
+			return nil, fmt.Errorf("mcp %s: start %q: %w (hint: use absolute path, e.g. run `which %s`)", name, command, err, command)
+		}
 		return nil, fmt.Errorf("mcp %s: start %q: %w", name, command, err)
 	}
 
@@ -211,6 +215,12 @@ func (c *Client) recv(ctx context.Context, expectedID int, result any) error {
 			if len(line) == 0 {
 				continue
 			}
+			// Many MCP servers print banner/log text to stdout before
+			// the JSON-RPC stream begins. Skip any line that doesn't
+			// look like a JSON object.
+			if line[0] != '{' {
+				continue
+			}
 			// Skip server-initiated notifications (no "id" field)
 			var peek struct {
 				ID *json.RawMessage `json:"id"`
@@ -273,8 +283,11 @@ func extractTexts(contents []ToolContent) string {
 }
 
 func truncRaw(b []byte) string {
-	if len(b) > 200 {
-		return string(b[:200]) + "..."
+	const maxRunes = 200
+	s := string(b)
+	runes := []rune(s)
+	if len(runes) <= maxRunes {
+		return s
 	}
-	return string(b)
+	return string(runes[:maxRunes]) + "..."
 }

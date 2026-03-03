@@ -5,7 +5,7 @@ go 1.24.0
 require (
 	github.com/BurntSushi/toml v1.3.0
 	github.com/chai2010/winsvc v0.0.0-20200705094454-db7ec320025c
-	github.com/chzyer/readline v1.5.1
+	github.com/ergochat/readline v0.1.3
 	github.com/gobwas/glob v0.2.3
 	github.com/jackpal/gateway v1.0.10
 	github.com/koding/multiconfig v0.0.0-20171124222453-69c27309b2d7
@@ -13,7 +13,7 @@ require (
 	github.com/shirou/gopsutil/v3 v3.23.6
 	github.com/toolkits/pkg v1.3.3
 	go.uber.org/zap v1.24.0
-	golang.org/x/sys v0.9.0
+	golang.org/x/sys v0.15.0
 	golang.org/x/text v0.34.0
 )
 

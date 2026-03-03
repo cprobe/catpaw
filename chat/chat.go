@@ -10,7 +10,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/chzyer/readline"
+	"github.com/ergochat/readline"
 	"github.com/cprobe/catpaw/config"
 	"github.com/cprobe/catpaw/diagnose"
 	"github.com/cprobe/catpaw/diagnose/aiclient"

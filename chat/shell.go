@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/chzyer/readline"
+	"github.com/ergochat/readline"
 	"github.com/cprobe/catpaw/pkg/cmdx"
 )
 
