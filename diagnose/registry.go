@@ -186,6 +186,53 @@ func (r *ToolRegistry) CategoriesWithTools() []ToolCategory {
 	return result
 }
 
+// ListAllTools returns a compact catalog of every registered tool, grouped by
+// category and sorted alphabetically. Designed for injection into AI prompts
+// so the model can call tools directly without a discovery round-trip.
+func (r *ToolRegistry) ListAllTools() string {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	cats := make([]*ToolCategory, 0, len(r.categories))
+	for _, cat := range r.categories {
+		cats = append(cats, cat)
+	}
+	sort.Slice(cats, func(i, j int) bool { return cats[i].Name < cats[j].Name })
+
+	var b strings.Builder
+	for _, cat := range cats {
+		desc := cat.Description
+		if desc == "" {
+			desc = cat.Name
+		}
+		fmt.Fprintf(&b, "[%s] %s\n", cat.Name, desc)
+		for _, t := range cat.Tools {
+			params := formatParamsCompact(t.Parameters)
+			if params != "" {
+				fmt.Fprintf(&b, "  %s(%s) - %s\n", t.Name, params, t.Description)
+			} else {
+				fmt.Fprintf(&b, "  %s() - %s\n", t.Name, t.Description)
+			}
+		}
+	}
+	return b.String()
+}
+
+func formatParamsCompact(params []ToolParam) string {
+	if len(params) == 0 {
+		return ""
+	}
+	parts := make([]string, 0, len(params))
+	for _, p := range params {
+		s := p.Name
+		if p.Required {
+			s += "*"
+		}
+		parts = append(parts, s)
+	}
+	return strings.Join(parts, ", ")
+}
+
 // HasAccessorFactory reports whether a plugin has a registered accessor factory.
 func (r *ToolRegistry) HasAccessorFactory(plugin string) bool {
 	r.mu.RLock()

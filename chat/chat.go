@@ -48,7 +48,8 @@ func Run() error {
 		RequestTimeout: time.Duration(cfg.RequestTimeout),
 	})
 
-	systemPrompt := buildChatSystemPrompt(registry, cfg.Language)
+	snapshot := collectSnapshot(registry)
+	systemPrompt := buildChatSystemPrompt(registry, snapshot, cfg.Language)
 	aiTools := buildChatToolSet()
 	toolTimeout := time.Duration(cfg.ToolTimeout)
 	retryCfg := aiclient.RetryConfig{
@@ -122,13 +123,13 @@ func Run() error {
 
 		messages = trimHistory(messages)
 
-		snapshot := len(messages)
+		msgCount := len(messages)
 
 		var reply string
 		reply, messages, err = runConversationTurn(ctx, client, retryCfg, registry, aiTools, messages, toolTimeout, rl)
 		if err != nil {
 			fmt.Printf("\033[31merror: %v\033[0m\n\n", err)
-			messages = messages[:snapshot-1]
+			messages = messages[:msgCount-1]
 			continue
 		}
 
@@ -144,29 +145,8 @@ func buildChatToolSet() []aiclient.Tool {
 		{
 			Type: "function",
 			Function: aiclient.ToolFunction{
-				Name:        "list_tool_categories",
-				Description: "List all available diagnostic tool categories (e.g. disk, cpu, memory, redis)",
-			},
-		},
-		{
-			Type: "function",
-			Function: aiclient.ToolFunction{
-				Name:        "list_tools",
-				Description: "List all diagnostic tools and their parameters under a category",
-				Parameters: &aiclient.Parameters{
-					Type: "object",
-					Properties: map[string]aiclient.Property{
-						"category": {Type: "string", Description: "Tool category name"},
-					},
-					Required: []string{"category"},
-				},
-			},
-		},
-		{
-			Type: "function",
-			Function: aiclient.ToolFunction{
 				Name:        "call_tool",
-				Description: "Invoke a diagnostic tool by name",
+				Description: "Invoke a diagnostic tool by name. All available tools are listed in the system prompt.",
 				Parameters: &aiclient.Parameters{
 					Type: "object",
 					Properties: map[string]aiclient.Property{
@@ -174,6 +154,20 @@ func buildChatToolSet() []aiclient.Tool {
 						"tool_args": {Type: "string", Description: "Tool arguments as JSON string"},
 					},
 					Required: []string{"name"},
+				},
+			},
+		},
+		{
+			Type: "function",
+			Function: aiclient.ToolFunction{
+				Name:        "list_tools",
+				Description: "Show detailed parameter info for tools in a category. Use only when you need parameter details not shown in the catalog.",
+				Parameters: &aiclient.Parameters{
+					Type: "object",
+					Properties: map[string]aiclient.Property{
+						"category": {Type: "string", Description: "Tool category name"},
+					},
+					Required: []string{"category"},
 				},
 			},
 		},
@@ -267,9 +261,6 @@ func executeChatTool(ctx context.Context, registry *diagnose.ToolRegistry, name,
 	args := parseArgs(rawArgs)
 
 	switch name {
-	case "list_tool_categories":
-		return registry.ListCategories()
-
 	case "list_tools":
 		category := args["category"]
 		if category == "" {

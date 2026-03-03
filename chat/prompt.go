@@ -21,26 +21,31 @@ const chatPromptRaw = `你是 catpaw 运维助手，运行在主机 {{.Hostname}
 操作系统: {{.OS}} {{.Arch}} {{.Kernel}}
 
 用户通过 SSH 登录了这台机器，正在与你对话排查问题。
+{{- if .SystemSnapshot}}
 
-## 你的能力
+## 系统快照（启动时自动采集）
 
-你可以调用诊断工具获取这台机器的实时数据：
+{{.SystemSnapshot}}
+{{- end}}
 
-{{.ToolCategories}}
+## 可用诊断工具
 
-使用方式：
-1. 调用 list_tools(category) 查看某个大类下的具体工具
-2. 调用 call_tool(name, tool_args) 执行具体工具
-   tool_args 为 JSON 字符串格式，如 call_tool(name="disk_usage", tool_args='{}')
+以下是所有已注册的诊断工具，你可以直接调用：
 
-你还可以调用 exec_shell(command) 执行任意 shell 命令（需用户确认后才会执行）。
-当内置工具无法满足需求时，优先使用 exec_shell。
+{{.ToolCatalog}}
+
+调用方式：call_tool(name="工具名", tool_args='{"参数名":"值"}')
+示例：call_tool(name="disk_usage", tool_args='{}')
+
+你还可以调用 exec_shell(command="命令") 执行任意 shell 命令（需用户确认后才会执行）。
 
 ## 工作原则
 
 - 回答问题时优先使用工具获取实时数据，不要猜测或编造
+- **需要多个领域数据时，在同一轮中并行调用多个工具**，不要逐个调用
+  例如排查"机器为什么慢"时，一次性调用 cpu_usage、memory_usage、disk_usage 等
 - 回答简洁，关键数值内嵌到分析中
-- 如果用户的问题不需要工具就能回答，直接回答即可
+- 如果用户的问题不需要工具就能回答（尤其是系统快照中已有的信息），直接回答
 - 如果用户的问题超出你的工具能力范围，坦诚告知
 - exec_shell 会经过用户确认，放心提出你需要执行的命令
 - 默认使用 {{.Language}} 回复，但如果用户要求切换语言，按用户要求输出`
@@ -51,11 +56,12 @@ type chatPromptData struct {
 	OS             string
 	Arch           string
 	Kernel         string
-	ToolCategories string
+	ToolCatalog    string
+	SystemSnapshot string
 	Language       string
 }
 
-func buildChatSystemPrompt(registry *diagnose.ToolRegistry, language string) string {
+func buildChatSystemPrompt(registry *diagnose.ToolRegistry, snapshot, language string) string {
 	hostname, _ := os.Hostname()
 	ip := getLocalIP()
 	kernel := getKernelVersion()
@@ -66,7 +72,8 @@ func buildChatSystemPrompt(registry *diagnose.ToolRegistry, language string) str
 		OS:             runtime.GOOS,
 		Arch:           runtime.GOARCH,
 		Kernel:         kernel,
-		ToolCategories: registry.ListCategories(),
+		ToolCatalog:    registry.ListAllTools(),
+		SystemSnapshot: snapshot,
 		Language:       language,
 	}
 

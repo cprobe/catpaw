@@ -77,6 +77,53 @@ func TestRegistryListCategories(t *testing.T) {
 	}
 }
 
+func TestRegistryListAllTools(t *testing.T) {
+	r := NewToolRegistry()
+	r.RegisterCategory("cpu", "cpu", "CPU diagnostics", ToolScopeLocal)
+	_ = r.Register("cpu", DiagnoseTool{
+		Name:        "cpu_usage",
+		Description: "Show CPU usage",
+		Scope:       ToolScopeLocal,
+	})
+	r.RegisterCategory("disk", "disk", "Disk diagnostics", ToolScopeLocal)
+	_ = r.Register("disk", DiagnoseTool{
+		Name:        "disk_usage",
+		Description: "Show disk usage",
+		Scope:       ToolScopeLocal,
+		Parameters:  []ToolParam{{Name: "path", Type: "string", Description: "Mount path", Required: true}},
+	})
+
+	out := r.ListAllTools()
+
+	if !strings.Contains(out, "[cpu]") {
+		t.Error("expected [cpu] category header")
+	}
+	if !strings.Contains(out, "[disk]") {
+		t.Error("expected [disk] category header")
+	}
+	if !strings.Contains(out, "cpu_usage()") {
+		t.Error("expected cpu_usage() with no params")
+	}
+	if !strings.Contains(out, "disk_usage(path*)") {
+		t.Error("expected disk_usage(path*) with required param marker")
+	}
+
+	// Verify alphabetical ordering: cpu before disk
+	cpuIdx := strings.Index(out, "[cpu]")
+	diskIdx := strings.Index(out, "[disk]")
+	if cpuIdx >= diskIdx {
+		t.Errorf("expected cpu before disk, got cpu@%d disk@%d", cpuIdx, diskIdx)
+	}
+}
+
+func TestRegistryListAllToolsEmpty(t *testing.T) {
+	r := NewToolRegistry()
+	out := r.ListAllTools()
+	if out != "" {
+		t.Errorf("expected empty string for empty registry, got %q", out)
+	}
+}
+
 func TestRegistryAccessorFactory(t *testing.T) {
 	r := NewToolRegistry()
 	r.RegisterAccessorFactory("redis", func(ctx context.Context, insRef any) (any, error) {
