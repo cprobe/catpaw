@@ -34,8 +34,10 @@ func Run() error {
 
 	registry := diagnose.NewToolRegistry()
 	for _, creator := range plugins.PluginCreators {
-		p := creator()
-		plugins.MayRegisterDiagnoseTools(p, registry)
+		plugins.MayRegisterDiagnoseTools(creator(), registry)
+	}
+	for _, r := range plugins.DiagnoseRegistrars {
+		r(registry)
 	}
 
 	client := aiclient.NewClient(aiclient.ClientConfig{

@@ -89,3 +89,13 @@ var PluginCreators = map[string]Creator{}
 func Add(name string, creator Creator) {
 	PluginCreators[name] = creator
 }
+
+// DiagnoseRegistrar registers diagnostic tools that are independent of any
+// alert-collecting plugin (e.g. system-level troubleshooting utilities).
+type DiagnoseRegistrar func(registry *diagnose.ToolRegistry)
+
+var DiagnoseRegistrars []DiagnoseRegistrar
+
+func AddDiagnoseRegistrar(r DiagnoseRegistrar) {
+	DiagnoseRegistrars = append(DiagnoseRegistrars, r)
+}

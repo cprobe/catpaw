@@ -41,6 +41,7 @@ import (
 	_ "github.com/cprobe/catpaw/plugins/secmod"
 	_ "github.com/cprobe/catpaw/plugins/sockstat"
 	_ "github.com/cprobe/catpaw/plugins/sysctl"
+	_ "github.com/cprobe/catpaw/plugins/sysdiag"
 	_ "github.com/cprobe/catpaw/plugins/systemd"
 	_ "github.com/cprobe/catpaw/plugins/tcpstate"
 	_ "github.com/cprobe/catpaw/plugins/uptime"
@@ -101,10 +102,11 @@ func (a *Agent) initDiagnoseEngine() {
 		return
 	}
 	registry := diagnose.NewToolRegistry()
-	for name, creator := range plugins.PluginCreators {
-		p := creator()
-		plugins.MayRegisterDiagnoseTools(p, registry)
-		_ = name
+	for _, creator := range plugins.PluginCreators {
+		plugins.MayRegisterDiagnoseTools(creator(), registry)
+	}
+	for _, r := range plugins.DiagnoseRegistrars {
+		r(registry)
 	}
 	diagnose.Init(registry)
 }

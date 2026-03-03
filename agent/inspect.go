@@ -93,8 +93,10 @@ func runInspectRequest(registry *diagnose.ToolRegistry, pluginName, target strin
 func buildFullRegistry() *diagnose.ToolRegistry {
 	registry := diagnose.NewToolRegistry()
 	for _, c := range plugins.PluginCreators {
-		p := c()
-		plugins.MayRegisterDiagnoseTools(p, registry)
+		plugins.MayRegisterDiagnoseTools(c(), registry)
+	}
+	for _, r := range plugins.DiagnoseRegistrars {
+		r(registry)
 	}
 	return registry
 }
