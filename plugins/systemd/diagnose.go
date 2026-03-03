@@ -41,6 +41,7 @@ func (p *SystemdPlugin) RegisterDiagnoseTools(registry *diagnose.ToolRegistry) {
 	})
 
 	registerJournalQuery(registry)
+	registerTimers(registry)
 }
 
 func execServiceStatus(ctx context.Context, args map[string]string) (string, error) {

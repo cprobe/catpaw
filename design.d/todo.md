@@ -100,3 +100,34 @@ for _, registrar := range plugins.DiagnoseRegistrars {
 | `numa_stat` | `plugins/sysdiag/numa.go` | NUMA 节点内存分布+跨节点访问统计，检测不对称内存和高 miss 率 | ✅ |
 | `thermal_zone` | `plugins/sysdiag/thermal.go` | 热区温度读取（毫摄氏度转换），含 trip point，高温告警 | ✅ |
 | `lvm_status` | `plugins/sysdiag/lvm.go` | LVM 卷组+逻辑卷状态（vgs/lvs），解析 attr 标志位检测异常 | ✅ |
+
+### P6：Tier A 网络/存储基础信息工具 ✅ Done
+
+| 工具 | 文件 | 说明 | 状态 |
+| --- | --- | --- | --- |
+| `net_interface` | `plugins/sysdiag/netif.go` | 网卡级统计（/proc/net/dev）：RX/TX 字节/包数/丢包/错误，标注问题接口 | ✅ |
+| `ip_addr` | `plugins/sysdiag/ipaddr.go` | 网络接口列表：IP/子网/MAC/MTU/状态，JSON+文本双模式解析，标注 DOWN 接口 | ✅ |
+| `route_table` | `plugins/sysdiag/route.go` | IPv4/IPv6 路由表：目标/网关/设备/metric/src，JSON+文本双模式，标注缺失默认路由 | ✅ |
+| `block_devices` | `plugins/sysdiag/blockdev.go` | 块设备拓扑树（lsblk）：磁盘→分区→LVM→挂载点，JSON+文本双模式 | ✅ |
+
+### P7：Tier B 安全/进程/定时任务工具 ✅ Done
+
+| 工具 | 文件 | 说明 | 状态 |
+| --- | --- | --- | --- |
+| `arp_neigh` | `plugins/sysdiag/arp.go` | ARP 邻居表摘要：条目数/gc_thresh3 对比/incomplete 检测/按接口汇总 | ✅ |
+| `firewall_summary` | `plugins/sysdiag/firewall.go` | 防火墙规则摘要：nftables 优先回退 iptables，chain/rule/DROP/REJECT 统计 | ✅ |
+| `selinux_status` | `plugins/sysdiag/selinux.go` | SELinux/AppArmor 状态+最近拒绝，自动检测 MAC 类型，ausearch/journalctl 获取 denied | ✅ |
+| `proc_threads` | `plugins/sysdiag/threads.go` | 进程线程列表（/proc/pid/task/），TID/名称/状态/CPU 时间，D 状态高亮 | ✅ |
+| `systemd_timers` | `plugins/systemd/timers.go` | systemd timer 列表+下次触发时间，过期 timer 高亮，支持 --all | ✅ |
+
+### P8：Tier C Timeout 排障专项工具 ✅ Done
+
+| 工具 | 文件 | 说明 | 状态 |
+| --- | --- | --- | --- |
+| `listen_overflow` | `plugins/sysdiag/listen.go` | LISTEN socket 队列使用率（Recv-Q/Send-Q），ListenOverflows/ListenDrops 内核计数器 | ✅ |
+| `tcp_retrans_rate` | `plugins/sysdiag/retrans.go` | TCP 重传/错误速率（两次采样 delta）：RetransSegs/s、InErrs/s、TCPTimeouts/s，含重传比 | ✅ |
+| `disk_io_latency` | `plugins/sysdiag/disklatency.go` | 磁盘 IO 延迟（两次采样 /proc/diskstats）：IOPS、MB/s、await ms、%util，高延迟/饱和标注 | ✅ |
+| `tcp_tuning_check` | `plugins/sysdiag/tcptune.go` | TCP 内核参数批量检查：SYN retry/keepalive/backlog/tw/内存/拥塞，推荐值范围对比 | ✅ |
+| `conn_latency_summary` | `plugins/sysdiag/connlatency.go` | 按远端 IP:port 聚合 TCP RTT 分布：count/avg/p99/max，定位慢下游服务 | ✅ |
+| `proc_threads` 增强 | `plugins/sysdiag/threads.go` | 新增 wchan 字段：显示线程在内核中的等待函数，D 状态线程排障关键信息 | ✅ |
+| `softnet_stat` | `plugins/sysdiag/softnet.go` | 每 CPU softnet 统计：processed/dropped/time_squeeze，网卡层丢包检测 | ✅ |
