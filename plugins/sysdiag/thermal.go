@@ -60,7 +60,7 @@ func readThermalZones(basePath string) ([]thermalEntry, error) {
 		return nil, fmt.Errorf("glob %s: %w", pattern, err)
 	}
 	if len(matches) == 0 {
-		return nil, fmt.Errorf("no thermal zones found (check /sys/class/thermal/)")
+		return nil, nil
 	}
 
 	sort.Strings(matches)

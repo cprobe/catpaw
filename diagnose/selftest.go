@@ -168,7 +168,12 @@ func RunSelfTest(registry *ToolRegistry, filter string, verbose bool) {
 		fmt.Println("WARN details:")
 		for _, r := range results {
 			if r.Status == "WARN" {
-				fmt.Printf("  [WARN] %-28s %s\n", r.Tool, r.Message)
+				hint := installHint(r.Message)
+				if hint != "" {
+					fmt.Printf("  [WARN] %-28s %s\n         %s\n", r.Tool, r.Message, hint)
+				} else {
+					fmt.Printf("  [WARN] %-28s %s\n", r.Tool, r.Message)
+				}
 			}
 		}
 	}
@@ -345,6 +350,59 @@ func formatBytes(n int) string {
 		return fmt.Sprintf("%dB", n)
 	}
 	return fmt.Sprintf("%.1fKB", float64(n)/1024)
+}
+
+// installHint extracts the missing command from the error message and
+// suggests install commands for common package managers.
+func installHint(msg string) string {
+	cmd := extractMissingCommand(msg)
+	if cmd == "" {
+		return ""
+	}
+
+	pkg := commandToPackage(cmd)
+	return fmt.Sprintf("fix: apt install %s  OR  yum install %s  OR  dnf install %s", pkg, pkg, pkg)
+}
+
+func extractMissingCommand(msg string) string {
+	// Pattern: exec: "traceroute": executable file not found in $PATH
+	if i := strings.Index(msg, `exec: "`); i >= 0 {
+		rest := msg[i+7:]
+		if j := strings.IndexByte(rest, '"'); j > 0 {
+			return rest[:j]
+		}
+	}
+	// Pattern: traceroute not found
+	if i := strings.Index(msg, " not found"); i > 0 {
+		parts := strings.Fields(msg[:i])
+		if len(parts) > 0 {
+			return parts[len(parts)-1]
+		}
+	}
+	return ""
+}
+
+var commandPackageMap = map[string]string{
+	"traceroute":  "traceroute",
+	"ss":          "iproute2",
+	"ip":          "iproute2",
+	"nft":         "nftables",
+	"iptables":    "iptables",
+	"vgs":         "lvm2",
+	"lvs":         "lvm2",
+	"getenforce":  "libselinux-utils",
+	"ausearch":    "auditd",
+	"aa-status":   "apparmor-utils",
+	"coredumpctl": "systemd-coredump",
+	"lsblk":       "util-linux",
+	"dmesg":       "util-linux",
+}
+
+func commandToPackage(cmd string) string {
+	if pkg, ok := commandPackageMap[cmd]; ok {
+		return pkg
+	}
+	return cmd
 }
 
 func formatTestArgs(args map[string]string) string {

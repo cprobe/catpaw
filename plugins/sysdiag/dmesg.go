@@ -72,12 +72,6 @@ func execDmesgRecent(ctx context.Context, args map[string]string) (string, error
 		return "", fmt.Errorf("dmesg not found: %w", err)
 	}
 
-	cmdArgs := []string{
-		"--time-format=iso",
-		"--level=" + level,
-		"--since=" + fmt.Sprintf("-%ds", sinceSeconds),
-	}
-
 	timeout := dmesgTimeout
 	if deadline, ok := ctx.Deadline(); ok {
 		if remaining := time.Until(deadline); remaining < timeout {
@@ -85,25 +79,21 @@ func execDmesgRecent(ctx context.Context, args map[string]string) (string, error
 		}
 	}
 
-	cmd := exec.Command(bin, cmdArgs...)
-	var stdout, stderr strings.Builder
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
+	cutoff := time.Now().Add(-time.Duration(sinceSeconds) * time.Second)
 
-	runErr, timedOut := cmdx.RunTimeout(cmd, timeout)
-
-	if timedOut {
-		return "", fmt.Errorf("dmesg timed out after %s", timeout)
-	}
-
-	// dmesg may exit non-zero when run without root and --since is unsupported
-	output := stdout.String()
-	if runErr != nil && output == "" {
-		stderrStr := strings.TrimSpace(stderr.String())
-		if stderrStr != "" {
-			return "", fmt.Errorf("dmesg failed: %v (%s)", runErr, stderrStr)
+	output, err := tryDmesg(bin, timeout,
+		"--time-format=iso", "--level="+level, fmt.Sprintf("--since=-%ds", sinceSeconds))
+	if err != nil {
+		// Fallback: old util-linux without --since / --time-format
+		output, err = tryDmesg(bin, timeout, "-T", "--level="+level)
+		if err != nil {
+			// Last resort: very old dmesg without --level
+			output, err = tryDmesg(bin, timeout, "-T")
+			if err != nil {
+				return "", fmt.Errorf("dmesg failed: %w", err)
+			}
 		}
-		return "", fmt.Errorf("dmesg failed: %v", runErr)
+		output = filterDmesgByTime(output, cutoff)
 	}
 
 	lines := strings.Split(strings.TrimRight(output, "\n"), "\n")
@@ -121,6 +111,61 @@ func execDmesgRecent(ctx context.Context, args map[string]string) (string, error
 	}
 
 	return strings.Join(lines, "\n"), nil
+}
+
+func tryDmesg(bin string, timeout time.Duration, args ...string) (string, error) {
+	cmd := exec.Command(bin, args...)
+	var stdout, stderr strings.Builder
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+
+	runErr, timedOut := cmdx.RunTimeout(cmd, timeout)
+	if timedOut {
+		return "", fmt.Errorf("dmesg timed out after %s", timeout)
+	}
+
+	output := stdout.String()
+	if runErr != nil && output == "" {
+		stderrStr := strings.TrimSpace(stderr.String())
+		if stderrStr != "" {
+			return "", fmt.Errorf("%v (%s)", runErr, stderrStr)
+		}
+		return "", runErr
+	}
+	return output, nil
+}
+
+// filterDmesgByTime keeps only lines whose leading timestamp is after cutoff.
+// Handles "dmesg -T" format: "[Wed Jan  1 12:34:56 2025] message"
+func filterDmesgByTime(output string, cutoff time.Time) string {
+	var kept []string
+	for _, line := range strings.Split(output, "\n") {
+		ts := parseDmesgTimestamp(line)
+		if ts.IsZero() || ts.After(cutoff) {
+			kept = append(kept, line)
+		}
+	}
+	return strings.Join(kept, "\n")
+}
+
+var dmesgTimeLayouts = []string{
+	"Mon Jan  2 15:04:05 2006",
+	"Mon Jan 2 15:04:05 2006",
+}
+
+func parseDmesgTimestamp(line string) time.Time {
+	start := strings.IndexByte(line, '[')
+	end := strings.IndexByte(line, ']')
+	if start < 0 || end < 0 || end <= start+1 {
+		return time.Time{}
+	}
+	raw := strings.TrimSpace(line[start+1 : end])
+	for _, layout := range dmesgTimeLayouts {
+		if t, err := time.ParseInLocation(layout, raw, time.Local); err == nil {
+			return t
+		}
+	}
+	return time.Time{}
 }
 
 const maxDmesgSeconds = 7 * 86400 // 7 days
