@@ -54,10 +54,12 @@ catpaw 监控系统检测到以下告警：
 你可以直接调用以下 {{.Plugin}} 工具（无需通过 call_tool）：
 {{.DirectTools}}
 
-如需使用其他领域的工具（磁盘、CPU、内存、网络等），请：
-1. 调用 list_tool_categories() 查看可用工具大类
-2. 调用 list_tools(category) 查看某个大类下的具体工具
-3. 调用 call_tool(name, tool_args) 执行具体工具
+如需使用其他领域的工具，以下是所有可用的工具大类：
+
+{{.ToolCategories}}
+使用步骤：
+1. 调用 list_tools(category) 查看某个大类下的具体工具
+2. 调用 call_tool(name, tool_args) 执行具体工具
    tool_args 为 JSON 字符串格式，如 call_tool(name="disk_usage", tool_args='{}')
 
 注意：上述 {{.Plugin}} 工具请直接调用，不要通过 call_tool 包装。
@@ -127,26 +129,28 @@ type promptData struct {
 	Target         string
 	Checks         []CheckSnapshot
 	DirectTools    string
+	ToolCategories string
 	IsRemoteTarget bool
 	LocalHost      string
 	Language       string
 }
 
-func buildSystemPrompt(req *DiagnoseRequest, directTools string, localHost string, isRemote bool, language string) string {
-	return renderPrompt(ModeAlert, req, directTools, localHost, isRemote, language)
+func buildSystemPrompt(req *DiagnoseRequest, directTools, toolCategories, localHost string, isRemote bool, language string) string {
+	return renderPrompt(ModeAlert, req, directTools, toolCategories, localHost, isRemote, language)
 }
 
-func buildInspectPrompt(req *DiagnoseRequest, directTools string, localHost string, isRemote bool, language string) string {
-	return renderPrompt(ModeInspect, req, directTools, localHost, isRemote, language)
+func buildInspectPrompt(req *DiagnoseRequest, directTools, toolCategories, localHost string, isRemote bool, language string) string {
+	return renderPrompt(ModeInspect, req, directTools, toolCategories, localHost, isRemote, language)
 }
 
-func renderPrompt(mode string, req *DiagnoseRequest, directTools string, localHost string, isRemote bool, language string) string {
+func renderPrompt(mode string, req *DiagnoseRequest, directTools, toolCategories, localHost string, isRemote bool, language string) string {
 	data := promptData{
 		Mode:           mode,
 		Plugin:         req.Plugin,
 		Target:         req.Target,
 		Checks:         req.Checks,
 		DirectTools:    directTools,
+		ToolCategories: toolCategories,
 		IsRemoteTarget: isRemote,
 		LocalHost:      localHost,
 		Language:       language,

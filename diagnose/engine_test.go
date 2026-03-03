@@ -349,7 +349,7 @@ func TestPromptSingleCheck(t *testing.T) {
 			Description:       "memory high",
 		}},
 	}
-	prompt := buildSystemPrompt(req, "- redis_info: show info\n", "myhost", true, "zh")
+	prompt := buildSystemPrompt(req, "- redis_info: show info\n", "", "myhost", true, "zh")
 	if !strings.Contains(prompt, "redis::used_memory") {
 		t.Fatal("prompt should contain check name")
 	}
@@ -370,7 +370,7 @@ func TestPromptMultipleChecks(t *testing.T) {
 			{Check: "redis::connected_clients", Status: "Critical", Description: "too many"},
 		},
 	}
-	prompt := buildSystemPrompt(req, "", "myhost", false, "zh")
+	prompt := buildSystemPrompt(req, "", "", "myhost", false, "zh")
 	if !strings.Contains(prompt, "2 个异常检查项") {
 		t.Fatal("multi-check prompt should mention count")
 	}
@@ -385,7 +385,7 @@ func TestPromptInspectMode(t *testing.T) {
 		Plugin: "redis",
 		Target: "10.0.0.1:6379",
 	}
-	prompt := buildInspectPrompt(req, "- redis_info: show info\n", "myhost", true, "zh")
+	prompt := buildInspectPrompt(req, "- redis_info: show info\n", "", "myhost", true, "zh")
 	if !strings.Contains(prompt, "主动健康巡检") {
 		t.Fatal("inspect prompt should mention health inspection")
 	}
@@ -404,17 +404,17 @@ func TestPromptLanguage(t *testing.T) {
 		Checks: []CheckSnapshot{{Check: "redis::mem", Status: "Warning"}},
 	}
 
-	zhPrompt := buildSystemPrompt(req, "", "myhost", false, "zh")
+	zhPrompt := buildSystemPrompt(req, "", "", "myhost", false, "zh")
 	if strings.Contains(zhPrompt, "You MUST respond in") {
 		t.Fatal("zh prompt should not contain language override")
 	}
 
-	enPrompt := buildSystemPrompt(req, "", "myhost", false, "en")
+	enPrompt := buildSystemPrompt(req, "", "", "myhost", false, "en")
 	if !strings.Contains(enPrompt, "You MUST respond in en") {
 		t.Fatal("en prompt should contain language instruction")
 	}
 
-	jaPrompt := buildInspectPrompt(req, "", "myhost", false, "ja")
+	jaPrompt := buildInspectPrompt(req, "", "", "myhost", false, "ja")
 	if !strings.Contains(jaPrompt, "You MUST respond in ja") {
 		t.Fatal("ja prompt should contain language instruction")
 	}

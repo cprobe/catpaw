@@ -211,7 +211,7 @@ func (c *AIConfig) applyDefaults() {
 		c.MaxTokens = 4000
 	}
 	if c.MaxRounds <= 0 {
-		c.MaxRounds = 8
+		c.MaxRounds = 15
 	}
 	if time.Duration(c.RequestTimeout) == 0 {
 		c.RequestTimeout = Duration(60 * time.Second)

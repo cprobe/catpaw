@@ -29,7 +29,7 @@ integration_key = "your-flashduty-integration-key"
 #
 ## AI 请求参数
 # max_tokens = 4000                  # 单次 AI 请求最大 token 数
-# max_rounds = 8                     # AI Agent 最大交互轮次
+# max_rounds = 15                    # AI Agent 最大交互轮次（工具多时建议 12~20）
 # request_timeout = "60s"            # 单次 AI 请求超时
 #
 ## 重试配置
