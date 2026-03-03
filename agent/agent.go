@@ -24,6 +24,7 @@ import (
 	_ "github.com/cprobe/catpaw/plugins/exec"
 	_ "github.com/cprobe/catpaw/plugins/filecheck"
 	_ "github.com/cprobe/catpaw/plugins/filefd"
+	_ "github.com/cprobe/catpaw/plugins/hostident"
 	_ "github.com/cprobe/catpaw/plugins/http"
 	_ "github.com/cprobe/catpaw/plugins/journaltail"
 	_ "github.com/cprobe/catpaw/plugins/logfile"

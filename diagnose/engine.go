@@ -19,15 +19,13 @@ import (
 // DiagnoseEngine is the central coordinator for AI-powered diagnosis.
 type DiagnoseEngine struct {
 	registry *ToolRegistry
-	client   *aiclient.Client
+	fc       *aiclient.FailoverClient
 	state    *DiagnoseState
 	cfg      config.AIConfig
 
 	maxRounds          int
 	contextWindowLimit int
 	toolTimeout        time.Duration
-	retryBackoff       time.Duration
-	maxRetries         int
 
 	// in-flight tracking for graceful shutdown
 	mu       sync.Mutex
@@ -38,32 +36,25 @@ type DiagnoseEngine struct {
 
 // NewDiagnoseEngine creates a new engine from global config.
 func NewDiagnoseEngine(registry *ToolRegistry, cfg config.AIConfig) *DiagnoseEngine {
-	client := aiclient.NewClient(aiclient.ClientConfig{
-		BaseURL:        cfg.BaseURL,
-		APIKey:         cfg.APIKey,
-		Model:          cfg.Model,
-		MaxTokens:      cfg.MaxTokens,
-		RequestTimeout: time.Duration(cfg.RequestTimeout),
-	})
+	fc := aiclient.NewFailoverClient(cfg)
 
 	state := NewDiagnoseState()
 	state.Load()
 
-	contextWindow := cfg.ContextWindow
+	primary := cfg.PrimaryModel()
+	contextWindow := primary.ContextWindow
 	if contextWindow <= 0 {
 		contextWindow = 128000
 	}
 
 	return &DiagnoseEngine{
 		registry:           registry,
-		client:             client,
+		fc:                 fc,
 		state:              state,
 		cfg:                cfg,
 		maxRounds:          cfg.MaxRounds,
 		contextWindowLimit: contextWindow * 80 / 100,
 		toolTimeout:        time.Duration(cfg.ToolTimeout),
-		retryBackoff:       time.Duration(cfg.RetryBackoff),
-		maxRetries:         cfg.MaxRetries,
 		inFlight:           make(map[string]context.CancelFunc),
 		sem:                make(chan struct{}, cfg.MaxConcurrentDiagnoses),
 	}
@@ -193,11 +184,7 @@ func (e *DiagnoseEngine) diagnose(ctx context.Context, req *DiagnoseRequest, ses
 	}
 
 	estimatedTokens := aiclient.EstimateTokensChinese(prompt)
-	session.Record.AI.Model = e.cfg.Model
-	retryCfg := aiclient.RetryConfig{
-		MaxRetries:   e.maxRetries,
-		RetryBackoff: e.retryBackoff,
-	}
+	session.Record.AI.Model = e.cfg.PrimaryModelName()
 	contextWarned := false
 
 	for round := 0; round < e.maxRounds; round++ {
@@ -214,10 +201,11 @@ func (e *DiagnoseEngine) diagnose(ctx context.Context, req *DiagnoseRequest, ses
 			})
 		}
 
-		resp, err := aiclient.ChatWithRetry(ctx, e.client, retryCfg, messages, aiToolDefs)
+		resp, modelName, err := e.fc.Chat(ctx, messages, aiToolDefs)
 		if err != nil {
 			return "", fmt.Errorf("AI API error at round %d: %w", round+1, err)
 		}
+		session.Record.AI.Model = modelName
 
 		if resp.Usage.TotalTokens > 0 {
 			estimatedTokens = resp.Usage.TotalTokens

@@ -15,9 +15,8 @@ import (
 )
 
 type Global struct {
-	Interval         Duration          `toml:"interval"`
-	Labels           map[string]string `toml:"labels"`
-	LabelHasHostname bool              `toml:"label_has_hostname"`
+	Interval Duration          `toml:"interval"`
+	Labels   map[string]string `toml:"labels"`
 }
 
 type LogConfig struct {
@@ -61,15 +60,26 @@ type NotifyConfig struct {
 	WebAPI    *WebAPIConfig    `toml:"webapi"`
 }
 
-type AIConfig struct {
-	Enabled bool   `toml:"enabled"`
-	BaseURL string `toml:"base_url"`
-	APIKey  string `toml:"api_key"`
-	Model   string `toml:"model"`
+// ModelConfig defines connection and model-specific parameters for one AI model.
+type ModelConfig struct {
+	BaseURL       string                 `toml:"base_url"`
+	APIKey        string                 `toml:"api_key"`
+	Model         string                 `toml:"model"`
+	MaxTokens     int                    `toml:"max_tokens"`
+	ContextWindow int                    `toml:"context_window"`
+	InputPrice    float64                `toml:"input_price"`
+	OutputPrice   float64                `toml:"output_price"`
+	ExtraBody     map[string]interface{} `toml:"extra_body"`
+}
 
-	MaxTokens     int      `toml:"max_tokens"`
-	ContextWindow int      `toml:"context_window"`
-	MaxRounds     int      `toml:"max_rounds"`
+// AIConfig holds the full AI subsystem configuration.
+// ModelPriority defines the failover order; Models maps profile names to ModelConfig.
+type AIConfig struct {
+	Enabled       bool                   `toml:"enabled"`
+	ModelPriority []string               `toml:"model_priority"`
+	Models        map[string]ModelConfig `toml:"models"`
+
+	MaxRounds      int      `toml:"max_rounds"`
 	RequestTimeout Duration `toml:"request_timeout"`
 
 	MaxRetries   int      `toml:"max_retries"`
@@ -85,12 +95,24 @@ type AIConfig struct {
 	DiagnoseRetention Duration `toml:"diagnose_retention"`
 	DiagnoseMaxCount  int      `toml:"diagnose_max_count"`
 
-	Language string `toml:"language"` // output language: "zh", "en", etc. Default: "zh"
-
-	InputPrice  float64 `toml:"input_price"`  // USD per 1M input tokens (0 = don't show cost)
-	OutputPrice float64 `toml:"output_price"` // USD per 1M output tokens
+	Language string `toml:"language"`
 
 	MCP MCPConfig `toml:"mcp"`
+}
+
+// PrimaryModel returns the first model in the priority list.
+// Panics if ModelPriority is empty or references a missing model — Validate
+// should always be called before this.
+func (c *AIConfig) PrimaryModel() ModelConfig {
+	return c.Models[c.ModelPriority[0]]
+}
+
+// PrimaryModelName returns the name of the first model in the priority list.
+func (c *AIConfig) PrimaryModelName() string {
+	if len(c.ModelPriority) == 0 {
+		return ""
+	}
+	return c.ModelPriority[0]
 }
 
 type ConfigType struct {
@@ -155,47 +177,16 @@ func InitConfig(configDir string, interval int64, plugins, loglevel string) erro
 	Config.Notify.applyDefaults()
 
 	Config.AI.applyDefaults()
-	Config.AI.resolveAPIKey()
+	Config.AI.resolveAPIKeys()
 
 	if Config.Global.Labels == nil {
 		Config.Global.Labels = make(map[string]string)
 	}
 
-	for k, v := range Config.Global.Labels {
-		if !strings.Contains(v, "$") {
-			continue
-		}
-
-		if strings.Contains(v, "$hostname") {
-			Config.Global.LabelHasHostname = true
-		}
-
-		if strings.Contains(v, "$ip") {
-			ip, err := GetOutboundIP()
-			if err != nil {
-				return fmt.Errorf("failed to get outbound ip: %v", err)
-			}
-			Config.Global.Labels[k] = strings.ReplaceAll(Config.Global.Labels[k], "$ip", fmt.Sprint(ip))
-		}
-
-		Config.Global.Labels[k] = os.Expand(Config.Global.Labels[k], func(key string) string {
-			if key == "hostname" {
-				return "$hostname"
-			}
-			return GetEnv(key)
-		})
-	}
+	builtins := HostBuiltins()
+	Config.Global.Labels = expandLabels(Config.Global.Labels, builtins)
 
 	return nil
-}
-
-func GetEnv(key string) string {
-	v := os.Getenv(key)
-	var envVarEscaper = strings.NewReplacer(
-		`"`, `\"`,
-		`\`, `\\`,
-	)
-	return envVarEscaper.Replace(v)
 }
 
 // Get preferred outbound ip of this machine
@@ -222,12 +213,6 @@ func GetOutboundIP() (net.IP, error) {
 }
 
 func (c *AIConfig) applyDefaults() {
-	if c.Model == "" {
-		c.Model = "gpt-4o"
-	}
-	if c.MaxTokens <= 0 {
-		c.MaxTokens = 4000
-	}
 	if c.MaxRounds <= 0 {
 		c.MaxRounds = 15
 	}
@@ -261,12 +246,26 @@ func (c *AIConfig) applyDefaults() {
 	if c.Language == "" {
 		c.Language = "zh"
 	}
+
+	for name, m := range c.Models {
+		if m.MaxTokens <= 0 {
+			m.MaxTokens = 4000
+		}
+		if m.ContextWindow <= 0 {
+			m.ContextWindow = 128000
+		}
+		c.Models[name] = m
+	}
 }
 
-func (c *AIConfig) resolveAPIKey() {
-	if strings.HasPrefix(c.APIKey, "${") && strings.HasSuffix(c.APIKey, "}") {
-		envKey := c.APIKey[2 : len(c.APIKey)-1]
-		c.APIKey = os.Getenv(envKey)
+// resolveAPIKeys resolves ${ENV_VAR} references in all model API keys.
+func (c *AIConfig) resolveAPIKeys() {
+	for name, m := range c.Models {
+		if strings.HasPrefix(m.APIKey, "${") && strings.HasSuffix(m.APIKey, "}") {
+			envKey := m.APIKey[2 : len(m.APIKey)-1]
+			m.APIKey = os.Getenv(envKey)
+			c.Models[name] = m
+		}
 	}
 }
 
@@ -274,11 +273,23 @@ func (c *AIConfig) Validate() error {
 	if !c.Enabled {
 		return nil
 	}
-	if c.BaseURL == "" {
-		return fmt.Errorf("[ai] base_url is required when enabled=true")
+	if len(c.ModelPriority) == 0 {
+		return fmt.Errorf("[ai] model_priority is required when enabled=true")
 	}
-	if c.APIKey == "" {
-		return fmt.Errorf("[ai] api_key is required when enabled=true (supports ${ENV_VAR} syntax)")
+	if len(c.Models) == 0 {
+		return fmt.Errorf("[ai] at least one model must be configured in [ai.models]")
+	}
+	for _, name := range c.ModelPriority {
+		m, ok := c.Models[name]
+		if !ok {
+			return fmt.Errorf("[ai] model_priority references unknown model %q", name)
+		}
+		if m.BaseURL == "" {
+			return fmt.Errorf("[ai.models.%s] base_url is required", name)
+		}
+		if m.APIKey == "" {
+			return fmt.Errorf("[ai.models.%s] api_key is required (supports ${ENV_VAR} syntax)", name)
+		}
 	}
 	if c.QueueFullPolicy != "drop" && c.QueueFullPolicy != "wait" {
 		return fmt.Errorf("[ai] queue_full_policy must be \"drop\" or \"wait\", got %q", c.QueueFullPolicy)
@@ -334,4 +345,15 @@ func (c *NotifyConfig) applyDefaults() {
 			})
 		}
 	}
+}
+
+// expandLabels resolves ${HOSTNAME}, ${SHORT_HOSTNAME}, ${IP} and any
+// environment variable references in label values.
+func expandLabels(labels map[string]string, builtins map[string]string) map[string]string {
+	for k, v := range labels {
+		if strings.Contains(v, "$") {
+			labels[k] = ExpandWithBuiltins(v, builtins)
+		}
+	}
+	return labels
 }

@@ -94,11 +94,11 @@ func TestDiagnoseEndToEnd(t *testing.T) {
 	})
 
 	aiCfg := config.AIConfig{
-		Enabled:                true,
-		BaseURL:                srv.URL,
-		APIKey:                 "test-key",
-		Model:                  "test-model",
-		MaxTokens:              4000,
+		Enabled:       true,
+		ModelPriority: []string{"test"},
+		Models: map[string]config.ModelConfig{
+			"test": {BaseURL: srv.URL, APIKey: "test-key", Model: "test-model", MaxTokens: 4000},
+		},
 		MaxRounds:              8,
 		RequestTimeout:         config.Duration(30 * time.Second),
 		MaxRetries:             1,
@@ -230,11 +230,11 @@ func TestDiagnoseMetaTools(t *testing.T) {
 	})
 
 	engine := NewDiagnoseEngine(registry, config.AIConfig{
-		Enabled:                true,
-		BaseURL:                srv.URL,
-		APIKey:                 "test",
-		Model:                  "test",
-		MaxTokens:              4000,
+		Enabled:       true,
+		ModelPriority: []string{"test"},
+		Models: map[string]config.ModelConfig{
+			"test": {BaseURL: srv.URL, APIKey: "test", Model: "test", MaxTokens: 4000},
+		},
 		MaxRounds:              8,
 		RequestTimeout:         config.Duration(30 * time.Second),
 		MaxRetries:             0,
@@ -281,10 +281,11 @@ func TestDiagnoseShutdown(t *testing.T) {
 
 	registry := NewToolRegistry()
 	engine := NewDiagnoseEngine(registry, config.AIConfig{
-		Enabled:                true,
-		BaseURL:                srv.URL,
-		APIKey:                 "test",
-		Model:                  "test",
+		Enabled:       true,
+		ModelPriority: []string{"test"},
+		Models: map[string]config.ModelConfig{
+			"test": {BaseURL: srv.URL, APIKey: "test", Model: "test"},
+		},
 		MaxRounds:              2,
 		RequestTimeout:         config.Duration(10 * time.Second),
 		MaxConcurrentDiagnoses: 3,

@@ -48,20 +48,21 @@ func RunTest(mcpCfg config.MCPConfig) []TestResult {
 	ctx, cancel := context.WithTimeout(context.Background(), testTotalTimeout)
 	defer cancel()
 
+	builtins := config.HostBuiltins()
 	results := make([]TestResult, 0, len(mcpCfg.Servers))
 	for i := range mcpCfg.Servers {
 		srv := &mcpCfg.Servers[i]
-		r := testOneServer(ctx, srv, mcpCfg.DefaultIdentity)
+		r := testOneServer(ctx, srv, mcpCfg.DefaultIdentity, builtins)
 		results = append(results, r)
 	}
 	return results
 }
 
-func testOneServer(ctx context.Context, srv *config.MCPServerConfig, defaultIdentity string) TestResult {
+func testOneServer(ctx context.Context, srv *config.MCPServerConfig, defaultIdentity string, builtins map[string]string) TestResult {
 	start := time.Now()
 	r := TestResult{
 		Name:     srv.Name,
-		Identity: srv.ResolvedIdentity(defaultIdentity),
+		Identity: srv.ResolvedIdentity(defaultIdentity, builtins),
 	}
 
 	if srv.Name == "" {

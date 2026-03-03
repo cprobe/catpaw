@@ -22,9 +22,10 @@ const (
 // Manager manages the lifecycle of multiple MCP server connections and
 // registers their tools into catpaw's ToolRegistry.
 type Manager struct {
-	mu      sync.RWMutex
-	clients map[string]*Client // name → client
-	configs map[string]*config.MCPServerConfig
+	mu       sync.RWMutex
+	clients  map[string]*Client // name → client
+	configs  map[string]*config.MCPServerConfig
+	builtins map[string]string // host-level built-in variables, computed once
 }
 
 // NewManager creates an unstarted Manager.
@@ -39,6 +40,7 @@ func NewManager() *Manager {
 // and registers them into the ToolRegistry.
 // Servers that fail to start are logged and skipped (best-effort).
 func (m *Manager) StartAll(ctx context.Context, mcpCfg config.MCPConfig, registry *diagnose.ToolRegistry) {
+	m.builtins = config.HostBuiltins()
 	for i := range mcpCfg.Servers {
 		srv := &mcpCfg.Servers[i]
 		if srv.Name == "" || srv.Command == "" {
@@ -80,7 +82,7 @@ func (m *Manager) startServer(ctx context.Context, srv *config.MCPServerConfig, 
 	m.configs[srv.Name] = srv
 	m.mu.Unlock()
 
-	identity := srv.ResolvedIdentity(defaultIdentity)
+	identity := srv.ResolvedIdentity(defaultIdentity, m.builtins)
 
 	registered := m.registerTools(srv, tools, client, identity, registry)
 	log.Printf("[mcp] %s: %d/%d tools registered (identity: %s)", srv.Name, registered, len(tools), identity)
@@ -177,7 +179,7 @@ func (m *Manager) IdentitySummary(defaultIdentity string) string {
 
 	for _, n := range names {
 		cfg := m.configs[n]
-		id := cfg.ResolvedIdentity(defaultIdentity)
+		id := cfg.ResolvedIdentity(defaultIdentity, m.builtins)
 		if id != "" {
 			fmt.Fprintf(&b, "- %s: %s\n", n, id)
 		}

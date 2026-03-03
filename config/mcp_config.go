@@ -26,15 +26,16 @@ type MCPServerConfig struct {
 // ResolvedIdentity returns the identity string for this server,
 // falling back to defaultIdentity, then auto-detected host info.
 // Variables ${HOSTNAME}, ${SHORT_HOSTNAME}, ${IP}, and ${ENV_VAR} are expanded.
-func (s *MCPServerConfig) ResolvedIdentity(defaultIdentity string) string {
+// builtins should be obtained from HostBuiltins().
+func (s *MCPServerConfig) ResolvedIdentity(defaultIdentity string, builtins map[string]string) string {
 	raw := s.Identity
 	if raw == "" {
 		raw = defaultIdentity
 	}
 	if raw == "" {
-		return autoIdentity()
+		return autoIdentity(builtins)
 	}
-	return expandIdentityVars(raw)
+	return ExpandWithBuiltins(raw, builtins)
 }
 
 // IsToolAllowed checks whether a tool name passes the whitelist filter.
@@ -51,20 +52,24 @@ func (s *MCPServerConfig) IsToolAllowed(toolName string) bool {
 	return false
 }
 
-func expandIdentityVars(raw string) string {
+// HostBuiltins computes host-level built-in variables once.
+// Callers should compute this early and pass it to expandWithBuiltins.
+func HostBuiltins() map[string]string {
 	hostname, _ := os.Hostname()
 	short := hostname
 	if idx := strings.IndexByte(short, '.'); idx > 0 {
 		short = short[:idx]
 	}
-	ip := detectIP()
-
-	builtins := map[string]string{
+	return map[string]string{
 		"HOSTNAME":       hostname,
 		"SHORT_HOSTNAME": short,
-		"IP":             ip,
+		"IP":             DetectIP(),
 	}
+}
 
+// ExpandWithBuiltins expands ${VAR} references in raw, checking builtins
+// first and falling back to environment variables.
+func ExpandWithBuiltins(raw string, builtins map[string]string) string {
 	return os.Expand(raw, func(key string) string {
 		if v, ok := builtins[key]; ok {
 			return v
@@ -73,14 +78,12 @@ func expandIdentityVars(raw string) string {
 	})
 }
 
-func autoIdentity() string {
-	hostname, _ := os.Hostname()
-	ip := detectIP()
+func autoIdentity(builtins map[string]string) string {
 	parts := make([]string, 0, 2)
-	if hostname != "" {
-		parts = append(parts, "hostname="+hostname)
+	if h := builtins["HOSTNAME"]; h != "" {
+		parts = append(parts, "hostname="+h)
 	}
-	if ip != "" {
+	if ip := builtins["IP"]; ip != "" {
 		parts = append(parts, "ip="+ip)
 	}
 	if len(parts) == 0 {
@@ -89,7 +92,10 @@ func autoIdentity() string {
 	return strings.Join(parts, ", ")
 }
 
-func detectIP() string {
+// DetectIP returns the preferred outbound IPv4 address. It first tries
+// gateway-based detection via GetOutboundIP, then falls back to scanning
+// network interfaces.
+func DetectIP() string {
 	ip, err := GetOutboundIP()
 	if err != nil {
 		return detectIPFallback()

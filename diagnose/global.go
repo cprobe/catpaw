@@ -35,7 +35,7 @@ func Init(registry *ToolRegistry) {
 	go runPeriodicCleanup(cleanupStop)
 
 	logger.Logger.Infow("AI diagnose engine initialized",
-		"model", cfg.Model,
+		"models", cfg.ModelPriority,
 		"max_rounds", cfg.MaxRounds,
 		"max_concurrent", cfg.MaxConcurrentDiagnoses,
 		"aggregate_window", time.Duration(cfg.AggregateWindow),

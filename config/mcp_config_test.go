@@ -10,7 +10,7 @@ func TestResolvedIdentity_ServerOverridesDefault(t *testing.T) {
 	srv := MCPServerConfig{
 		Identity: "custom-id",
 	}
-	got := srv.ResolvedIdentity("default-id")
+	got := srv.ResolvedIdentity("default-id", HostBuiltins())
 	if got != "custom-id" {
 		t.Errorf("expected custom-id, got %q", got)
 	}
@@ -18,7 +18,7 @@ func TestResolvedIdentity_ServerOverridesDefault(t *testing.T) {
 
 func TestResolvedIdentity_FallbackToDefault(t *testing.T) {
 	srv := MCPServerConfig{}
-	got := srv.ResolvedIdentity("default-id")
+	got := srv.ResolvedIdentity("default-id", HostBuiltins())
 	if got != "default-id" {
 		t.Errorf("expected default-id, got %q", got)
 	}
@@ -26,7 +26,7 @@ func TestResolvedIdentity_FallbackToDefault(t *testing.T) {
 
 func TestResolvedIdentity_AutoDetectWhenEmpty(t *testing.T) {
 	srv := MCPServerConfig{}
-	got := srv.ResolvedIdentity("")
+	got := srv.ResolvedIdentity("", HostBuiltins())
 	if got == "" {
 		t.Error("expected auto-detected identity, got empty string")
 	}
@@ -35,8 +35,9 @@ func TestResolvedIdentity_AutoDetectWhenEmpty(t *testing.T) {
 	}
 }
 
-func TestExpandIdentityVars_Hostname(t *testing.T) {
-	result := expandIdentityVars("host=${HOSTNAME}")
+func TestExpandWithBuiltins_Hostname(t *testing.T) {
+	builtins := HostBuiltins()
+	result := ExpandWithBuiltins("host=${HOSTNAME}", builtins)
 	hostname, _ := os.Hostname()
 	expected := "host=" + hostname
 	if result != expected {
@@ -44,18 +45,20 @@ func TestExpandIdentityVars_Hostname(t *testing.T) {
 	}
 }
 
-func TestExpandIdentityVars_EnvVar(t *testing.T) {
+func TestExpandWithBuiltins_EnvVar(t *testing.T) {
 	os.Setenv("TEST_MCP_VAR", "test123")
 	defer os.Unsetenv("TEST_MCP_VAR")
 
-	result := expandIdentityVars("val=${TEST_MCP_VAR}")
+	builtins := HostBuiltins()
+	result := ExpandWithBuiltins("val=${TEST_MCP_VAR}", builtins)
 	if result != "val=test123" {
 		t.Errorf("expected val=test123, got %q", result)
 	}
 }
 
-func TestExpandIdentityVars_ShortHostname(t *testing.T) {
-	result := expandIdentityVars("short=${SHORT_HOSTNAME}")
+func TestExpandWithBuiltins_ShortHostname(t *testing.T) {
+	builtins := HostBuiltins()
+	result := ExpandWithBuiltins("short=${SHORT_HOSTNAME}", builtins)
 	hostname, _ := os.Hostname()
 	short := hostname
 	if idx := strings.IndexByte(short, '.'); idx > 0 {

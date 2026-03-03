@@ -18,6 +18,7 @@ type Client struct {
 	apiKey     string
 	model      string
 	maxTokens  int
+	extraBody  map[string]interface{}
 	httpClient *http.Client
 }
 
@@ -28,6 +29,7 @@ type ClientConfig struct {
 	Model          string
 	MaxTokens      int
 	RequestTimeout time.Duration
+	ExtraBody      map[string]interface{}
 }
 
 // NewClient creates a new AI API client.
@@ -37,24 +39,19 @@ func NewClient(cfg ClientConfig) *Client {
 		apiKey:    cfg.APIKey,
 		model:     cfg.Model,
 		maxTokens: cfg.MaxTokens,
+		extraBody: cfg.ExtraBody,
 		httpClient: &http.Client{
 			Timeout: cfg.RequestTimeout,
 		},
 	}
 }
 
+// Model returns the model name configured for this client.
+func (c *Client) Model() string { return c.model }
+
 // Chat sends a single chat completion request and returns the parsed response.
 func (c *Client) Chat(ctx context.Context, messages []Message, tools []Tool) (*ChatResponse, error) {
-	reqBody := ChatRequest{
-		Model:    c.model,
-		Messages: messages,
-		Tools:    tools,
-	}
-	if c.maxTokens > 0 {
-		reqBody.MaxTokens = c.maxTokens
-	}
-
-	payload, err := json.Marshal(reqBody)
+	payload, err := c.buildRequestPayload(messages, tools)
 	if err != nil {
 		return nil, fmt.Errorf("marshal request: %w", err)
 	}
@@ -118,4 +115,26 @@ func truncStr(s string, maxBytes int) string {
 		maxBytes--
 	}
 	return s[:maxBytes] + "..."
+}
+
+// buildRequestPayload constructs the JSON body for a chat completion request.
+// Vendor-specific extraBody fields are merged first, then standard fields are
+// set on top so they can never be accidentally overridden.
+func (c *Client) buildRequestPayload(messages []Message, tools []Tool) ([]byte, error) {
+	body := make(map[string]interface{}, 4+len(c.extraBody))
+
+	for k, v := range c.extraBody {
+		body[k] = v
+	}
+
+	body["model"] = c.model
+	body["messages"] = messages
+	if len(tools) > 0 {
+		body["tools"] = tools
+	}
+	if c.maxTokens > 0 {
+		body["max_tokens"] = c.maxTokens
+	}
+
+	return json.Marshal(body)
 }

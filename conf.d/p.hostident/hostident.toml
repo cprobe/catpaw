@@ -1,0 +1,21 @@
+[[instances]]
+## 检测 hostname 变化
+## severity: 变化时的告警级别（Critical / Warning / Info，默认 Warning）
+[instances.hostname_changed]
+enabled = true
+# severity = "Warning"
+
+## 检测 IP 变化
+[instances.ip_changed]
+enabled = true
+# severity = "Warning"
+
+## 低频事件，5 分钟检测一次即可
+interval = "5m"
+
+[instances.alerting]
+for_duration = 0
+repeat_interval = "1h"
+repeat_number = 0
+# disabled = false
+# disable_recovery_notification = false

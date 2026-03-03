@@ -164,6 +164,7 @@ func handleChatSubcommand(args []string) {
 	fs := flag.NewFlagSet("chat", flag.ExitOnError)
 	verbose := fs.Bool("v", false, "Verbose: show tool output summaries")
 	fs.BoolVar(verbose, "verbose", false, "Verbose: show tool output summaries")
+	modelPin := fs.String("model", "", "Pin to a specific model (skip failover)")
 	fs.Usage = printChatUsage
 	fs.Parse(args[1:])
 
@@ -172,7 +173,7 @@ func handleChatSubcommand(args []string) {
 		os.Exit(1)
 	}
 
-	if err := chat.Run(*verbose); err != nil {
+	if err := chat.Run(*verbose, *modelPin); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
 	}
@@ -315,7 +316,7 @@ Examples:
 }
 
 func printChatUsage() {
-	fmt.Println(`Usage: catpaw chat [-v]
+	fmt.Println(`Usage: catpaw chat [-v] [--model <name>]
 
 Start an interactive AI-powered chat session for troubleshooting.
 The AI can use built-in diagnostic tools and execute shell commands
@@ -324,12 +325,18 @@ The AI can use built-in diagnostic tools and execute shell commands
 Requires [ai] enabled = true in config.toml.
 
 Flags:
-  -v, --verbose    Show tool output summaries (first 5 lines of each tool result)
+  -v, --verbose       Show tool output summaries (first 5 lines of each tool result)
+  --model <name>      Pin to a specific model (skip failover)
+
+Interactive commands:
+  /models             List all configured models and current status
+  /model <name>       Switch to a specific model
+  /model auto         Restore priority-based failover
 
 Examples:
   catpaw chat                             Start interactive chat
   catpaw chat -v                          Verbose mode (show tool outputs)
-  catpaw --configs /etc/catpaw/conf.d chat   Use custom config directory`)
+  catpaw chat --model gpt4o              Pin to specific model`)
 }
 
 func printDiagnoseUsage() {

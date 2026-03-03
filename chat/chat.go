@@ -23,7 +23,8 @@ const (
 )
 
 // Run starts the interactive chat REPL.
-func Run(verbose bool) error {
+// If modelPin is non-empty, only that model is used (no failover).
+func Run(verbose bool, modelPin string) error {
 	cfg := config.Config.AI
 	if !cfg.Enabled {
 		return fmt.Errorf("AI is not enabled, set [ai] enabled = true in config.toml")
@@ -40,7 +41,6 @@ func Run(verbose bool) error {
 		r(registry)
 	}
 
-	// Start MCP servers if configured
 	mcpMgr := mcp.NewManager()
 	if cfg.MCP.Enabled && len(cfg.MCP.Servers) > 0 {
 		mcpCtx, mcpCancel := context.WithCancel(context.Background())
@@ -54,23 +54,18 @@ func Run(verbose bool) error {
 		}
 	}
 
-	client := aiclient.NewClient(aiclient.ClientConfig{
-		BaseURL:        cfg.BaseURL,
-		APIKey:         cfg.APIKey,
-		Model:          cfg.Model,
-		MaxTokens:      cfg.MaxTokens,
-		RequestTimeout: time.Duration(cfg.RequestTimeout),
-	})
+	fc := aiclient.NewFailoverClient(cfg)
+	if modelPin != "" {
+		if err := fc.PinModel(modelPin); err != nil {
+			return fmt.Errorf("--model flag: %w", err)
+		}
+	}
 
 	snapshot := collectSnapshot(registry)
 	mcpIdentity := mcpMgr.IdentitySummary(cfg.MCP.DefaultIdentity)
 	systemPrompt := buildChatSystemPrompt(registry, snapshot, mcpIdentity, cfg.Language)
 	aiTools := buildChatToolSet()
 	toolTimeout := time.Duration(cfg.ToolTimeout)
-	retryCfg := aiclient.RetryConfig{
-		MaxRetries:   cfg.MaxRetries,
-		RetryBackoff: time.Duration(cfg.RetryBackoff),
-	}
 
 	messages := []aiclient.Message{
 		{Role: "system", Content: systemPrompt},
@@ -85,8 +80,7 @@ func Run(verbose bool) error {
 	}
 	defer rl.Close()
 
-	fmt.Println("catpaw chat - type your question to start, type exit or Ctrl+C to quit")
-	fmt.Println()
+	printChatBanner(fc)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -131,6 +125,10 @@ func Run(verbose bool) error {
 			break
 		}
 
+		if handleSlashCommand(input, fc, &cfg) {
+			continue
+		}
+
 		messages = append(messages, aiclient.Message{
 			Role:    "user",
 			Content: input,
@@ -143,7 +141,7 @@ func Run(verbose bool) error {
 		autoApprove := false
 		var reply string
 		var usage aiclient.Usage
-		reply, messages, usage, err = runConversationTurn(ctx, client, retryCfg, registry, aiTools, messages, toolTimeout, rl, verbose, &autoApprove)
+		reply, messages, usage, err = runConversationTurn(ctx, fc, registry, aiTools, messages, toolTimeout, rl, verbose, &autoApprove)
 		if err != nil {
 			fmt.Printf("\033[31merror: %v\033[0m\n\n", err)
 			messages = messages[:msgCount-1]
@@ -152,10 +150,80 @@ func Run(verbose bool) error {
 
 		fmt.Println()
 		fmt.Println(reply)
-		printTokenUsage(usage, cfg.InputPrice, cfg.OutputPrice)
+		primary := cfg.PrimaryModel()
+		printTokenUsage(usage, primary.InputPrice, primary.OutputPrice)
 		fmt.Println()
 	}
 	return nil
+}
+
+func printChatBanner(fc *aiclient.FailoverClient) {
+	fmt.Print("catpaw chat")
+	if pinned := fc.PinnedModel(); pinned != "" {
+		fmt.Printf(" [model: %s]", pinned)
+	} else {
+		names := fc.ModelNames()
+		if len(names) == 1 {
+			fmt.Printf(" [model: %s]", names[0])
+		} else {
+			fmt.Printf(" [models: %s]", strings.Join(names, " → "))
+		}
+	}
+	fmt.Println(" - type your question, /models for model info, exit or Ctrl+C to quit")
+	fmt.Println()
+}
+
+// handleSlashCommand processes /model and /models commands.
+// Returns true if the input was a slash command (handled), false otherwise.
+func handleSlashCommand(input string, fc *aiclient.FailoverClient, cfg *config.AIConfig) bool {
+	if input == "/models" {
+		printModelList(fc, cfg)
+		return true
+	}
+
+	if input == "/model auto" {
+		fc.PinModel("")
+		names := fc.ModelNames()
+		fmt.Printf("\033[33mSwitched to auto mode (priority: %s)\033[0m\n\n", strings.Join(names, " → "))
+		return true
+	}
+
+	if strings.HasPrefix(input, "/model ") {
+		name := strings.TrimSpace(strings.TrimPrefix(input, "/model "))
+		if name == "" {
+			printModelList(fc, cfg)
+			return true
+		}
+		if err := fc.PinModel(name); err != nil {
+			fmt.Printf("\033[31m%v\033[0m\n", err)
+			fmt.Printf("Available: %s\n\n", strings.Join(fc.ModelNames(), ", "))
+		} else {
+			fmt.Printf("\033[33mSwitched to %s\033[0m\n\n", name)
+		}
+		return true
+	}
+
+	return false
+}
+
+func printModelList(fc *aiclient.FailoverClient, cfg *config.AIConfig) {
+	pinned := fc.PinnedModel()
+	for i, name := range fc.ModelNames() {
+		m := cfg.Models[name]
+		marker := "  "
+		if pinned != "" && name == pinned {
+			marker = "* "
+		} else if pinned == "" && i == 0 {
+			marker = "* "
+		}
+		fmt.Printf("  %s\033[33m%s\033[0m  model=%s  base_url=%s\n", marker, name, m.Model, m.BaseURL)
+	}
+	if pinned != "" {
+		fmt.Printf("  (pinned to %s, use /model auto to restore failover)\n", pinned)
+	} else {
+		fmt.Println("  (auto mode: tries models in priority order)")
+	}
+	fmt.Println()
 }
 
 func buildChatToolSet() []aiclient.Tool {
@@ -210,8 +278,7 @@ func buildChatToolSet() []aiclient.Tool {
 // rounds until the AI produces a final text response.
 func runConversationTurn(
 	ctx context.Context,
-	client *aiclient.Client,
-	retryCfg aiclient.RetryConfig,
+	fc *aiclient.FailoverClient,
 	registry *diagnose.ToolRegistry,
 	aiTools []aiclient.Tool,
 	messages []aiclient.Message,
@@ -228,7 +295,7 @@ func runConversationTurn(
 
 		sp := startSpinner(fmt.Sprintf("[round %d] ⟳ thinking...", roundNum))
 		start := time.Now()
-		resp, err := aiclient.ChatWithRetry(ctx, client, retryCfg, messages, aiTools)
+		resp, _, err := fc.Chat(ctx, messages, aiTools)
 		sp.stop()
 		printThinkingDone(roundNum, time.Since(start))
 		if err != nil {

@@ -70,7 +70,7 @@ func runInspectRequest(registry *diagnose.ToolRegistry, pluginName, target strin
 	}
 
 	fmt.Printf("[*] Starting health inspection: plugin=%s target=%s\n", pluginName, target)
-	fmt.Printf("   AI model: %s, max rounds: %d\n", config.Config.AI.Model, config.Config.AI.MaxRounds)
+	fmt.Printf("   AI models: %v, max rounds: %d\n", config.Config.AI.ModelPriority, config.Config.AI.MaxRounds)
 	fmt.Println()
 
 	record := engine.RunDiagnose(req)

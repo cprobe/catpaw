@@ -2,7 +2,6 @@ package engine
 
 import (
 	"fmt"
-	"os"
 	"sort"
 	"strings"
 	"sync"
@@ -19,30 +18,8 @@ import (
 )
 
 var (
-	cachedHostname string
-	hostnameExpiry time.Time
-	hostnameMu     sync.Mutex
-
 	diagnosedKeys sync.Map // AlertKey → struct{}: tracks alerts that already triggered a diagnosis
 )
-
-func getCachedHostname() (string, error) {
-	hostnameMu.Lock()
-	defer hostnameMu.Unlock()
-
-	now := time.Now()
-	if cachedHostname != "" && now.Before(hostnameExpiry) {
-		return cachedHostname, nil
-	}
-
-	h, err := os.Hostname()
-	if err != nil {
-		return "", err
-	}
-	cachedHostname = h
-	hostnameExpiry = now.Add(5 * time.Second)
-	return h, nil
-}
 
 func PushRawEvents(pluginName string, pluginObj plugins.Plugin, ins plugins.Instance, queue *safe.Queue[*types.Event]) {
 	if queue.Len() == 0 {
@@ -197,22 +174,9 @@ func clean(event *types.Event, now int64, pluginName string, pluginObj plugins.P
 		event.Labels[k] = v
 	}
 
-	// append label: global labels
-	var hostname string
-	if config.Config.Global.LabelHasHostname {
-		var err error
-		hostname, err = getCachedHostname()
-		if err != nil {
-			return fmt.Errorf("failed to get hostname: %s", err.Error())
-		}
-	}
-
-	for key := range config.Config.Global.Labels {
-		if strings.Contains(config.Config.Global.Labels[key], "$hostname") {
-			event.Labels[key] = strings.ReplaceAll(config.Config.Global.Labels[key], "$hostname", hostname)
-		} else {
-			event.Labels[key] = config.Config.Global.Labels[key]
-		}
+	// append label: global labels (already fully expanded at init time)
+	for key, val := range config.Config.Global.Labels {
+		event.Labels[key] = val
 	}
 
 	keys := make([]string, 0, len(event.Labels))
