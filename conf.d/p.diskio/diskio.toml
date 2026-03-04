@@ -1,0 +1,43 @@
+[[instances]]
+## ===== 磁盘 IO 延迟监控（仅支持 Linux，其他平台自动跳过）=====
+## 自动过滤虚拟设备（loop/ram）和分区，只监控整盘块设备
+## 自动探测设备类型（HDD/SSD/NVMe）并应用对应默认阈值
+## 首次采集仅做基线记录，第二次起才产出事件
+
+## 设备过滤（可选，默认监控所有真实块设备）
+## 支持 glob 模式，示例: ["sda", "nvme*"]
+# devices = []
+# ignore_devices = ["sr0"]
+
+## IO 延迟阈值
+## 默认按设备类型自动选择：
+##   HDD:  warn >= 50ms,  critical >= 200ms
+##   SSD:  warn >= 20ms,  critical >= 100ms
+##   NVMe: warn >= 10ms,  critical >= 50ms
+##   未知: warn >= 100ms, critical >= 500ms
+## 手工指定后覆盖自动阈值，对所有设备统一生效
+[instances.io_latency]
+enabled = true
+# warn_ge = 50.0
+# critical_ge = 200.0
+
+## 采集间隔
+# interval = "30s"
+
+## 追加自定义标签
+# labels = { env = "production", team = "devops" }
+
+[instances.alerting]
+for_duration = 0
+repeat_interval = "5m"
+repeat_number = 3
+# disabled = false
+# disable_recovery_notification = false
+
+## AI 智能诊断（生效前提：config.toml 中已配置 [ai]）
+## IO 延迟告警时 AI 可调用 sysdiag 工具定位 IO 大户进程和读写模式
+[instances.diagnose]
+enabled = true
+# min_severity = "Warning"
+# timeout = "120s"
+# cooldown = "10m"

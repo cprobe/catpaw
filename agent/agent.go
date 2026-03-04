@@ -19,6 +19,7 @@ import (
 	_ "github.com/cprobe/catpaw/plugins/conntrack"
 	_ "github.com/cprobe/catpaw/plugins/cpu"
 	_ "github.com/cprobe/catpaw/plugins/disk"
+	_ "github.com/cprobe/catpaw/plugins/diskio"
 	_ "github.com/cprobe/catpaw/plugins/dns"
 	_ "github.com/cprobe/catpaw/plugins/docker"
 	_ "github.com/cprobe/catpaw/plugins/exec"
