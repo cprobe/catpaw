@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/cprobe/catpaw/config"
 	"github.com/cprobe/catpaw/types"
 )
 
@@ -109,8 +110,12 @@ func truncateHeadTail(s string, headRunes, tailRunes int) string {
 		return s
 	}
 	omitted := total - headRunes - tailRunes
+	pattern := "\n... [%d chars omitted] ...\n"
+	if config.Config != nil && config.Config.AI.Language == "zh" {
+		pattern = "\n... [省略 %d 字符] ...\n"
+	}
 	return string(runes[:headRunes]) +
-		fmt.Sprintf("\n... [省略 %d 字符] ...\n", omitted) +
+		fmt.Sprintf(pattern, omitted) +
 		string(runes[total-tailRunes:])
 }
 
