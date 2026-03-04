@@ -174,6 +174,9 @@ routing_key = "your-routing-key"
 ```toml
 [ai]
 enabled = true
+model_priority = ["default"]
+
+[ai.models.default]
 base_url = "https://api.openai.com/v1"
 api_key = "${OPENAI_API_KEY}"
 model = "gpt-4o"
