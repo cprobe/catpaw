@@ -173,6 +173,9 @@ func handleChatSubcommand(args []string) {
 		os.Exit(1)
 	}
 
+	closefn := logger.Build()
+	defer closefn()
+
 	if err := chat.Run(*verbose, *modelPin); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
