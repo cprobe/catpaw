@@ -2,6 +2,7 @@
 /nohup.out
 /vendor
 /dist
+/up_down.sh
 
 .idea
 .DS_Store

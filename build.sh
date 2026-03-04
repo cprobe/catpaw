@@ -1,82 +1,78 @@
 #!/bin/sh
 set -e
 
-export GOPROXY=https://goproxy.cn
 export CGO_ENABLED=0
 
 APP_NAME="catpaw"
 VERSION=$(grep 'var Version' config/version.go | awk -F'"' '{print $2}')
 TIMESTAMP=$(date +%Y%m%d%H%M%S)
 GIT_COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
+LDFLAGS="-s -w -X github.com/cprobe/catpaw/config.Version=${VERSION}-${GIT_COMMIT}"
 
-build_local() {
-    echo "==> Building for local platform ..."
-    go build -ldflags "-s -w -X github.com/cprobe/catpaw/config.Version=${VERSION}-${GIT_COMMIT}" -o ${APP_NAME} .
-    echo "==> Done: ./${APP_NAME}"
-}
+_package() {
+    GOOS_VAL="${1}"
+    GOARCH_VAL="${2}"
 
-# _compile_linux_amd64: build the binary for linux/amd64 and echo the output path.
-_compile_linux_amd64() {
-    GOOS=linux GOARCH=amd64 \
-    go build -ldflags "-s -w -X github.com/cprobe/catpaw/config.Version=${VERSION}-${GIT_COMMIT}" -o ${APP_NAME} .
-}
+    echo "==> Building ${GOOS_VAL}/${GOARCH_VAL} ..."
+    GOOS=${GOOS_VAL} GOARCH=${GOARCH_VAL} go build -ldflags "${LDFLAGS}" -o ${APP_NAME} .
 
-# _upload: upload a zip to OSS and print the download link.
-_upload() {
-    ZIP_NAME="${1}"
-    ossutil cp "${ZIP_NAME}" oss://flashcat-public/ulrictmp/
-    echo "Download link: https://flashcat-public.oss-cn-beijing.aliyuncs.com/ulrictmp/${ZIP_NAME}"
-    echo "==> Done: ${ZIP_NAME}"
-}
-
-build_linux_amd64() {
-    _compile_linux_amd64
-
-    RELEASE_DIR="${APP_NAME}-${VERSION}-linux-amd64-${TIMESTAMP}"
+    RELEASE_DIR="${APP_NAME}-${VERSION}-${GOOS_VAL}-${GOARCH_VAL}-${TIMESTAMP}"
     mkdir -p "${RELEASE_DIR}"
     cp ${APP_NAME} "${RELEASE_DIR}/"
     cp -r conf.d   "${RELEASE_DIR}/"
 
-    zip -rq "${RELEASE_DIR}.zip" "${RELEASE_DIR}"
+    tar czf "${RELEASE_DIR}.tar.gz" "${RELEASE_DIR}"
     rm -rf "${RELEASE_DIR}" ${APP_NAME}
 
-    _upload "${RELEASE_DIR}.zip"
+    echo "==> Done: ${RELEASE_DIR}.tar.gz"
 }
 
-build_linux_amd64_bin() {
-    _compile_linux_amd64
+build_local() {
+    echo "==> Building for local platform ..."
+    go build -ldflags "${LDFLAGS}" -o ${APP_NAME} .
+    echo "==> Done: ./${APP_NAME}"
+}
 
-    RELEASE_NAME="${APP_NAME}-${VERSION}-linux-amd64-bin-${TIMESTAMP}.zip"
-    zip -q "${RELEASE_NAME}" ${APP_NAME}
-    rm -f ${APP_NAME}
+build_linux_amd64() {
+    _package linux amd64
+}
 
-    _upload "${RELEASE_NAME}"
+build_linux_arm64() {
+    _package linux arm64
+}
+
+build_all() {
+    build_linux_amd64
+    build_linux_arm64
 }
 
 usage() {
-    echo "Usage: $0 {build_local|build_linux_amd64|build_linux_amd64_bin}"
+    echo "Usage: $0 {local|linux-amd64|linux-arm64|all}"
     echo ""
-    echo "  build_local          Build for current platform"
-    echo "  build_linux_amd64    Cross-compile linux/amd64 and package binary + conf.d as zip"
-    echo "  build_linux_amd64_bin Cross-compile linux/amd64 and package binary only as zip"
+    echo "  local        Build for current platform"
+    echo "  linux-amd64  Cross-compile and package linux/amd64"
+    echo "  linux-arm64  Cross-compile and package linux/arm64"
+    echo "  all          Build both linux/amd64 and linux/arm64"
 }
 
 case "${1}" in
-    build_local)
+    local)
         build_local
         ;;
-    build_linux_amd64)
-        echo "==> Building linux/amd64 release package ..."
+    linux-amd64)
         build_linux_amd64
         ;;
-    build_linux_amd64_bin)
-        echo "==> Building linux/amd64 binary-only package ..."
-        build_linux_amd64_bin
+    linux-arm64)
+        build_linux_arm64
+        ;;
+    all)
+        build_all
+        ;;
+    "")
+        build_local
         ;;
     *)
-        build_local || exit 1
-        echo
         usage
-        exit 0
+        exit 1
         ;;
 esac
