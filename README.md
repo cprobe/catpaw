@@ -1,27 +1,27 @@
 English | [中文](README_zh.md)
 
-# catpaw
+# 🐾 catpaw
 
 catpaw is a lightweight monitoring agent with **AI-powered diagnostics**.
 It detects anomalies through plugin-based checks, produces standardized events, and — when an alert fires — can automatically trigger AI root-cause analysis using 70+ built-in diagnostic tools.
 
 Events can be forwarded to any alert platform (Flashduty, PagerDuty, or any HTTP endpoint), or simply printed to the console for quick validation.
 
-## Key Features
+## ✨ Key Features
 
-- **Lightweight, zero heavy dependencies** — single binary, easy to deploy
-- **Plugin-based monitoring** — 25+ check plugins, enable only what you need
-- **AI-powered diagnosis** — automatic root-cause analysis triggered by alerts
-- **Interactive AI chat** — troubleshoot issues conversationally with AI + tools
-- **Proactive health inspection** — on-demand AI-driven health checks
-- **70+ diagnostic tools** — system, network, storage, security, process, kernel
-- **MCP integration** — connect external data sources (Prometheus, Jaeger, CMDB, etc.) via [Model Context Protocol](https://modelcontextprotocol.io/)
-- **Flexible notification** — console, generic WebAPI, Flashduty, PagerDuty, or any combination
-- **Self-monitoring friendly** — ideal for monitoring your monitoring systems
+- 🪶 **Lightweight, zero heavy dependencies** — single binary, easy to deploy
+- 🔌 **Plugin-based monitoring** — 25+ check plugins, enable only what you need
+- 🤖 **AI-powered diagnosis** — automatic root-cause analysis triggered by alerts
+- 💬 **Interactive AI chat** — troubleshoot issues conversationally with AI + tools
+- 🩺 **Proactive health inspection** — on-demand AI-driven health checks
+- 🛠️ **70+ diagnostic tools** — system, network, storage, security, process, kernel
+- 🔗 **MCP integration** — connect external data sources (Prometheus, Jaeger, CMDB, etc.) via [Model Context Protocol](https://modelcontextprotocol.io/)
+- 📡 **Flexible notification** — console, generic WebAPI, Flashduty, PagerDuty, or any combination
+- 🔄 **Self-monitoring friendly** — ideal for monitoring your monitoring systems
 
-## Architecture Overview
+## 🏗️ Architecture Overview
 
-```
+```text
 ┌─────────────────────────────────────────────────────────────────┐
 │                        catpaw agent                             │
 │                                                                 │
@@ -42,7 +42,7 @@ Events can be forwarded to any alert platform (Flashduty, PagerDuty, or any HTTP
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-## Check Plugins
+## 🔍 Check Plugins
 
 | Plugin | Description |
 | --- | --- |
@@ -76,40 +76,40 @@ Events can be forwarded to any alert platform (Flashduty, PagerDuty, or any HTTP
 | `uptime` | Unexpected reboot detection |
 | `zombie` | Zombie process detection |
 
-## AI Diagnostic Tools (70+)
+## 🧠 AI Diagnostic Tools (70+)
 
 When AI diagnosis is triggered (by alert, inspection, or chat), the AI agent has access to a rich toolkit:
 
-**System & Process**: CPU top, memory breakdown, OOM history, cgroup limits, process threads (with wchan), open files, environment variables, PSI pressure
+⚙️ **System & Process**: CPU top, memory breakdown, OOM history, cgroup limits, process threads (with wchan), open files, environment variables, PSI pressure
 
-**Network**: ping, traceroute, DNS resolve, ARP neighbors, TCP connection states, socket details (RTT/cwnd), retransmission rate, connection latency summary, listen queue overflow, TCP tuning check, softnet stats, route table, IP addresses, interface stats, firewall rules
+🌐 **Network**: ping, traceroute, DNS resolve, ARP neighbors, TCP connection states, socket details (RTT/cwnd), retransmission rate, connection latency summary, listen queue overflow, TCP tuning check, softnet stats, route table, IP addresses, interface stats, firewall rules
 
-**Storage**: disk I/O latency, block device topology, LVM status, mount info
+💾 **Storage**: disk I/O latency, block device topology, LVM status, mount info
 
-**Kernel & Security**: dmesg, interrupts distribution, conntrack stats, NUMA stats, thermal zones, sysctl snapshot, SELinux/AppArmor status, coredump list
+🔐 **Kernel & Security**: dmesg, interrupts distribution, conntrack stats, NUMA stats, thermal zones, sysctl snapshot, SELinux/AppArmor status, coredump list
 
-**Logs**: log tail, log grep (with pattern matching), journald query
+📜 **Logs**: log tail, log grep (with pattern matching), journald query
 
-**Services**: systemd service status, failed services list, timer list, Docker ps/inspect
+🐳 **Services**: systemd service status, failed services list, timer list, Docker ps/inspect
 
-**Remote plugins** (Redis, etc.) contribute their own specialized diagnostic tools for deep introspection.
+🔌 **Remote plugins** (Redis, etc.) contribute their own specialized diagnostic tools for deep introspection.
 
-**MCP external tools**: Connect Prometheus, Jaeger, CMDB, or any MCP-compatible data source — the AI automatically discovers and uses their tools.
+🔗 **MCP external tools**: Connect Prometheus, Jaeger, CMDB, or any MCP-compatible data source — the AI automatically discovers and uses their tools.
 
-## CLI Commands
+## 🖥️ CLI Commands
 
+```bash
+catpaw run [flags]                      # Start the monitoring agent
+catpaw chat [-v]                        # Interactive AI chat for troubleshooting
+catpaw inspect <plugin> [target]        # Proactive AI health inspection
+catpaw diagnose list|show <id>          # View past diagnosis records
+catpaw selftest [filter] [-q]           # Smoke-test all diagnostic tools
+catpaw mcptest                          # Test MCP server connections
 ```
-catpaw run [flags]                      Start the monitoring agent
-catpaw chat [-v]                        Interactive AI chat for troubleshooting
-catpaw inspect <plugin> [target]        Proactive AI health inspection
-catpaw diagnose list|show <id>          View past diagnosis records
-catpaw selftest [filter] [-q]           Smoke-test all diagnostic tools
-catpaw mcptest                          Test MCP server connections
-```
 
-## Quick Start
+## 🚀 Quick Start
 
-### Installation
+### 📦 Installation
 
 Download the binary from [GitHub Releases](https://github.com/cprobe/catpaw/releases).
 
@@ -124,7 +124,7 @@ Download the binary from [GitHub Releases](https://github.com/cprobe/catpaw/rele
 
 The default config enables `[notify.console]`, so events are printed to the terminal with colored output — no external service needed for a quick test.
 
-### Event Notification
+### 📡 Event Notification
 
 catpaw supports multiple notification channels. Configure one or more in `conf.d/config.toml`:
 
@@ -169,7 +169,7 @@ integration_key = "your-integration-key"
 routing_key = "your-routing-key"
 ```
 
-### AI Diagnosis (optional)
+### 🤖 AI Diagnosis (optional)
 
 Add to `conf.d/config.toml`:
 
@@ -183,7 +183,7 @@ model = "gpt-4o"
 
 Now when alerts fire, AI automatically analyzes root cause using built-in diagnostic tools.
 
-### Interactive Chat
+### 💬 Interactive Chat
 
 ```bash
 ./catpaw chat
@@ -191,7 +191,7 @@ Now when alerts fire, AI automatically analyzes root cause using built-in diagno
 
 Ask questions like "Why is CPU high?" or "Check disk I/O latency" — the AI uses diagnostic tools and shell commands (with confirmation) to investigate.
 
-### MCP External Data Sources (optional)
+### 🔗 MCP External Data Sources (optional)
 
 Connect Prometheus, Jaeger, or other MCP servers for AI to query historical metrics, traces, etc.:
 
@@ -214,7 +214,7 @@ Verify connectivity:
 ./catpaw mcptest
 ```
 
-## Configuration
+## ⚙️ Configuration
 
 - Global config: `conf.d/config.toml`
 - Plugin configs: `conf.d/p.<plugin>/*.toml` (multiple files merged on load)
@@ -224,7 +224,7 @@ Verify connectivity:
 kill -HUP $(pidof catpaw)
 ```
 
-## Documentation
+## 📚 Documentation
 
 | Document | Description |
 | --- | --- |
@@ -234,6 +234,6 @@ kill -HUP $(pidof catpaw)
 | [Event Data Model](docs/event-model.md) | Event structure, labels, AlertKey rules |
 | [Plugin Development Guide](docs/plugin-development.md) | How to create a new catpaw plugin |
 
-## Community
+## 💬 Community
 
 WeChat: add `picobyte` and mention `catpaw` to join the group.
