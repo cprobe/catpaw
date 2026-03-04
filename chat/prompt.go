@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/cprobe/catpaw/diagnose"
+	"github.com/cprobe/catpaw/logger"
 )
 
 var chatPromptTmpl = template.Must(template.New("chat").Parse(chatPromptRaw))
@@ -92,6 +93,8 @@ func buildChatSystemPrompt(registry *diagnose.ToolRegistry, snapshot, mcpIdentit
 		MCPIdentity:    mcpIdentity,
 		Language:       language,
 	}
+
+	logger.Logger.Debugf("[chat] ToolCatalog len=%d content:\n%s", len(data.ToolCatalog), data.ToolCatalog)
 
 	var buf bytes.Buffer
 	if err := chatPromptTmpl.Execute(&buf, data); err != nil {
