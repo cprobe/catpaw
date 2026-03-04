@@ -265,7 +265,10 @@ func (e *DiagnoseEngine) diagnose(ctx context.Context, req *DiagnoseRequest, ses
 	}
 
 	session.Record.AI.TotalRounds = e.maxRounds
-	return "[诊断未完成] 已达到最大轮次限制，AI 未能在限定轮次内输出最终报告。", nil
+	if e.cfg.Language == "zh" {
+		return "[诊断未完成] 已达到最大轮次限制，AI 未能在限定轮次内输出最终报告。", nil
+	}
+	return "[Incomplete] Max round limit reached, AI did not produce a final report.", nil
 }
 
 func (e *DiagnoseEngine) initSessionAccessor(ctx context.Context, req *DiagnoseRequest, session *DiagnoseSession) error {
@@ -318,7 +321,7 @@ func (e *DiagnoseEngine) Shutdown() {
 // forwardReport sends the diagnosis report to all configured notifiers
 // as a new Event with the same AlertKey but a fresh EventTime and Description.
 func (e *DiagnoseEngine) forwardReport(req *DiagnoseRequest, record *DiagnoseRecord, report string) {
-	desc := FormatReportForFlashDuty(record, report)
+	desc := FormatReportDescription(record, report, e.cfg.Language)
 	now := time.Now().Unix()
 
 	seen := make(map[string]bool, len(req.Events))

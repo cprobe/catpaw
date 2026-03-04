@@ -9,16 +9,16 @@ import (
 
 const maxDescriptionBytes = 2048
 
-// FormatReportForFlashDuty builds a concise diagnosis report suitable for
-// FlashDuty's description field (max 2048 bytes). It prioritizes:
+// FormatReportDescription builds a concise diagnosis report suitable for
+// notification description fields (max 2048 bytes). It prioritizes:
 //  1. Header (plugin, target, time, status)
 //  2. AI summary/report body
-//  3. A footer with record path for full details
+//  3. A footer with record ID and CLI hint
 //
 // If the report exceeds 2048 bytes, the AI body is truncated.
-func FormatReportForFlashDuty(record *DiagnoseRecord, report string) string {
-	header := formatHeader(record)
-	footer := formatFooter(record)
+func FormatReportDescription(record *DiagnoseRecord, report string, language string) string {
+	header := formatHeader(record, language)
+	footer := formatFooter(record, language)
 
 	headerBytes := len(header)
 	footerBytes := len(footer)
@@ -28,7 +28,7 @@ func FormatReportForFlashDuty(record *DiagnoseRecord, report string) string {
 		return TruncateUTF8(header, maxDescriptionBytes)
 	}
 
-	const truncSuffix = "\n...[诊断报告已截断，完整内容请查看本地记录]"
+	truncSuffix := truncSuffixText(language)
 	budget := maxDescriptionBytes - overhead
 	body := report
 	if len(body) > budget {
@@ -42,20 +42,41 @@ func FormatReportForFlashDuty(record *DiagnoseRecord, report string) string {
 	return header + body + footer
 }
 
-func formatHeader(record *DiagnoseRecord) string {
+func formatHeader(record *DiagnoseRecord, language string) string {
 	var b strings.Builder
-	b.WriteString(fmt.Sprintf("[*] AI 诊断报告 [%s]\n", record.Status))
-	b.WriteString(fmt.Sprintf("插件: %s | 目标: %s\n", record.Alert.Plugin, record.Alert.Target))
-	b.WriteString(fmt.Sprintf("诊断时间: %s | 耗时: %dms | AI轮次: %d\n",
-		record.CreatedAt.Format(time.DateTime),
-		record.DurationMs,
-		record.AI.TotalRounds))
+	if language == "zh" {
+		b.WriteString(fmt.Sprintf("[*] AI 诊断报告 [%s]\n", record.Status))
+		b.WriteString(fmt.Sprintf("插件: %s | 目标: %s\n", record.Alert.Plugin, record.Alert.Target))
+		b.WriteString(fmt.Sprintf("诊断时间: %s | 耗时: %dms | AI轮次: %d\n",
+			record.CreatedAt.Format(time.DateTime),
+			record.DurationMs,
+			record.AI.TotalRounds))
+	} else {
+		b.WriteString(fmt.Sprintf("[*] AI Diagnosis Report [%s]\n", record.Status))
+		b.WriteString(fmt.Sprintf("Plugin: %s | Target: %s\n", record.Alert.Plugin, record.Alert.Target))
+		b.WriteString(fmt.Sprintf("Time: %s | Duration: %dms | Rounds: %d\n",
+			record.CreatedAt.Format(time.DateTime),
+			record.DurationMs,
+			record.AI.TotalRounds))
+	}
 	b.WriteString("---\n")
 	return b.String()
 }
 
-func formatFooter(record *DiagnoseRecord) string {
-	return fmt.Sprintf("\n---\n完整记录: %s\n", record.FilePath())
+func formatFooter(record *DiagnoseRecord, language string) string {
+	if language == "zh" {
+		return fmt.Sprintf("\n---\n完整记录: %s\n查看命令: catpaw diagnose show %s\n",
+			record.FilePath(), record.ID)
+	}
+	return fmt.Sprintf("\n---\nFull record: %s\nView command: catpaw diagnose show %s\n",
+		record.FilePath(), record.ID)
+}
+
+func truncSuffixText(language string) string {
+	if language == "zh" {
+		return "\n...[诊断报告已截断，完整内容请查看本地记录]"
+	}
+	return "\n...[Report truncated, see local record for full content]"
 }
 
 // TruncateUTF8 truncates s to at most maxBytes bytes without breaking
@@ -63,6 +84,9 @@ func formatFooter(record *DiagnoseRecord) string {
 func TruncateUTF8(s string, maxBytes int) string {
 	if len(s) <= maxBytes {
 		return s
+	}
+	if maxBytes <= 0 {
+		return ""
 	}
 	for maxBytes > 0 && !utf8.RuneStart(s[maxBytes]) {
 		maxBytes--
