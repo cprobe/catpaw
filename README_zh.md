@@ -204,9 +204,19 @@ enabled = true
 name = "prometheus"
 command = "/usr/local/bin/mcp-prometheus"
 args = ["serve"]
-identity = "ident=\"my-host\""
+identity = 'instance="${IP}:9100"'
 [ai.mcp.servers.env]
 PROMETHEUS_URL = "http://127.0.0.1:9090"
+
+[[ai.mcp.servers]]
+name = "nightingale"
+command = "npx"
+args = ["-y", "@n9e/n9e-mcp-server", "stdio"]
+identity = 'ident="${HOSTNAME}"'
+tools_allow = []
+[ai.mcp.servers.env]
+N9E_TOKEN = "480c04ed-ebe7-4266-xxxx-f8daf7819a6d"
+N9E_BASE_URL = "http://127.0.0.1:17000"
 ```
 
 验证连通性：
