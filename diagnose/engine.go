@@ -318,38 +318,46 @@ func (e *DiagnoseEngine) Shutdown() {
 // forwardReport sends the diagnosis report to all configured notifiers
 // as a new Event with the same AlertKey but a fresh EventTime and Description.
 func (e *DiagnoseEngine) forwardReport(req *DiagnoseRequest, record *DiagnoseRecord, report string) {
-	original := req.Events[0]
 	desc := FormatReportForFlashDuty(record, report)
+	now := time.Now().Unix()
 
-	labels := make(map[string]string, len(original.Labels))
-	for k, v := range original.Labels {
-		labels[k] = v
-	}
-
-	var attrs map[string]string
-	if len(original.Attrs) > 0 {
-		attrs = make(map[string]string, len(original.Attrs))
-		for k, v := range original.Attrs {
-			attrs[k] = v
+	seen := make(map[string]bool, len(req.Events))
+	for _, original := range req.Events {
+		if seen[original.AlertKey] {
+			continue
 		}
-	}
+		seen[original.AlertKey] = true
 
-	event := &types.Event{
-		EventTime:         time.Now().Unix(),
-		EventStatus:       original.EventStatus,
-		AlertKey:          original.AlertKey,
-		Labels:            labels,
-		Attrs:             attrs,
-		Description:       desc,
-		DescriptionFormat: types.DescFormatMarkdown,
-	}
+		labels := make(map[string]string, len(original.Labels))
+		for k, v := range original.Labels {
+			labels[k] = v
+		}
 
-	if notify.Forward(event) {
-		logger.Logger.Infow("diagnose report forwarded",
-			"alert_key", event.AlertKey, "plugin", req.Plugin, "target", req.Target)
-	} else {
-		logger.Logger.Warnw("diagnose report forward failed",
-			"alert_key", event.AlertKey, "plugin", req.Plugin, "target", req.Target)
+		var attrs map[string]string
+		if len(original.Attrs) > 0 {
+			attrs = make(map[string]string, len(original.Attrs))
+			for k, v := range original.Attrs {
+				attrs[k] = v
+			}
+		}
+
+		event := &types.Event{
+			EventTime:         now,
+			EventStatus:       original.EventStatus,
+			AlertKey:          original.AlertKey,
+			Labels:            labels,
+			Attrs:             attrs,
+			Description:       desc,
+			DescriptionFormat: types.DescFormatMarkdown,
+		}
+
+		if notify.Forward(event) {
+			logger.Logger.Infow("diagnose report forwarded",
+				"alert_key", event.AlertKey, "plugin", req.Plugin, "target", req.Target)
+		} else {
+			logger.Logger.Warnw("diagnose report forward failed",
+				"alert_key", event.AlertKey, "plugin", req.Plugin, "target", req.Target)
+		}
 	}
 }
 
