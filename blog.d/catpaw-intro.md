@@ -214,7 +214,7 @@ catpaw 不是指标采集器（不与 Prometheus + Node-Exporter 重叠），它
 🟡 Warning   mem::memory_usage  target=memory  memory usage 82.1% >= warn threshold 80.0%
 ```
 
-> **想立刻看到告警？** 打开 `conf.d/p.mem/mem.toml`，把内存告警阈值改小（比如 `warn_ge = 0.01`），运行 `./catpaw run`，一分钟后就能在终端看到告警事件。验证完改回来就好。
+> **想立刻看到告警？** 打开 `conf.d/p.mem/mem.toml`，把内存告警阈值改小（比如 `warn_ge = 0.01`），运行 `./catpaw run`，一分钟后就能在终端看到告警事件，再等几个几十秒就可以看到 AI 分析的结论（前提是配置文件里启用了 AI 相关配置）。验证完改回来就好。
 
 ### 第 3 步：开启 AI（可选）
 
@@ -249,8 +249,8 @@ catpaw 支持多种通知渠道，可以同时开启：
 | --- | --- |
 | **Console** | 终端输出（默认开启，快速验证） |
 | **WebAPI** | 推送到任意 HTTP 端点 |
-| **Flashduty** | 对接 [Flashduty](https://flashcat.cloud/product/flashduty/) 告警平台 |
-| **PagerDuty** | 对接 [PagerDuty](https://www.pagerduty.com/) |
+| **Flashduty** | 对接 [Flashduty](https://flashcat.cloud/product/flashduty/) On-call 中心 |
+| **PagerDuty** | 对接 [PagerDuty](https://www.pagerduty.com/) On-call 中心 |
 
 ## 为什么说 catpaw 适合练手 AI 编程
 
@@ -321,7 +321,7 @@ Level 5  →  接入新的 MCP 数据源，扩展 AI 的诊断视野
 | `smart` 插件 | 磁盘 S.M.A.R.T 健康状态预测 |
 | `raid` 插件 | 硬件/软件 RAID 阵列状态 |
 | GPU 诊断工具 | NVIDIA GPU 利用率/显存/温度 |
-| 更多 MCP 适配 | ClickHouse、Elasticsearch、Jaeger 等 |
+| eBPF 诊断工具 | 引入更多诊断能力，增强 catpaw 这名老司机的实力 |
 | **你的场景** | 你遇到的"早该监控上的"问题 |
 
 ### 举个例子
