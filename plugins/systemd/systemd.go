@@ -257,6 +257,16 @@ func (ins *Instance) queryUnit(unit string) (map[string]string, error) {
 	if timedOut {
 		return nil, fmt.Errorf("systemctl show timed out after %s", time.Duration(ins.Timeout))
 	}
+
+	// systemctl show may exit 1 when some requested properties are
+	// unrecognized (e.g. NRestarts on systemd < 235), while still
+	// writing the known properties to stdout. Prefer stdout data
+	// over exit code.
+	props := parseProperties(stdout.Bytes())
+	if len(props) > 0 {
+		return props, nil
+	}
+
 	if runErr != nil {
 		errMsg := strings.TrimSpace(stderr.String())
 		if errMsg != "" {
@@ -265,7 +275,7 @@ func (ins *Instance) queryUnit(unit string) (map[string]string, error) {
 		return nil, runErr
 	}
 
-	return parseProperties(stdout.Bytes()), nil
+	return props, nil
 }
 
 func parseProperties(data []byte) map[string]string {
