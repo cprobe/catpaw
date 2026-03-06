@@ -142,6 +142,7 @@ type ConfigType struct {
 	LogConfig LogConfig    `toml:"log"`
 	Notify    NotifyConfig `toml:"notify"`
 	AI        AIConfig     `toml:"ai"`
+	Server    ServerConfig `toml:"server"`
 }
 
 var Config *ConfigType
@@ -202,6 +203,8 @@ func InitConfig(configDir string, interval int64, plugins, loglevel string) erro
 
 	builtins := HostBuiltins()
 	Config.Global.Labels = expandLabels(Config.Global.Labels, builtins)
+
+	Config.Server.resolve()
 
 	return nil
 }

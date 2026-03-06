@@ -1,9 +1,11 @@
 package agent
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/BurntSushi/toml"
 	"github.com/cprobe/catpaw/config"
@@ -12,6 +14,7 @@ import (
 	"github.com/cprobe/catpaw/notify"
 	"github.com/cprobe/catpaw/pkg/choice"
 	"github.com/cprobe/catpaw/plugins"
+	"github.com/cprobe/catpaw/server"
 	"github.com/toolkits/pkg/file"
 
 	// auto registry
@@ -60,6 +63,8 @@ type Agent struct {
 	pluginFilters map[string]struct{}
 	pluginConfigs map[string]*PluginConfig
 	pluginRunners map[string]*PluginRunner
+	cancel        context.CancelFunc
+	startTime     time.Time
 	sync.RWMutex
 }
 
@@ -68,6 +73,7 @@ func New() *Agent {
 		pluginFilters: parseFilter(config.Config.Plugins),
 		pluginConfigs: make(map[string]*PluginConfig),
 		pluginRunners: make(map[string]*PluginRunner),
+		startTime:     time.Now(),
 	}
 }
 
@@ -87,7 +93,25 @@ func (a *Agent) Start() {
 		a.LoadPlugin(name, pc)
 	}
 
+	a.startServerConn()
+
 	logger.Logger.Info("agent started")
+}
+
+func (a *Agent) startServerConn() {
+	if !config.Config.Server.Enabled {
+		return
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	a.cancel = cancel
+
+	pluginNames := make([]string, 0, len(a.pluginRunners))
+	for name := range a.pluginRunners {
+		pluginNames = append(pluginNames, name)
+	}
+
+	go server.RunForever(ctx, a.startTime, pluginNames)
 }
 
 func initNotifiers() {
@@ -194,6 +218,10 @@ func (a *Agent) GetPluginConfig(name string) *PluginConfig {
 
 func (a *Agent) Stop() {
 	logger.Logger.Info("agent stopping")
+
+	if a.cancel != nil {
+		a.cancel()
+	}
 
 	diagnose.Shutdown()
 
