@@ -1,5 +1,13 @@
 package aiclient
 
+import "context"
+
+// ChatClient is the interface for AI chat backends (OpenAI, Bedrock, etc.).
+type ChatClient interface {
+	Chat(ctx context.Context, messages []Message, tools []Tool) (*ChatResponse, error)
+	Model() string
+}
+
 // Message represents a single message in the chat conversation.
 type Message struct {
 	Role       string     `json:"role"`
