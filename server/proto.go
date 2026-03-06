@@ -15,8 +15,9 @@ import (
 
 // Message types — Agent -> Server
 const (
-	typeRegister  = "register"
-	typeHeartbeat = "heartbeat"
+	typeRegister    = "register"
+	typeHeartbeat   = "heartbeat"
+	typeAlertEvents = "alert_events"
 )
 
 // Message types — Server -> Agent
@@ -70,6 +71,20 @@ type heartbeatPayload struct {
 	ActiveAlerts   int     `json:"active_alerts"`
 	CPUPct         float64 `json:"cpu_pct,omitempty"`
 	MemPct         float64 `json:"mem_pct,omitempty"`
+}
+
+type alertEventsPayload struct {
+	Events []alertEventItem `json:"events"`
+}
+
+type alertEventItem struct {
+	EventTime         int64             `json:"event_time"`
+	EventStatus       string            `json:"event_status"`
+	AlertKey          string            `json:"alert_key"`
+	Labels            map[string]string `json:"labels"`
+	Attrs             map[string]string `json:"attrs,omitempty"`
+	Description       string            `json:"description"`
+	DescriptionFormat string            `json:"description_format,omitempty"`
 }
 
 // --- Server -> Agent payloads ---

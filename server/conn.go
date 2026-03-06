@@ -19,15 +19,39 @@ import (
 
 	"github.com/cprobe/catpaw/config"
 	"github.com/cprobe/catpaw/logger"
+	"github.com/cprobe/catpaw/types"
 )
 
 const (
-	heartbeatInterval = 30 * time.Second
-	writeTimeout      = 10 * time.Second
-	readTimeout       = 90 * time.Second
-	ackTimeout        = 10 * time.Second
-	sendChSize        = 16
+	heartbeatInterval  = 30 * time.Second
+	writeTimeout       = 10 * time.Second
+	readTimeout        = 90 * time.Second
+	ackTimeout         = 10 * time.Second
+	sendChSize         = 16
+	alertFlushInterval = 1 * time.Second
+	alertFlushBatch    = 100
 )
+
+// alertRing is the package-level ring buffer shared across connection attempts.
+// Events survive disconnects and are flushed after reconnection.
+var alertRing *RingBuffer
+
+// InitAlertBuffer creates the package-level alert ring buffer.
+// Must be called once before RunForever.
+func InitAlertBuffer(capacity int) {
+	alertRing = NewRingBuffer(capacity)
+}
+
+// SendAlertEvent enqueues an alert event into the ring buffer.
+// Safe to call even when the WebSocket connection is down.
+// NOTE: the event pointer is stored as-is; callers must not reuse/mutate
+// the Event after this call. The current engine always creates fresh Events.
+func SendAlertEvent(event *types.Event) {
+	if alertRing == nil {
+		return
+	}
+	alertRing.Push(event)
+}
 
 // Conn manages one WebSocket connection to catpaw-server.
 type Conn struct {
@@ -126,9 +150,10 @@ func Run(ctx context.Context, startTime time.Time, plugins []string) error {
 	defer cancel()
 
 	var wg sync.WaitGroup
-	wg.Add(2)
+	wg.Add(3)
 	go func() { defer wg.Done(); c.writeLoop(connCtx) }()
 	go func() { defer wg.Done(); c.heartbeatLoop(connCtx) }()
+	go func() { defer wg.Done(); c.alertFlushLoop(connCtx) }()
 
 	c.readLoop(connCtx)
 
@@ -296,6 +321,64 @@ func (c *Conn) heartbeatLoop(ctx context.Context) {
 				logger.Logger.Warnw("heartbeat_send_buffer_full", "agent_id", c.agentID)
 			}
 		case <-ctx.Done():
+			return
+		}
+	}
+}
+
+// alertFlushLoop drains the shared alert ring buffer every 1s and sends
+// batched alert_events messages via sendCh.
+func (c *Conn) alertFlushLoop(ctx context.Context) {
+	if alertRing == nil {
+		return
+	}
+
+	ticker := time.NewTicker(alertFlushInterval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ticker.C:
+			c.flushAlertEvents()
+		case <-ctx.Done():
+			return
+		}
+	}
+}
+
+func (c *Conn) flushAlertEvents() {
+	for {
+		events := alertRing.Drain(alertFlushBatch)
+		if len(events) == 0 {
+			return
+		}
+
+		items := make([]alertEventItem, len(events))
+		for i, e := range events {
+			items[i] = alertEventItem{
+				EventTime:         e.EventTime,
+				EventStatus:       e.EventStatus,
+				AlertKey:          e.AlertKey,
+				Labels:            e.Labels,
+				Attrs:             e.Attrs,
+				Description:       e.Description,
+				DescriptionFormat: e.DescriptionFormat,
+			}
+		}
+
+		msg, err := newMessage(typeAlertEvents, alertEventsPayload{Events: items})
+		if err != nil {
+			logger.Logger.Warnw("alert_events_marshal_failed", "error", err)
+			return
+		}
+		data, err := json.Marshal(msg)
+		if err != nil {
+			return
+		}
+
+		select {
+		case c.sendCh <- data:
+		case <-c.done:
 			return
 		}
 	}

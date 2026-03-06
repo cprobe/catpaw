@@ -103,6 +103,8 @@ func (a *Agent) startServerConn() {
 		return
 	}
 
+	server.InitAlertBuffer(config.Config.Server.GetAlertBufferSize())
+
 	ctx, cancel := context.WithCancel(context.Background())
 	a.cancel = cancel
 
@@ -126,6 +128,9 @@ func initNotifiers() {
 	}
 	if cfg := config.Config.Notify.WebAPI; cfg != nil && cfg.URL != "" {
 		notify.Register(notify.NewWebAPINotifier(cfg))
+	}
+	if config.Config.Server.Enabled {
+		notify.Register(notify.NewServerNotifier())
 	}
 }
 

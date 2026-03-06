@@ -206,6 +206,27 @@ func InitConfig(configDir string, interval int64, plugins, loglevel string) erro
 
 	Config.Server.resolve()
 
+	// When server is enabled, alert events are sent to server and need these labels.
+	// When server is disabled, do not require them so catpaw can run in pure local mode.
+	if Config.Server.Enabled {
+		if err := validateRequiredLabels(Config.Global.Labels); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// Required global labels when server is enabled; all must be present and non-empty after expansion.
+var requiredGlobalLabels = []string{"from_agent", "from_hostname", "from_hostip"}
+
+func validateRequiredLabels(labels map[string]string) error {
+	for _, key := range requiredGlobalLabels {
+		v, ok := labels[key]
+		if !ok || v == "" {
+			return fmt.Errorf("[global.labels] required label %q is missing or empty; please set it in config.toml", key)
+		}
+	}
 	return nil
 }
 
