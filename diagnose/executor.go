@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strconv"
+	"unicode/utf8"
 )
 
 const (
@@ -133,6 +134,32 @@ func anyToString(v any) string {
 		return string(b)
 	default:
 		return fmt.Sprint(val)
+	}
+}
+
+// FormatToolArgsDisplay produces a human-friendly summary of tool arguments
+// for terminal display. Returns "" when there is nothing meaningful to show.
+func FormatToolArgsDisplay(name, rawArgs string) string {
+	args := ParseArgs(rawArgs)
+	switch name {
+	case "call_tool":
+		toolName := args["name"]
+		toolArgs := args["tool_args"]
+		if toolArgs != "" && toolArgs != "{}" {
+			return toolName + " " + toolArgs
+		}
+		return toolName
+	case "list_tools":
+		return args["category"]
+	case "exec_shell":
+		cmd := args["command"]
+		if utf8.RuneCountInString(cmd) > 80 {
+			runes := []rune(cmd)
+			cmd = string(runes[:77]) + "..."
+		}
+		return cmd
+	default:
+		return ""
 	}
 }
 

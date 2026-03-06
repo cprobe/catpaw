@@ -187,6 +187,8 @@ func (e *DiagnoseEngine) diagnose(ctx context.Context, req *DiagnoseRequest, ses
 	session.Record.AI.Model = e.cfg.PrimaryModelName()
 	contextWarned := false
 
+	progress := req.OnProgress // nil-safe: emitProgress checks
+
 	for round := 0; round < e.maxRounds; round++ {
 		if !contextWarned && estimatedTokens > e.contextWindowLimit {
 			contextWarned = true
@@ -201,8 +203,13 @@ func (e *DiagnoseEngine) diagnose(ctx context.Context, req *DiagnoseRequest, ses
 			})
 		}
 
+		emitProgress(progress, ProgressEvent{Type: ProgressAIStart, Round: round + 1})
+
+		aiStart := time.Now()
 		resp, modelName, err := e.fc.Chat(ctx, messages, aiToolDefs)
+		aiElapsed := time.Since(aiStart)
 		if err != nil {
+			emitProgress(progress, ProgressEvent{Type: ProgressAIDone, Round: round + 1, Duration: aiElapsed, IsError: true})
 			return "", fmt.Errorf("AI API error at round %d: %w", round+1, err)
 		}
 		session.Record.AI.Model = modelName
@@ -220,6 +227,13 @@ func (e *DiagnoseEngine) diagnose(ctx context.Context, req *DiagnoseRequest, ses
 			toolCalls = resp.Choices[0].Message.ToolCalls
 		}
 
+		emitProgress(progress, ProgressEvent{
+			Type:      ProgressAIDone,
+			Round:     round + 1,
+			Reasoning: content,
+			Duration:  aiElapsed,
+		})
+
 		if len(toolCalls) == 0 {
 			session.Record.AI.TotalRounds = round + 1
 			return content, nil
@@ -235,16 +249,37 @@ func (e *DiagnoseEngine) diagnose(ctx context.Context, req *DiagnoseRequest, ses
 		roundRecord := RoundRecord{Round: round + 1}
 
 		for _, tc := range toolCalls {
+			argsDisplay := FormatToolArgsDisplay(tc.Function.Name, tc.Function.Arguments)
+
+			emitProgress(progress, ProgressEvent{
+				Type:     ProgressToolStart,
+				Round:    round + 1,
+				ToolName: tc.Function.Name,
+				ToolArgs: argsDisplay,
+			})
+
 			toolCtx, toolCancel := context.WithTimeout(ctx, e.toolTimeout)
 			toolStart := time.Now()
 
 			result, toolErr := executeTool(toolCtx, e.registry, session, tc.Function.Name, tc.Function.Arguments)
 			toolCancel()
+			toolElapsed := time.Since(toolStart)
 
-			if toolErr != nil {
+			isErr := toolErr != nil
+			if isErr {
 				result = "error: " + toolErr.Error()
 			}
 			truncated := TruncateOutput(result)
+
+			emitProgress(progress, ProgressEvent{
+				Type:      ProgressToolDone,
+				Round:     round + 1,
+				ToolName:  tc.Function.Name,
+				ToolArgs:  argsDisplay,
+				Duration:  toolElapsed,
+				ResultLen: len(result),
+				IsError:   isErr,
+			})
 
 			messages = append(messages, aiclient.Message{
 				Role:       "tool",
@@ -257,7 +292,7 @@ func (e *DiagnoseEngine) diagnose(ctx context.Context, req *DiagnoseRequest, ses
 				Name:       tc.Function.Name,
 				Args:       ParseArgs(tc.Function.Arguments),
 				Result:     TruncateForRecord(result),
-				DurationMs: time.Since(toolStart).Milliseconds(),
+				DurationMs: toolElapsed.Milliseconds(),
 			})
 		}
 		roundRecord.AIReasoning = content
@@ -372,4 +407,10 @@ func (e *DiagnoseEngine) State() *DiagnoseState {
 // Registry returns the engine's tool registry.
 func (e *DiagnoseEngine) Registry() *ToolRegistry {
 	return e.registry
+}
+
+func emitProgress(cb ProgressCallback, event ProgressEvent) {
+	if cb != nil {
+		cb(event)
+	}
 }

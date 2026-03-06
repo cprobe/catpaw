@@ -296,7 +296,7 @@ func runConversationTurn(
 		sp := startSpinner(fmt.Sprintf("[round %d] ⟳ thinking...", roundNum))
 		start := time.Now()
 		resp, _, err := fc.Chat(ctx, messages, aiTools)
-		sp.stop()
+		sp.Stop()
 		printThinkingDone(roundNum, time.Since(start))
 		if err != nil {
 			return "", messages, totalUsage, fmt.Errorf("AI API call failed: %w", err)

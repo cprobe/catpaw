@@ -11,6 +11,7 @@ import (
 	"github.com/BurntSushi/toml"
 	"github.com/cprobe/catpaw/config"
 	"github.com/cprobe/catpaw/diagnose"
+	"github.com/cprobe/catpaw/pkg/term"
 	"github.com/cprobe/catpaw/plugins"
 	"github.com/toolkits/pkg/file"
 )
@@ -67,6 +68,7 @@ func runInspectRequest(registry *diagnose.ToolRegistry, pluginName, target strin
 		Target:      target,
 		InstanceRef: instanceRef,
 		Timeout:     2 * time.Minute,
+		OnProgress:  inspectProgress(),
 	}
 
 	fmt.Printf("[*] Starting health inspection: plugin=%s target=%s\n", pluginName, target)
@@ -236,6 +238,36 @@ func readInspectPluginConfig(pluginName string) ([]byte, error) {
 
 func hasAccessorFactory(registry *diagnose.ToolRegistry, plugin string) bool {
 	return registry.HasAccessorFactory(plugin)
+}
+
+func inspectProgress() diagnose.ProgressCallback {
+	var sp *term.Spinner
+	return func(e diagnose.ProgressEvent) {
+		switch e.Type {
+		case diagnose.ProgressAIStart:
+			sp = term.StartSpinner(fmt.Sprintf("[round %d] thinking...", e.Round))
+		case diagnose.ProgressAIDone:
+			if sp != nil {
+				sp.Stop()
+				sp = nil
+			}
+			if e.IsError {
+				fmt.Printf("  %s[round %d]%s %s✗ AI error%s %s(%s)%s\n",
+					term.ColorGray, e.Round, term.ColorReset,
+					term.ColorRed, term.ColorReset,
+					term.ColorGray, term.FmtDur(e.Duration), term.ColorReset)
+			} else {
+				term.PrintThinkingDone(e.Round, e.Duration)
+				if e.Reasoning != "" {
+					term.PrintAIReasoning(e.Reasoning)
+				}
+			}
+		case diagnose.ProgressToolStart:
+			term.PrintToolStart(e.ToolName, e.ToolArgs)
+		case diagnose.ProgressToolDone:
+			term.PrintToolDone(e.ToolName, e.ToolArgs, e.Duration, e.ResultLen, e.IsError)
+		}
+	}
 }
 
 func availablePluginNames() string {
