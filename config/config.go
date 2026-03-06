@@ -74,12 +74,19 @@ type ModelConfig struct {
 	InputPrice    float64                `toml:"input_price"`
 	OutputPrice   float64                `toml:"output_price"`
 	ExtraBody     map[string]interface{} `toml:"extra_body"`
+}
 
-	// Bedrock-specific fields (used when provider = "bedrock").
-	AWSRegion         string `toml:"aws_region"`
-	AWSAccessKeyID    string `toml:"aws_access_key_id"`
-	AWSSecretAccessKey string `toml:"aws_secret_access_key"`
-	AWSSessionToken   string `toml:"aws_session_token"`
+// ExtraStr returns a string value from ExtraBody, or empty if missing.
+func (m ModelConfig) ExtraStr(key string) string {
+	if m.ExtraBody == nil {
+		return ""
+	}
+	v, ok := m.ExtraBody[key]
+	if !ok {
+		return ""
+	}
+	s, _ := v.(string)
+	return s
 }
 
 // AIConfig holds the full AI subsystem configuration.
@@ -268,24 +275,24 @@ func (c *AIConfig) applyDefaults() {
 	}
 }
 
-// resolveAPIKeys resolves ${ENV_VAR} references in all model API keys and AWS credentials.
+// resolveAPIKeys resolves ${ENV_VAR} references in API keys and ExtraBody string values.
 func (c *AIConfig) resolveAPIKeys() {
 	for name, m := range c.Models {
 		m.APIKey = resolveEnvRef(m.APIKey)
-		m.AWSAccessKeyID = resolveEnvRef(m.AWSAccessKeyID)
-		m.AWSSecretAccessKey = resolveEnvRef(m.AWSSecretAccessKey)
-		m.AWSSessionToken = resolveEnvRef(m.AWSSessionToken)
-		// Bedrock: fallback to standard AWS env vars if not set in config.
+		// Resolve ${ENV_VAR} in all string values of ExtraBody.
+		for k, v := range m.ExtraBody {
+			if s, ok := v.(string); ok {
+				m.ExtraBody[k] = resolveEnvRef(s)
+			}
+		}
+		// Bedrock: fallback to standard AWS env vars if not set in extra_body.
 		if m.Provider == "bedrock" {
-			if m.AWSAccessKeyID == "" {
-				m.AWSAccessKeyID = os.Getenv("AWS_ACCESS_KEY_ID")
+			if m.ExtraBody == nil {
+				m.ExtraBody = make(map[string]interface{})
 			}
-			if m.AWSSecretAccessKey == "" {
-				m.AWSSecretAccessKey = os.Getenv("AWS_SECRET_ACCESS_KEY")
-			}
-			if m.AWSSessionToken == "" {
-				m.AWSSessionToken = os.Getenv("AWS_SESSION_TOKEN")
-			}
+			setExtraDefault(m.ExtraBody, "aws_access_key_id", "AWS_ACCESS_KEY_ID")
+			setExtraDefault(m.ExtraBody, "aws_secret_access_key", "AWS_SECRET_ACCESS_KEY")
+			setExtraDefault(m.ExtraBody, "aws_session_token", "AWS_SESSION_TOKEN")
 		}
 		c.Models[name] = m
 	}
@@ -296,6 +303,18 @@ func resolveEnvRef(val string) string {
 		return os.Getenv(val[2 : len(val)-1])
 	}
 	return val
+}
+
+// setExtraDefault fills an ExtraBody key from an environment variable if not already set.
+func setExtraDefault(extra map[string]interface{}, key, envVar string) {
+	if v, ok := extra[key]; ok {
+		if s, _ := v.(string); s != "" {
+			return
+		}
+	}
+	if val := os.Getenv(envVar); val != "" {
+		extra[key] = val
+	}
 }
 
 func (c *AIConfig) Validate() error {
@@ -317,8 +336,8 @@ func (c *AIConfig) Validate() error {
 			if m.Model == "" {
 				return fmt.Errorf("[ai.models.%s] model is required for bedrock provider", name)
 			}
-			if m.AWSRegion == "" {
-				return fmt.Errorf("[ai.models.%s] aws_region is required for bedrock provider", name)
+			if m.ExtraStr("aws_region") == "" {
+				return fmt.Errorf("[ai.models.%s] extra_body.aws_region is required for bedrock provider", name)
 			}
 		} else {
 			if m.BaseURL == "" {

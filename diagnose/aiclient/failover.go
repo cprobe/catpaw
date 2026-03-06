@@ -44,14 +44,14 @@ func NewFailoverClient(cfg config.AIConfig) *FailoverClient {
 func newChatClient(m config.ModelConfig, timeout time.Duration) ChatClient {
 	if m.Provider == "bedrock" {
 		return NewBedrockClient(BedrockClientConfig{
-			Region:         m.AWSRegion,
+			Region:         m.ExtraStr("aws_region"),
 			Model:          m.Model,
 			MaxTokens:      m.MaxTokens,
 			RequestTimeout: timeout,
 			Credentials: AWSCredentials{
-				AccessKeyID:     m.AWSAccessKeyID,
-				SecretAccessKey: m.AWSSecretAccessKey,
-				SessionToken:    m.AWSSessionToken,
+				AccessKeyID:     m.ExtraStr("aws_access_key_id"),
+				SecretAccessKey: m.ExtraStr("aws_secret_access_key"),
+				SessionToken:    m.ExtraStr("aws_session_token"),
 			},
 		})
 	}
