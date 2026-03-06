@@ -62,6 +62,10 @@ type NotifyConfig struct {
 
 // ModelConfig defines connection and model-specific parameters for one AI model.
 type ModelConfig struct {
+	// Provider selects the backend: "" or "openai" for OpenAI-compatible,
+	// "bedrock" for AWS Bedrock Converse API with SigV4 auth.
+	Provider string `toml:"provider"`
+
 	BaseURL       string                 `toml:"base_url"`
 	APIKey        string                 `toml:"api_key"`
 	Model         string                 `toml:"model"`
@@ -70,6 +74,12 @@ type ModelConfig struct {
 	InputPrice    float64                `toml:"input_price"`
 	OutputPrice   float64                `toml:"output_price"`
 	ExtraBody     map[string]interface{} `toml:"extra_body"`
+
+	// Bedrock-specific fields (used when provider = "bedrock").
+	AWSRegion         string `toml:"aws_region"`
+	AWSAccessKeyID    string `toml:"aws_access_key_id"`
+	AWSSecretAccessKey string `toml:"aws_secret_access_key"`
+	AWSSessionToken   string `toml:"aws_session_token"`
 }
 
 // AIConfig holds the full AI subsystem configuration.
@@ -258,15 +268,34 @@ func (c *AIConfig) applyDefaults() {
 	}
 }
 
-// resolveAPIKeys resolves ${ENV_VAR} references in all model API keys.
+// resolveAPIKeys resolves ${ENV_VAR} references in all model API keys and AWS credentials.
 func (c *AIConfig) resolveAPIKeys() {
 	for name, m := range c.Models {
-		if strings.HasPrefix(m.APIKey, "${") && strings.HasSuffix(m.APIKey, "}") {
-			envKey := m.APIKey[2 : len(m.APIKey)-1]
-			m.APIKey = os.Getenv(envKey)
-			c.Models[name] = m
+		m.APIKey = resolveEnvRef(m.APIKey)
+		m.AWSAccessKeyID = resolveEnvRef(m.AWSAccessKeyID)
+		m.AWSSecretAccessKey = resolveEnvRef(m.AWSSecretAccessKey)
+		m.AWSSessionToken = resolveEnvRef(m.AWSSessionToken)
+		// Bedrock: fallback to standard AWS env vars if not set in config.
+		if m.Provider == "bedrock" {
+			if m.AWSAccessKeyID == "" {
+				m.AWSAccessKeyID = os.Getenv("AWS_ACCESS_KEY_ID")
+			}
+			if m.AWSSecretAccessKey == "" {
+				m.AWSSecretAccessKey = os.Getenv("AWS_SECRET_ACCESS_KEY")
+			}
+			if m.AWSSessionToken == "" {
+				m.AWSSessionToken = os.Getenv("AWS_SESSION_TOKEN")
+			}
 		}
+		c.Models[name] = m
 	}
+}
+
+func resolveEnvRef(val string) string {
+	if strings.HasPrefix(val, "${") && strings.HasSuffix(val, "}") {
+		return os.Getenv(val[2 : len(val)-1])
+	}
+	return val
 }
 
 func (c *AIConfig) Validate() error {
@@ -284,11 +313,20 @@ func (c *AIConfig) Validate() error {
 		if !ok {
 			return fmt.Errorf("[ai] model_priority references unknown model %q", name)
 		}
-		if m.BaseURL == "" {
-			return fmt.Errorf("[ai.models.%s] base_url is required", name)
-		}
-		if m.APIKey == "" {
-			return fmt.Errorf("[ai.models.%s] api_key is required (supports ${ENV_VAR} syntax)", name)
+		if m.Provider == "bedrock" {
+			if m.Model == "" {
+				return fmt.Errorf("[ai.models.%s] model is required for bedrock provider", name)
+			}
+			if m.AWSRegion == "" {
+				return fmt.Errorf("[ai.models.%s] aws_region is required for bedrock provider", name)
+			}
+		} else {
+			if m.BaseURL == "" {
+				return fmt.Errorf("[ai.models.%s] base_url is required", name)
+			}
+			if m.APIKey == "" {
+				return fmt.Errorf("[ai.models.%s] api_key is required (supports ${ENV_VAR} syntax)", name)
+			}
 		}
 	}
 	if c.QueueFullPolicy != "drop" && c.QueueFullPolicy != "wait" {

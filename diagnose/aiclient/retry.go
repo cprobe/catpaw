@@ -15,8 +15,8 @@ type RetryConfig struct {
 	RetryBackoff time.Duration
 }
 
-// ChatWithRetry calls Client.Chat with exponential backoff retry on transient errors.
-func ChatWithRetry(ctx context.Context, client *Client, cfg RetryConfig, messages []Message, tools []Tool) (*ChatResponse, error) {
+// ChatWithRetry calls ChatClient.Chat with exponential backoff retry on transient errors.
+func ChatWithRetry(ctx context.Context, client ChatClient, cfg RetryConfig, messages []Message, tools []Tool) (*ChatResponse, error) {
 	var lastErr error
 	for attempt := 0; attempt <= cfg.MaxRetries; attempt++ {
 		if attempt > 0 {
