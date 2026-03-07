@@ -74,6 +74,10 @@ type ModelConfig struct {
 	InputPrice    float64                `toml:"input_price"`
 	OutputPrice   float64                `toml:"output_price"`
 	ExtraBody     map[string]interface{} `toml:"extra_body"`
+
+	// AuthHeader sets the Authorization header format.
+	// Common values: "Bearer" (default), "Api-Key", or empty (no prefix).
+	AuthHeader string `toml:"auth_header"`
 }
 
 // ExtraStr returns a string value from ExtraBody, or empty if missing.

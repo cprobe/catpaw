@@ -16,6 +16,7 @@ import (
 type Client struct {
 	baseURL    string
 	apiKey     string
+	authHeader string // "Bearer", "Api-Key", or empty
 	model      string
 	maxTokens  int
 	extraBody  map[string]interface{}
@@ -26,6 +27,7 @@ type Client struct {
 type ClientConfig struct {
 	BaseURL        string
 	APIKey         string
+	AuthHeader     string // "Bearer", "Api-Key", or empty (no prefix)
 	Model          string
 	MaxTokens      int
 	RequestTimeout time.Duration
@@ -34,12 +36,17 @@ type ClientConfig struct {
 
 // NewClient creates a new AI API client.
 func NewClient(cfg ClientConfig) *Client {
+	authHeader := cfg.AuthHeader
+	if authHeader == "" {
+		authHeader = "Bearer" // default
+	}
 	return &Client{
-		baseURL:   strings.TrimRight(cfg.BaseURL, "/"),
-		apiKey:    cfg.APIKey,
-		model:     cfg.Model,
-		maxTokens: cfg.MaxTokens,
-		extraBody: cfg.ExtraBody,
+		baseURL:    strings.TrimRight(cfg.BaseURL, "/"),
+		apiKey:     cfg.APIKey,
+		authHeader: authHeader,
+		model:      cfg.Model,
+		maxTokens:  cfg.MaxTokens,
+		extraBody:  cfg.ExtraBody,
 		httpClient: &http.Client{
 			Timeout: cfg.RequestTimeout,
 		},
@@ -63,7 +70,11 @@ func (c *Client) Chat(ctx context.Context, messages []Message, tools []Tool) (*C
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
 	if c.apiKey != "" {
-		httpReq.Header.Set("Authorization", "Bearer "+c.apiKey)
+		if c.authHeader != "" {
+			httpReq.Header.Set("Authorization", c.authHeader+" "+c.apiKey)
+		} else {
+			httpReq.Header.Set("Authorization", c.apiKey)
+		}
 	}
 
 	resp, err := c.httpClient.Do(httpReq)

@@ -35,54 +35,38 @@ enabled = true
 # X-Custom-Header = "catpaw"
 
 ## AI 智能诊断配置（告警触发后自动分析根因）
-# [ai]
-# enabled = true
-#
-## 模型优先级列表（按顺序尝试，第一个可用的就用它；故障时自动切换下一个）
-## 调整顺序即可切换模型用于对比测试，也可用 catpaw chat --model <name> 固定某个模型
-# model_priority = ["gpt4o", "deepseek"]
-#
+[ai]
+enabled = true
+model_priority = ["minimax"]
+
 ## 运行时参数（与模型无关）
-# max_rounds = 15                    # AI Agent 最大交互轮次（工具多时建议 12~20）
-# request_timeout = "60s"            # 单次 AI 请求超时
-# max_retries = 2                    # AI API 失败重试次数
-# retry_backoff = "2s"               # 重试间隔
-#
+max_rounds = 15                    # AI Agent 最大交互轮次（工具多时建议 12~20）
+request_timeout = "60s"            # 单次 AI 请求超时
+max_retries = 2                    # AI API 失败重试次数
+retry_backoff = "2s"               # 重试间隔
+
 ## 并发与限流
-# max_concurrent_diagnoses = 3       # 最大并发诊断数
-# queue_full_policy = "drop"         # 并发满时策略: drop(丢弃) 或 wait(等待)
-# daily_token_limit = 500000         # 每日 token 消耗上限（0=不限）
-#
+max_concurrent_diagnoses = 3       # 最大并发诊断数
+queue_full_policy = "drop"         # 并发满时策略: drop(丢弃) 或 wait(等待)
+daily_token_limit = 500000         # 每日 token 消耗上限（0=不限）
+
 ## 工具与聚合
-# tool_timeout = "10s"               # 单个诊断工具执行超时
-# aggregate_window = "5s"            # 同目标告警聚合窗口
-#
+tool_timeout = "10s"               # 单个诊断工具执行超时
+aggregate_window = "5s"            # 同目标告警聚合窗口
+
 ## 诊断记录保留策略（保存在 state.d/diagnoses/）
-# diagnose_retention = "168h"        # 7 天
-# diagnose_max_count = 1000
-#
+diagnose_retention = "168h"        # 7 天
+diagnose_max_count = 1000
+
 ## ---- 模型配置（每个模型一个 [ai.models.<name>] 段）----
-#
-# [ai.models.gpt4o]
-# base_url = "https://api.openai.com/v1"
-# api_key = "${OPENAI_API_KEY}"      # 支持 ${ENV_VAR} 语法引用环境变量
-# model = "gpt-4o"
-# max_tokens = 4000                  # 单次 AI 返回最大 token 数
-# context_window = 128000            # 模型上下文窗口大小（token），默认 128000
-# input_price = 2.50                 # USD/百万 input tokens（用于 chat 模式展示成本，0=不显示）
-# output_price = 10.00               # USD/百万 output tokens
-#
-# [ai.models.deepseek]
-# base_url = "https://api.deepseek.com/v1"
-# api_key = "${DEEPSEEK_API_KEY}"
-# model = "deepseek-reasoner"
-# max_tokens = 8000
-# context_window = 64000
-# input_price = 0.55
-# output_price = 2.19
-# [ai.models.deepseek.extra_body]    # 厂商特有参数（透传到请求 JSON）
-# enable_thinking = true
-# thinking_budget = 10000
+
+[ai.models.minimax]
+base_url = "https://api.minimax.chat/v1"
+api_key = "${MINIMAX_API_KEY}"      # 支持 ${ENV_VAR} 语法引用环境变量
+model = "MiniMax-M2.5"
+max_tokens = 8000                  # 单次 AI 返回最大 token 数
+context_window = 128000            # 模型上下文窗口大小（token）
+# auth_header = "Bearer"            # 认证头格式，默认 Bearer
 #
 ## ---- MCP 外部数据源（连接 Prometheus/Nightingale/Jaeger/CMDB 等）----
 #
