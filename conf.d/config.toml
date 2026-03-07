@@ -84,6 +84,13 @@ enabled = true
 # enable_thinking = true
 # thinking_budget = 10000
 #
+# [ai.models.minimax]
+# base_url = "https://api.minimax.chat/v1"
+# api_key = "${MINIMAX_API_KEY}"
+# model = "MiniMax-M2.5"
+# max_tokens = 8000
+# context_window = 128000
+#
 ## ---- MCP 外部数据源（连接 Prometheus/Nightingale/Jaeger/CMDB 等）----
 #
 # [ai.mcp]
