@@ -161,6 +161,69 @@ func (e *DiagnoseEngine) RunDiagnose(req *DiagnoseRequest) *DiagnoseRecord {
 	return session.Record
 }
 
+// RunDiagnoseStreaming runs a diagnosis with streaming output via cb.
+// Unlike RunDiagnose, it uses the caller-provided ctx (can be cancelled externally),
+// does not manage sem/cooldown/state, and does not save records to disk.
+// Intended for remote sessions where the server manages lifecycle.
+func (e *DiagnoseEngine) RunDiagnoseStreaming(ctx context.Context, req *DiagnoseRequest, cb StreamCallback) (report string, err error) {
+	session := &DiagnoseSession{
+		Record:    NewDiagnoseRecord(req),
+		StartTime: time.Now(),
+	}
+	defer session.Close()
+
+	defer func() {
+		if r := recover(); r != nil {
+			logger.Logger.Errorw("streaming_diagnose_panic",
+				"plugin", req.Plugin, "target", req.Target,
+				"panic", r, "stack", string(debug.Stack()))
+			err = fmt.Errorf("panic: %v", r)
+		}
+	}()
+
+	emitStream := func(delta, stage string, done bool, metadata map[string]any) {
+		if cb != nil {
+			cb(delta, stage, done, metadata)
+		}
+	}
+
+	req.OnProgress = func(event ProgressEvent) {
+		switch event.Type {
+		case ProgressAIStart:
+			emitStream(fmt.Sprintf("[Round %d] AI thinking...", event.Round), "thinking", false, nil)
+		case ProgressAIDone:
+			if event.Reasoning != "" {
+				emitStream(event.Reasoning, "answer", false, nil)
+			}
+		case ProgressToolStart:
+			emitStream(fmt.Sprintf("[Tool] %s %s", event.ToolName, event.ToolArgs), "tool_call", false, nil)
+		case ProgressToolDone:
+			status := "ok"
+			if event.IsError {
+				status = "error"
+			}
+			emitStream(fmt.Sprintf("[Tool done] %s (%s, %dB, %s)", event.ToolName, status, event.ResultLen, event.Duration), "tool_result", false, nil)
+		}
+	}
+
+	logger.Logger.Infow("streaming_diagnose_started",
+		"plugin", req.Plugin, "target", req.Target, "mode", req.Mode)
+
+	report, err = e.diagnose(ctx, req, session)
+	if err != nil {
+		logger.Logger.Warnw("streaming_diagnose_failed",
+			"plugin", req.Plugin, "target", req.Target, "error", err)
+		return "", err
+	}
+
+	logger.Logger.Infow("streaming_diagnose_completed",
+		"plugin", req.Plugin, "target", req.Target,
+		"rounds", session.Record.AI.TotalRounds,
+		"tokens", session.Record.AI.InputTokens+session.Record.AI.OutputTokens)
+
+	return report, nil
+}
+
 func (e *DiagnoseEngine) diagnose(ctx context.Context, req *DiagnoseRequest, session *DiagnoseSession) (string, error) {
 	if err := e.initSessionAccessor(ctx, req, session); err != nil {
 		return "", fmt.Errorf("create accessor: %w", err)
@@ -179,9 +242,8 @@ func (e *DiagnoseEngine) diagnose(ctx context.Context, req *DiagnoseRequest, ses
 		prompt = buildSystemPrompt(req, directToolsStr, toolCatalog, hostname, isRemote, e.cfg.Language)
 	}
 
-	messages := []aiclient.Message{
-		{Role: "system", Content: prompt},
-	}
+	messages := make([]aiclient.Message, 0, e.maxRounds*4)
+	messages = append(messages, aiclient.Message{Role: "system", Content: prompt})
 
 	estimatedTokens := aiclient.EstimateTokensChinese(prompt)
 	session.Record.AI.Model = e.cfg.PrimaryModelName()
@@ -190,6 +252,10 @@ func (e *DiagnoseEngine) diagnose(ctx context.Context, req *DiagnoseRequest, ses
 	progress := req.OnProgress // nil-safe: emitProgress checks
 
 	for round := 0; round < e.maxRounds; round++ {
+		if ctx.Err() != nil {
+			return "", ctx.Err()
+		}
+
 		if !contextWarned && estimatedTokens > e.contextWindowLimit {
 			contextWarned = true
 			messages = append(messages, aiclient.Message{
@@ -407,6 +473,22 @@ func (e *DiagnoseEngine) State() *DiagnoseState {
 // Registry returns the engine's tool registry.
 func (e *DiagnoseEngine) Registry() *ToolRegistry {
 	return e.registry
+}
+
+// TrySem attempts to acquire a concurrency slot (shared with local diagnoses).
+// Returns true if acquired, false if all slots are occupied.
+func (e *DiagnoseEngine) TrySem() bool {
+	select {
+	case e.sem <- struct{}{}:
+		return true
+	default:
+		return false
+	}
+}
+
+// ReleaseSem releases one concurrency slot previously acquired via TrySem.
+func (e *DiagnoseEngine) ReleaseSem() {
+	<-e.sem
 }
 
 func emitProgress(cb ProgressCallback, event ProgressEvent) {

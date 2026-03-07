@@ -8,8 +8,10 @@ import (
 	"time"
 
 	"github.com/BurntSushi/toml"
+	"github.com/cprobe/catpaw/chat"
 	"github.com/cprobe/catpaw/config"
 	"github.com/cprobe/catpaw/diagnose"
+	"github.com/cprobe/catpaw/diagnose/aiclient"
 	"github.com/cprobe/catpaw/logger"
 	"github.com/cprobe/catpaw/notify"
 	"github.com/cprobe/catpaw/pkg/choice"
@@ -52,6 +54,111 @@ import (
 	_ "github.com/cprobe/catpaw/plugins/uptime"
 	_ "github.com/cprobe/catpaw/plugins/zombie"
 )
+
+// diagnoseRunnerAdapter bridges diagnose.DiagnoseEngine to server.DiagnoseRunner.
+type diagnoseRunnerAdapter struct {
+	engine *diagnose.DiagnoseEngine
+}
+
+func (a *diagnoseRunnerAdapter) RunStreaming(ctx context.Context, mode, plugin, target string, params map[string]any, cb server.StreamCallback) (string, error) {
+	req := &diagnose.DiagnoseRequest{
+		Mode:   mode,
+		Plugin: plugin,
+		Target: target,
+	}
+	if desc, _ := params["descriptions"].(string); desc != "" {
+		req.Descriptions = desc
+	}
+	return a.engine.RunDiagnoseStreaming(ctx, req, diagnose.StreamCallback(cb))
+}
+
+// chatRunnerAdapter bridges chat.ChatSession to server.ChatRunner.
+type chatRunnerAdapter struct{}
+
+func (a *chatRunnerAdapter) NewSession(ctx context.Context, opts server.ChatSessionOpts, cb server.StreamCallback) (server.ChatHandle, error) {
+	cfg := config.Config.AI
+	if !cfg.Enabled {
+		return nil, fmt.Errorf("AI is not enabled")
+	}
+
+	eng := diagnose.GlobalEngine()
+	if eng == nil {
+		return nil, fmt.Errorf("diagnose engine not initialized")
+	}
+
+	registry := eng.Registry()
+	fc := aiclient.NewFailoverClient(cfg)
+
+	snapshotStart := time.Now()
+	snapshot := chat.CollectSnapshot(registry)
+	logger.Logger.Infow("chat_snapshot_completed",
+		"duration_ms", time.Since(snapshotStart).Milliseconds())
+
+	io := &remoteChatIO{cb: cb, allowShell: opts.AllowShell}
+
+	sess := chat.NewChatSession(chat.SessionConfig{
+		FC:          fc,
+		Registry:    registry,
+		ToolTimeout: time.Duration(cfg.ToolTimeout),
+		IO:          io,
+		AllowShell:  opts.AllowShell,
+		Language:    cfg.Language,
+		Snapshot:    snapshot,
+	})
+
+	return &chatSessionHandle{sess: sess}, nil
+}
+
+// chatSessionHandle adapts chat.ChatSession to server.ChatHandle.
+type chatSessionHandle struct {
+	sess *chat.ChatSession
+}
+
+func (h *chatSessionHandle) HandleMessage(ctx context.Context, input string) (string, error) {
+	reply, _, err := h.sess.HandleMessage(ctx, input)
+	return reply, err
+}
+
+// remoteChatIO implements chat.ChatIO for remote sessions over WebSocket.
+type remoteChatIO struct {
+	cb         server.StreamCallback
+	allowShell bool
+}
+
+func (r *remoteChatIO) OnThinkingStart(round int) {
+	r.cb(fmt.Sprintf("[Round %d] thinking...", round), "thinking", false, nil)
+}
+
+func (r *remoteChatIO) OnThinkingDone(round int, elapsed time.Duration) {
+	r.cb(fmt.Sprintf("[Round %d done] %.1fs", round, elapsed.Seconds()), "thinking", false, nil)
+}
+
+func (r *remoteChatIO) OnReasoning(text string) {
+	r.cb(text, "answer", false, nil)
+}
+
+func (r *remoteChatIO) OnToolStart(name, argsDisplay string) {
+	r.cb(fmt.Sprintf("[Tool] %s %s", name, argsDisplay), "tool_call", false, nil)
+}
+
+func (r *remoteChatIO) OnToolDone(name, argsDisplay string, elapsed time.Duration, resultLen int, isErr bool) {
+	status := "ok"
+	if isErr {
+		status = "error"
+	}
+	r.cb(fmt.Sprintf("[Tool done] %s (%s, %dB, %s)", name, status, resultLen, elapsed), "tool_result", false, nil)
+}
+
+func (r *remoteChatIO) OnToolOutput(_ string) {
+	// Tool output is not streamed to remote clients to avoid excessive verbosity.
+}
+
+func (r *remoteChatIO) ApproveShell(command string) (bool, string) {
+	if r.allowShell {
+		return true, ""
+	}
+	return false, ""
+}
 
 type PluginConfig struct {
 	Source      string // file || http
@@ -104,6 +211,12 @@ func (a *Agent) startServerConn() {
 	}
 
 	server.InitAlertBuffer(config.Config.Server.GetAlertBufferSize())
+
+	if eng := diagnose.GlobalEngine(); eng != nil {
+		server.SetConcurrencyLimiter(eng)
+		server.SetDiagnoseRunner(&diagnoseRunnerAdapter{engine: eng})
+		server.SetChatRunner(&chatRunnerAdapter{})
+	}
 
 	ctx, cancel := context.WithCancel(context.Background())
 	a.cancel = cancel

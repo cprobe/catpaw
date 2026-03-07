@@ -22,12 +22,13 @@ import (
 	"github.com/cprobe/catpaw/types"
 )
 
+
 const (
 	heartbeatInterval  = 30 * time.Second
 	writeTimeout       = 10 * time.Second
 	readTimeout        = 90 * time.Second
 	ackTimeout         = 10 * time.Second
-	sendChSize         = 16
+	sendChSize         = 64
 	alertFlushInterval = 1 * time.Second
 	alertFlushBatch    = 100
 )
@@ -65,6 +66,7 @@ type Conn struct {
 	cancel         context.CancelFunc
 	closeOnce      sync.Once
 	retryAfterSec  int // set by handleServerMessage on disconnect
+	sessions       *sessionManager
 }
 
 // errAuthFailed signals that the Server rejected the tenant_token (401).
@@ -121,6 +123,7 @@ func Run(ctx context.Context, startTime time.Time, plugins []string) error {
 		plugins:   plugins,
 		sendCh:    make(chan []byte, sendChSize),
 		done:      make(chan struct{}),
+		sessions:  newSessionManager(),
 	}
 
 	logger.Logger.Infow("server_connected", "agent_id", agentID)
@@ -158,6 +161,7 @@ func Run(ctx context.Context, startTime time.Time, plugins []string) error {
 	c.readLoop(connCtx)
 
 	cancel()
+	c.sessions.cancelAll()
 	c.closeOnce.Do(func() { close(c.done) })
 	wg.Wait()
 
@@ -264,10 +268,16 @@ func (c *Conn) handleServerMessage(ctx context.Context, msg *Message) {
 		}
 		c.cancel()
 	case typeAck:
-		// Unexpected ack (not from register flow); log and ignore.
 		logger.Logger.Debugw("ws_unexpected_ack", "agent_id", c.agentID, "ref_id", msg.RefID)
+
+	case typeSessionStart:
+		c.handleSessionStart(ctx, msg)
+	case typeSessionInput:
+		c.handleSessionInput(msg)
+	case typeSessionCancel:
+		c.handleSessionCancel(msg)
+
 	default:
-		// TODO(Phase5): handle session_start, session_cancel, etc.
 		logger.Logger.Debugw("ws_unhandled_type", "agent_id", c.agentID, "type", msg.Type)
 	}
 }
@@ -300,7 +310,7 @@ func (c *Conn) heartbeatLoop(ctx context.Context) {
 		select {
 		case <-ticker.C:
 			msg, err := newMessage(typeHeartbeat, heartbeatPayload{
-				// TODO(Phase5): fill active_sessions from session manager
+				ActiveSessions: c.sessions.count(),
 				// TODO(Phase4): fill cpu_pct, mem_pct from local metrics
 				ActiveAlerts: 0,
 			})

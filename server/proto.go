@@ -15,15 +15,20 @@ import (
 
 // Message types — Agent -> Server
 const (
-	typeRegister    = "register"
-	typeHeartbeat   = "heartbeat"
-	typeAlertEvents = "alert_events"
+	typeRegister      = "register"
+	typeHeartbeat     = "heartbeat"
+	typeAlertEvents   = "alert_events"
+	typeSessionOutput = "session_output"
+	typeSessionError  = "session_error"
 )
 
 // Message types — Server -> Agent
 const (
-	typeAck        = "ack"
-	typeDisconnect = "disconnect"
+	typeAck           = "ack"
+	typeDisconnect    = "disconnect"
+	typeSessionStart  = "session_start"
+	typeSessionInput  = "session_input"
+	typeSessionCancel = "session_cancel"
 )
 
 // Message is the protocol envelope for all Agent <-> Server communication.
@@ -44,6 +49,10 @@ func newMessage(typ string, payload any) (*Message, error) {
 		ID:      uuid.NewString(),
 		Payload: raw,
 	}, nil
+}
+
+func newMsgID() string {
+	return uuid.NewString()
 }
 
 func (m *Message) decodePayload(target any) error {
@@ -98,4 +107,40 @@ type ackPayload struct {
 type disconnectPayload struct {
 	Reason        string `json:"reason"`
 	RetryAfterSec int    `json:"retry_after_sec"`
+}
+
+// --- Session payloads (Server -> Agent) ---
+
+type sessionStartPayload struct {
+	SessionID   string         `json:"session_id"`
+	SessionType string         `json:"session_type"` // "inspect", "diagnose", "chat"
+	UserName    string         `json:"user_name"`
+	Params      map[string]any `json:"params,omitempty"`
+}
+
+type sessionInputPayload struct {
+	SessionID string `json:"session_id"`
+	Message   string `json:"message"`
+}
+
+type sessionCancelPayload struct {
+	SessionID string `json:"session_id"`
+	Reason    string `json:"reason"`
+}
+
+// --- Session payloads (Agent -> Server) ---
+
+type sessionOutputPayload struct {
+	SessionID string         `json:"session_id"`
+	Delta     string         `json:"delta"`
+	Stage     string         `json:"stage"` // "thinking", "tool_call", "tool_result", "answer"
+	Done      bool           `json:"done"`
+	Report    string         `json:"report,omitempty"`
+	Metadata  map[string]any `json:"metadata,omitempty"`
+}
+
+type sessionErrorPayload struct {
+	SessionID string `json:"session_id"`
+	Error     string `json:"error"`
+	Code      string `json:"code"`
 }

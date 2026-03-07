@@ -98,6 +98,11 @@ type ProgressEvent struct {
 // A nil callback is safe; the engine simply skips the call.
 type ProgressCallback func(event ProgressEvent)
 
+// StreamCallback receives streaming output during a remote diagnosis run.
+// Called with incremental deltas; done=true on the final call.
+// A nil callback is safe; the engine simply skips the call.
+type StreamCallback func(delta, stage string, done bool, metadata map[string]any)
+
 // DiagnoseRequest is produced by the DiagnoseAggregator after collecting
 // alerts for the same target within the aggregation window.
 // For inspect mode, Events and Checks are nil.
@@ -110,7 +115,8 @@ type DiagnoseRequest struct {
 	InstanceRef any
 	Timeout     time.Duration
 	Cooldown    time.Duration
-	OnProgress  ProgressCallback // optional; nil means no progress output
+	Descriptions string           // remote diagnose: textual alert descriptions for AI context
+	OnProgress   ProgressCallback // optional; nil means no progress output
 }
 
 // DiagnoseSession manages the lifecycle of a single diagnosis run.
