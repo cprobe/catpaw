@@ -26,6 +26,7 @@ const (
 const (
 	typeAck           = "ack"
 	typeDisconnect    = "disconnect"
+	typePing          = "ping"
 	typeSessionStart  = "session_start"
 	typeSessionInput  = "session_input"
 	typeSessionCancel = "session_cancel"

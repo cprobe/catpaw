@@ -26,7 +26,7 @@ import (
 const (
 	heartbeatInterval  = 30 * time.Second
 	writeTimeout       = 10 * time.Second
-	readTimeout        = 90 * time.Second
+	readTimeout = 90 * time.Second
 	ackTimeout         = 10 * time.Second
 	sendChSize         = 64
 	alertFlushInterval = 1 * time.Second
@@ -269,6 +269,9 @@ func (c *Conn) handleServerMessage(ctx context.Context, msg *Message) {
 		c.cancel()
 	case typeAck:
 		logger.Logger.Debugw("ws_unexpected_ack", "agent_id", c.agentID, "ref_id", msg.RefID)
+
+	case typePing:
+		// Server keepalive — no action needed; the read itself resets the deadline.
 
 	case typeSessionStart:
 		c.handleSessionStart(ctx, msg)
