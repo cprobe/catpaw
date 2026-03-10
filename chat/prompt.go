@@ -48,7 +48,9 @@ const chatPromptRaw = `你是 catpaw 运维助手，运行在主机 {{.Hostname}
 调用方式：call_tool(name="工具名", tool_args='{"参数名":"值"}')
 示例：call_tool(name="disk_usage", tool_args='{}')
 
-你还可以调用 exec_shell(command="命令") 执行任意 shell 命令（需用户确认后才会执行）。
+{{- if .AllowShell}}
+你还可以调用 exec_shell(command="命令") 执行任意 shell 命令。
+{{- end}}
 
 ## 工作原则
 
@@ -58,7 +60,9 @@ const chatPromptRaw = `你是 catpaw 运维助手，运行在主机 {{.Hostname}
 - 回答简洁，关键数值内嵌到分析中
 - 如果用户的问题不需要工具就能回答（尤其是系统快照中已有的信息），直接回答
 - 如果用户的问题超出你的工具能力范围，坦诚告知
-- exec_shell 会经过用户确认，放心提出你需要执行的命令
+{{- if .AllowShell}}
+- exec_shell 可以执行任意命令，适合内置工具无法满足的场景
+{{- end}}
 - 默认使用 {{.Language}} 回复，但如果用户要求切换语言，按用户要求输出`
 
 type chatPromptData struct {
@@ -71,9 +75,10 @@ type chatPromptData struct {
 	SystemSnapshot string
 	MCPIdentity    string
 	Language       string
+	AllowShell     bool
 }
 
-func buildChatSystemPrompt(registry *diagnose.ToolRegistry, snapshot, mcpIdentity, language string) string {
+func buildChatSystemPrompt(registry *diagnose.ToolRegistry, snapshot, mcpIdentity, language string, allowShell bool) string {
 	if language == "" {
 		language = "中文"
 	}
@@ -91,6 +96,7 @@ func buildChatSystemPrompt(registry *diagnose.ToolRegistry, snapshot, mcpIdentit
 		SystemSnapshot: snapshot,
 		MCPIdentity:    mcpIdentity,
 		Language:       language,
+		AllowShell:     allowShell,
 	}
 
 	var buf bytes.Buffer

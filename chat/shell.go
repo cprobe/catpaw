@@ -5,10 +5,8 @@ import (
 	"context"
 	"fmt"
 	"os/exec"
-	"strings"
 	"time"
 
-	"github.com/ergochat/readline"
 	"github.com/cprobe/catpaw/diagnose"
 	"github.com/cprobe/catpaw/pkg/cmdx"
 )
@@ -39,48 +37,11 @@ func (w *cappedWriter) Write(p []byte) (int, error) {
 
 func (w *cappedWriter) String() string { return w.buf.String() }
 
-// execShellInteractive prompts the user for confirmation, then executes
-// the command via /bin/sh -c. Returns the output or a rejection message.
-// When *autoApprove is true, the command runs without prompting.
-// The user can enter "a" or "all" to set *autoApprove for subsequent commands.
-func execShellInteractive(ctx context.Context, rl *readline.Instance, command string, timeout time.Duration, autoApprove *bool) (string, error) {
-	defer rl.SetPrompt(chatPrompt)
-
-	fmt.Printf("\n\033[33m! AI requests command:\033[0m %s\n", command)
-
-	if *autoApprove {
-		fmt.Printf("\033[33m  (auto-approved)\033[0m\n")
-	} else {
-		rl.SetPrompt("\033[33mConfirm? [y/n/e(edit)/a(all)]:\033[0m ")
-		line, err := rl.Readline()
-		if err != nil {
-			return "user rejected command execution", nil
-		}
-		answer := strings.TrimSpace(strings.ToLower(line))
-
-		switch answer {
-		case "y", "yes":
-			// proceed
-		case "a", "all":
-			*autoApprove = true
-		case "e", "edit":
-			rl.SetPrompt("\033[33mEnter modified command:\033[0m ")
-			edited, err := rl.Readline()
-			if err != nil {
-				return "user cancelled command execution", nil
-			}
-			command = strings.TrimSpace(edited)
-			if command == "" {
-				return "user cancelled command execution", nil
-			}
-			fmt.Printf("\033[33mWill execute:\033[0m %s\n", command)
-		default:
-			return "user rejected command execution", nil
-		}
-	}
-
+// execShell executes a shell command via /bin/sh -c and returns the output.
+// Approval must be handled by the caller before invoking this function.
+func execShell(ctx context.Context, command string, timeout time.Duration) (string, error) {
 	if err := ctx.Err(); err != nil {
-		return "context cancelled, command not executed", nil
+		return "", fmt.Errorf("context cancelled, command not executed")
 	}
 
 	cmd := exec.Command("/bin/sh", "-c", command)

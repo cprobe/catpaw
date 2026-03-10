@@ -72,6 +72,37 @@ const (
 	ModeInspect = "inspect"
 )
 
+// ProgressEventType identifies the kind of progress event fired by the engine.
+type ProgressEventType int
+
+const (
+	ProgressAIStart   ProgressEventType = iota // AI call starting (spinner opportunity)
+	ProgressAIDone                              // AI call completed
+	ProgressToolStart                           // Tool invocation starting
+	ProgressToolDone                            // Tool invocation completed
+)
+
+// ProgressEvent carries details about one progress milestone in a diagnosis run.
+type ProgressEvent struct {
+	Type      ProgressEventType
+	Round     int
+	ToolName  string
+	ToolArgs  string
+	Reasoning string        // non-empty on AIDone when the model emits reasoning
+	Duration  time.Duration // set on AIDone / ToolDone
+	ResultLen int           // set on ToolDone
+	IsError   bool          // set on ToolDone
+}
+
+// ProgressCallback receives progress events during a diagnosis run.
+// A nil callback is safe; the engine simply skips the call.
+type ProgressCallback func(event ProgressEvent)
+
+// StreamCallback receives streaming output during a remote diagnosis run.
+// Called with incremental deltas; done=true on the final call.
+// A nil callback is safe; the engine simply skips the call.
+type StreamCallback func(delta, stage string, done bool, metadata map[string]any)
+
 // DiagnoseRequest is produced by the DiagnoseAggregator after collecting
 // alerts for the same target within the aggregation window.
 // For inspect mode, Events and Checks are nil.
@@ -84,6 +115,8 @@ type DiagnoseRequest struct {
 	InstanceRef any
 	Timeout     time.Duration
 	Cooldown    time.Duration
+	Descriptions string           // remote diagnose: textual alert descriptions for AI context
+	OnProgress   ProgressCallback // optional; nil means no progress output
 }
 
 // DiagnoseSession manages the lifecycle of a single diagnosis run.

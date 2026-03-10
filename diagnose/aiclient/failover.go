@@ -16,25 +16,19 @@ import (
 type FailoverClient struct {
 	mu       sync.RWMutex
 	priority []string
-	clients  map[string]*Client
+	clients  map[string]ChatClient
 	retryCfg RetryConfig
 	pinned   string // when non-empty, only this model is used (no failover)
 }
 
 // NewFailoverClient builds a FailoverClient from the AIConfig.
-// It creates one Client per entry in ModelPriority.
+// It creates one ChatClient per entry in ModelPriority, selecting
+// the appropriate backend (OpenAI or Bedrock) based on the provider field.
 func NewFailoverClient(cfg config.AIConfig) *FailoverClient {
-	clients := make(map[string]*Client, len(cfg.ModelPriority))
+	clients := make(map[string]ChatClient, len(cfg.ModelPriority))
 	for _, name := range cfg.ModelPriority {
 		m := cfg.Models[name]
-		clients[name] = NewClient(ClientConfig{
-			BaseURL:        m.BaseURL,
-			APIKey:         m.APIKey,
-			Model:          m.Model,
-			MaxTokens:      m.MaxTokens,
-			RequestTimeout: time.Duration(cfg.RequestTimeout),
-			ExtraBody:      m.ExtraBody,
-		})
+		clients[name] = newChatClient(m, time.Duration(cfg.RequestTimeout))
 	}
 	return &FailoverClient{
 		priority: cfg.ModelPriority,
@@ -44,6 +38,31 @@ func NewFailoverClient(cfg config.AIConfig) *FailoverClient {
 			RetryBackoff: time.Duration(cfg.RetryBackoff),
 		},
 	}
+}
+
+// newChatClient creates the appropriate ChatClient based on the provider field.
+func newChatClient(m config.ModelConfig, timeout time.Duration) ChatClient {
+	if m.Provider == "bedrock" {
+		return NewBedrockClient(BedrockClientConfig{
+			Region:         m.ExtraStr("aws_region"),
+			Model:          m.Model,
+			MaxTokens:      m.MaxTokens,
+			RequestTimeout: timeout,
+			Credentials: AWSCredentials{
+				AccessKeyID:     m.ExtraStr("aws_access_key_id"),
+				SecretAccessKey: m.ExtraStr("aws_secret_access_key"),
+				SessionToken:    m.ExtraStr("aws_session_token"),
+			},
+		})
+	}
+	return NewClient(ClientConfig{
+		BaseURL:        m.BaseURL,
+		APIKey:         m.APIKey,
+		Model:          m.Model,
+		MaxTokens:      m.MaxTokens,
+		RequestTimeout: timeout,
+		ExtraBody:      m.ExtraBody,
+	})
 }
 
 // Chat sends a request, trying models in priority order (or only the pinned
@@ -106,8 +125,8 @@ func (fc *FailoverClient) ModelNames() []string {
 	return out
 }
 
-// ModelClient returns the underlying Client for a specific model name.
-func (fc *FailoverClient) ModelClient(name string) (*Client, bool) {
+// ModelClient returns the underlying ChatClient for a specific model name.
+func (fc *FailoverClient) ModelClient(name string) (ChatClient, bool) {
 	c, ok := fc.clients[name]
 	return c, ok
 }

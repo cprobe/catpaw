@@ -40,9 +40,9 @@ const (
 	maxPerToolBytes    = 2000
 )
 
-// collectSnapshot runs baseline diagnostic tools concurrently and returns
+// CollectSnapshot runs baseline diagnostic tools concurrently and returns
 // a compact text summary. Failures are silently skipped.
-func collectSnapshot(registry *diagnose.ToolRegistry) string {
+func CollectSnapshot(registry *diagnose.ToolRegistry) string {
 	results := make([]snapshotResult, len(baselineTools))
 	var wg sync.WaitGroup
 

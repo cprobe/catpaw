@@ -62,6 +62,10 @@ type NotifyConfig struct {
 
 // ModelConfig defines connection and model-specific parameters for one AI model.
 type ModelConfig struct {
+	// Provider selects the backend: "" or "openai" for OpenAI-compatible,
+	// "bedrock" for AWS Bedrock Converse API with SigV4 auth.
+	Provider string `toml:"provider"`
+
 	BaseURL       string                 `toml:"base_url"`
 	APIKey        string                 `toml:"api_key"`
 	Model         string                 `toml:"model"`
@@ -70,6 +74,19 @@ type ModelConfig struct {
 	InputPrice    float64                `toml:"input_price"`
 	OutputPrice   float64                `toml:"output_price"`
 	ExtraBody     map[string]interface{} `toml:"extra_body"`
+}
+
+// ExtraStr returns a string value from ExtraBody, or empty if missing.
+func (m ModelConfig) ExtraStr(key string) string {
+	if m.ExtraBody == nil {
+		return ""
+	}
+	v, ok := m.ExtraBody[key]
+	if !ok {
+		return ""
+	}
+	s, _ := v.(string)
+	return s
 }
 
 // AIConfig holds the full AI subsystem configuration.
@@ -125,6 +142,7 @@ type ConfigType struct {
 	LogConfig LogConfig    `toml:"log"`
 	Notify    NotifyConfig `toml:"notify"`
 	AI        AIConfig     `toml:"ai"`
+	Server    ServerConfig `toml:"server"`
 }
 
 var Config *ConfigType
@@ -186,6 +204,29 @@ func InitConfig(configDir string, interval int64, plugins, loglevel string) erro
 	builtins := HostBuiltins()
 	Config.Global.Labels = expandLabels(Config.Global.Labels, builtins)
 
+	Config.Server.resolve()
+
+	// When server is enabled, alert events are sent to server and need these labels.
+	// When server is disabled, do not require them so catpaw can run in pure local mode.
+	if Config.Server.Enabled {
+		if err := validateRequiredLabels(Config.Global.Labels); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// Required global labels when server is enabled; all must be present and non-empty after expansion.
+var requiredGlobalLabels = []string{"from_agent", "from_hostname", "from_hostip"}
+
+func validateRequiredLabels(labels map[string]string) error {
+	for _, key := range requiredGlobalLabels {
+		v, ok := labels[key]
+		if !ok || v == "" {
+			return fmt.Errorf("[global.labels] required label %q is missing or empty; please set it in config.toml", key)
+		}
+	}
 	return nil
 }
 
@@ -258,14 +299,45 @@ func (c *AIConfig) applyDefaults() {
 	}
 }
 
-// resolveAPIKeys resolves ${ENV_VAR} references in all model API keys.
+// resolveAPIKeys resolves ${ENV_VAR} references in API keys and ExtraBody string values.
 func (c *AIConfig) resolveAPIKeys() {
 	for name, m := range c.Models {
-		if strings.HasPrefix(m.APIKey, "${") && strings.HasSuffix(m.APIKey, "}") {
-			envKey := m.APIKey[2 : len(m.APIKey)-1]
-			m.APIKey = os.Getenv(envKey)
-			c.Models[name] = m
+		m.APIKey = resolveEnvRef(m.APIKey)
+		// Resolve ${ENV_VAR} in all string values of ExtraBody.
+		for k, v := range m.ExtraBody {
+			if s, ok := v.(string); ok {
+				m.ExtraBody[k] = resolveEnvRef(s)
+			}
 		}
+		// Bedrock: fallback to standard AWS env vars if not set in extra_body.
+		if m.Provider == "bedrock" {
+			if m.ExtraBody == nil {
+				m.ExtraBody = make(map[string]interface{})
+			}
+			setExtraDefault(m.ExtraBody, "aws_access_key_id", "AWS_ACCESS_KEY_ID")
+			setExtraDefault(m.ExtraBody, "aws_secret_access_key", "AWS_SECRET_ACCESS_KEY")
+			setExtraDefault(m.ExtraBody, "aws_session_token", "AWS_SESSION_TOKEN")
+		}
+		c.Models[name] = m
+	}
+}
+
+func resolveEnvRef(val string) string {
+	if strings.HasPrefix(val, "${") && strings.HasSuffix(val, "}") {
+		return os.Getenv(val[2 : len(val)-1])
+	}
+	return val
+}
+
+// setExtraDefault fills an ExtraBody key from an environment variable if not already set.
+func setExtraDefault(extra map[string]interface{}, key, envVar string) {
+	if v, ok := extra[key]; ok {
+		if s, _ := v.(string); s != "" {
+			return
+		}
+	}
+	if val := os.Getenv(envVar); val != "" {
+		extra[key] = val
 	}
 }
 
@@ -284,11 +356,20 @@ func (c *AIConfig) Validate() error {
 		if !ok {
 			return fmt.Errorf("[ai] model_priority references unknown model %q", name)
 		}
-		if m.BaseURL == "" {
-			return fmt.Errorf("[ai.models.%s] base_url is required", name)
-		}
-		if m.APIKey == "" {
-			return fmt.Errorf("[ai.models.%s] api_key is required (supports ${ENV_VAR} syntax)", name)
+		if m.Provider == "bedrock" {
+			if m.Model == "" {
+				return fmt.Errorf("[ai.models.%s] model is required for bedrock provider", name)
+			}
+			if m.ExtraStr("aws_region") == "" {
+				return fmt.Errorf("[ai.models.%s] extra_body.aws_region is required for bedrock provider", name)
+			}
+		} else {
+			if m.BaseURL == "" {
+				return fmt.Errorf("[ai.models.%s] base_url is required", name)
+			}
+			if m.APIKey == "" {
+				return fmt.Errorf("[ai.models.%s] api_key is required (supports ${ENV_VAR} syntax)", name)
+			}
 		}
 	}
 	if c.QueueFullPolicy != "drop" && c.QueueFullPolicy != "wait" {

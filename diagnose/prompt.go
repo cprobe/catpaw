@@ -48,6 +48,9 @@ catpaw 监控系统检测到以下告警：
     描述: {{$c.Description}}
 {{- end}}
 请特别关注这些异常之间是否存在共同根因。
+{{- else if .Descriptions -}}
+### 告警上下文
+{{.Descriptions}}
 {{- end}}
 
 你的任务是诊断这个问题的根因，并给出建议操作。
@@ -133,6 +136,7 @@ type promptData struct {
 	Plugin         string
 	Target         string
 	Checks         []CheckSnapshot
+	Descriptions   string
 	DirectTools    string
 	ToolCatalog    string
 	IsRemoteTarget bool
@@ -154,6 +158,7 @@ func renderPrompt(mode string, req *DiagnoseRequest, directTools, toolCatalog, l
 		Plugin:         req.Plugin,
 		Target:         req.Target,
 		Checks:         req.Checks,
+		Descriptions:   req.Descriptions,
 		DirectTools:    directTools,
 		ToolCatalog:    toolCatalog,
 		IsRemoteTarget: isRemote,
