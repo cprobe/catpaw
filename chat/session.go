@@ -17,24 +17,26 @@ const (
 
 // SessionConfig configures a new ChatSession.
 type SessionConfig struct {
-	FC          *aiclient.FailoverClient
-	Registry    *diagnose.ToolRegistry
-	ToolTimeout time.Duration
-	IO          ChatIO
-	AllowShell  bool
-	Language    string
-	Snapshot    string
-	MCPIdentity string
+	FC                 *aiclient.FailoverClient
+	Registry           *diagnose.ToolRegistry
+	ToolTimeout        time.Duration
+	IO                 ChatIO
+	AllowShell         bool
+	Language           string
+	Snapshot           string
+	MCPIdentity        string
+	ContextWindowLimit int
 }
 
 // ChatSession manages a multi-turn chat conversation with history.
 type ChatSession struct {
-	fc          *aiclient.FailoverClient
-	registry    *diagnose.ToolRegistry
-	aiTools     []aiclient.Tool
-	messages    []aiclient.Message
-	toolTimeout time.Duration
-	io          ChatIO
+	fc                 *aiclient.FailoverClient
+	registry           *diagnose.ToolRegistry
+	aiTools            []aiclient.Tool
+	messages           []aiclient.Message
+	toolTimeout        time.Duration
+	io                 ChatIO
+	contextWindowLimit int
 }
 
 // NewChatSession creates a chat session with the given configuration.
@@ -43,12 +45,13 @@ func NewChatSession(cfg SessionConfig) *ChatSession {
 	aiTools := buildChatToolSetWithOptions(cfg.AllowShell)
 
 	return &ChatSession{
-		fc:          cfg.FC,
-		registry:    cfg.Registry,
-		aiTools:     aiTools,
-		messages:    []aiclient.Message{{Role: "system", Content: systemPrompt}},
-		toolTimeout: cfg.ToolTimeout,
-		io:          cfg.IO,
+		fc:                 cfg.FC,
+		registry:           cfg.Registry,
+		aiTools:            aiTools,
+		messages:           []aiclient.Message{{Role: "system", Content: systemPrompt}},
+		toolTimeout:        cfg.ToolTimeout,
+		io:                 cfg.IO,
+		contextWindowLimit: cfg.ContextWindowLimit,
 	}
 }
 
@@ -77,6 +80,10 @@ func (s *ChatSession) conversationLoop(ctx context.Context) (string, []aiclient.
 	for round := 0; round < chatMaxRounds; round++ {
 		if ctx.Err() != nil {
 			return "", s.messages, totalUsage, ctx.Err()
+		}
+
+		if s.contextWindowLimit > 0 {
+			s.messages = aiclient.CompactMessages(s.messages, s.contextWindowLimit)
 		}
 
 		roundNum := round + 1

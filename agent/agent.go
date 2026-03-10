@@ -97,13 +97,14 @@ func (a *chatRunnerAdapter) NewSession(ctx context.Context, opts server.ChatSess
 	io := &remoteChatIO{cb: cb, allowShell: opts.AllowShell}
 
 	sess := chat.NewChatSession(chat.SessionConfig{
-		FC:          fc,
-		Registry:    registry,
-		ToolTimeout: time.Duration(cfg.ToolTimeout),
-		IO:          io,
-		AllowShell:  opts.AllowShell,
-		Language:    cfg.Language,
-		Snapshot:    snapshot,
+		FC:                 fc,
+		Registry:           registry,
+		ToolTimeout:        time.Duration(cfg.ToolTimeout),
+		IO:                 io,
+		AllowShell:         opts.AllowShell,
+		Language:           cfg.Language,
+		Snapshot:           snapshot,
+		ContextWindowLimit: cfg.ContextWindowLimit(),
 	})
 
 	return &chatSessionHandle{sess: sess}, nil

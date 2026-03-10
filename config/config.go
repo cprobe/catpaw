@@ -132,6 +132,20 @@ func (c *AIConfig) PrimaryModelName() string {
 	return c.ModelPriority[0]
 }
 
+// ContextWindowLimit returns 80% of the primary model's context window size,
+// used as the safe upper bound for message token budgeting. Returns 0 if no
+// models are configured.
+func (c *AIConfig) ContextWindowLimit() int {
+	if len(c.ModelPriority) == 0 {
+		return 0
+	}
+	cw := c.PrimaryModel().ContextWindow
+	if cw <= 0 {
+		cw = 128000
+	}
+	return cw * 80 / 100
+}
+
 type ConfigType struct {
 	ConfigDir string `toml:"-"`
 	StateDir  string `toml:"-"`

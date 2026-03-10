@@ -41,10 +41,12 @@ func NewDiagnoseEngine(registry *ToolRegistry, cfg config.AIConfig) *DiagnoseEng
 	state := NewDiagnoseState()
 	state.Load()
 
-	primary := cfg.PrimaryModel()
-	contextWindow := primary.ContextWindow
-	if contextWindow <= 0 {
-		contextWindow = 128000
+	cwLimit := cfg.ContextWindowLimit()
+
+	if cwLimit > 0 && cwLimit < 12800 {
+		logger.Logger.Warnw("context_window is very small; system prompt with 70+ tools may consume most of the budget, leaving little room for diagnosis",
+			"context_window_limit", cwLimit,
+			"minimum_recommended", 16000)
 	}
 
 	return &DiagnoseEngine{
@@ -53,7 +55,7 @@ func NewDiagnoseEngine(registry *ToolRegistry, cfg config.AIConfig) *DiagnoseEng
 		state:              state,
 		cfg:                cfg,
 		maxRounds:          cfg.MaxRounds,
-		contextWindowLimit: contextWindow * 80 / 100,
+		contextWindowLimit: cwLimit,
 		toolTimeout:        time.Duration(cfg.ToolTimeout),
 		inFlight:           make(map[string]context.CancelFunc),
 		sem:                make(chan struct{}, cfg.MaxConcurrentDiagnoses),
@@ -245,7 +247,7 @@ func (e *DiagnoseEngine) diagnose(ctx context.Context, req *DiagnoseRequest, ses
 	messages := make([]aiclient.Message, 0, e.maxRounds*4)
 	messages = append(messages, aiclient.Message{Role: "system", Content: prompt})
 
-	estimatedTokens := aiclient.EstimateTokensChinese(prompt)
+	estimatedTokens := aiclient.EstimateMessageTokens(messages[0])
 	session.Record.AI.Model = e.cfg.PrimaryModelName()
 	contextWarned := false
 
@@ -256,7 +258,12 @@ func (e *DiagnoseEngine) diagnose(ctx context.Context, req *DiagnoseRequest, ses
 			return "", ctx.Err()
 		}
 
-		if !contextWarned && estimatedTokens > e.contextWindowLimit {
+		if estimatedTokens > e.contextWindowLimit {
+			messages = aiclient.CompactMessages(messages, e.contextWindowLimit)
+			estimatedTokens = aiclient.EstimateMessagesTokens(messages)
+		}
+
+		if !contextWarned && estimatedTokens > e.contextWindowLimit*90/100 {
 			contextWarned = true
 			messages = append(messages, aiclient.Message{
 				Role:    "user",
@@ -310,7 +317,7 @@ func (e *DiagnoseEngine) diagnose(ctx context.Context, req *DiagnoseRequest, ses
 			Content:   content,
 			ToolCalls: toolCalls,
 		})
-		estimatedTokens += aiclient.EstimateTokensChinese(content)
+		estimatedTokens += aiclient.EstimateMessageTokens(messages[len(messages)-1])
 
 		roundRecord := RoundRecord{Round: round + 1}
 
@@ -352,7 +359,7 @@ func (e *DiagnoseEngine) diagnose(ctx context.Context, req *DiagnoseRequest, ses
 				ToolCallID: tc.ID,
 				Content:    truncated,
 			})
-			estimatedTokens += aiclient.EstimateTokensChinese(truncated)
+			estimatedTokens += aiclient.EstimateMessageTokens(messages[len(messages)-1])
 
 			roundRecord.ToolCalls = append(roundRecord.ToolCalls, ToolCallRecord{
 				Name:       tc.Function.Name,

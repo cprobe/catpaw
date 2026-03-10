@@ -78,14 +78,15 @@ func Run(verbose bool, modelPin string) error {
 	mcpIdentity := mcpMgr.IdentitySummary(cfg.MCP.DefaultIdentity)
 
 	sess := NewChatSession(SessionConfig{
-		FC:          fc,
-		Registry:    registry,
-		ToolTimeout: time.Duration(cfg.ToolTimeout),
-		IO:          io,
-		AllowShell:  true,
-		Language:    cfg.Language,
-		Snapshot:    snapshot,
-		MCPIdentity: mcpIdentity,
+		FC:                 fc,
+		Registry:           registry,
+		ToolTimeout:        time.Duration(cfg.ToolTimeout),
+		IO:                 io,
+		AllowShell:         true,
+		Language:           cfg.Language,
+		Snapshot:           snapshot,
+		MCPIdentity:        mcpIdentity,
+		ContextWindowLimit: cfg.ContextWindowLimit(),
 	})
 
 	printChatBanner(fc)
@@ -220,4 +221,5 @@ func printModelList(fc *aiclient.FailoverClient, cfg *config.AIConfig) {
 	}
 	fmt.Println()
 }
+
 
