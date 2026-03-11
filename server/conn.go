@@ -22,11 +22,10 @@ import (
 	"github.com/cprobe/catpaw/types"
 )
 
-
 const (
 	heartbeatInterval  = 30 * time.Second
 	writeTimeout       = 10 * time.Second
-	readTimeout = 90 * time.Second
+	readTimeout        = 90 * time.Second
 	ackTimeout         = 10 * time.Second
 	sendChSize         = 64
 	alertFlushInterval = 1 * time.Second
@@ -56,20 +55,20 @@ func SendAlertEvent(event *types.Event) {
 
 // Conn manages one WebSocket connection to catpaw-server.
 type Conn struct {
-	cfg            config.ServerConfig
-	agentID        uuid.UUID
-	ws             *websocket.Conn
-	startTime      time.Time
-	plugins        []string
-	sendCh         chan []byte // TODO(Phase4/5): replace with priority dual-queue (session > heartbeat/alert)
-	done           chan struct{}
-	cancel         context.CancelFunc
-	closeOnce      sync.Once
-	retryAfterSec  int // set by handleServerMessage on disconnect
-	sessions       *sessionManager
+	cfg           config.ServerConfig
+	agentID       uuid.UUID
+	ws            *websocket.Conn
+	startTime     time.Time
+	plugins       []string
+	sendCh        chan []byte // TODO(Phase4/5): replace with priority dual-queue (session > heartbeat/alert)
+	done          chan struct{}
+	cancel        context.CancelFunc
+	closeOnce     sync.Once
+	retryAfterSec int // set by handleServerMessage on disconnect
+	sessions      *sessionManager
 }
 
-// errAuthFailed signals that the Server rejected the tenant_token (401).
+// errAuthFailed signals that the Server rejected the agent token (401).
 // RunForever uses this to apply the slower auth-failure backoff.
 var errAuthFailed = errors.New("authentication failed")
 
@@ -448,7 +447,7 @@ func (c *Conn) recvAck(ctx context.Context) (*ackPayload, error) {
 
 func buildHeaders(cfg config.ServerConfig, agentID uuid.UUID) http.Header {
 	h := http.Header{}
-	h.Set("X-Tenant-Token", cfg.TenantToken)
+	h.Set("X-Agent-Token", cfg.AgentToken)
 	h.Set("X-Agent-ID", agentID.String())
 	h.Set("X-Proto-Version", "1")
 	return h
