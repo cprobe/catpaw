@@ -2,11 +2,13 @@ package chat
 
 import (
 	"fmt"
+	"io"
+	"os"
 	"strings"
 	"time"
-
-	"github.com/ergochat/readline"
+	
 	"github.com/cprobe/catpaw/pkg/term"
+	"github.com/ergochat/readline"
 )
 
 // terminalChatIO provides terminal-based I/O for local chat REPL.
@@ -56,20 +58,25 @@ func (t *terminalChatIO) OnToolOutput(result string) {
 
 func (t *terminalChatIO) ApproveShell(command string) (bool, string) {
 	fmt.Printf("\n\033[33m! AI requests command:\033[0m %s\n", command)
-
+	
 	if *t.autoApprove {
 		fmt.Printf("\033[33m  (auto-approved)\033[0m\n")
 		return true, ""
 	}
-
+	
 	defer t.rl.SetPrompt(chatPrompt)
 	t.rl.SetPrompt("\033[33mConfirm? [y/n/e(edit)/a(all)]:\033[0m ")
 	line, err := t.rl.Readline()
 	if err != nil {
+		// 捕捉 Ctrl+C (ErrInterrupt) 和 Ctrl+D (EOF)
+		if err == readline.ErrInterrupt || err == io.EOF {
+			fmt.Println("\n\033[31m操作已取消，程序退出。\033[0m")
+			os.Exit(0) // 强制中断退出程序
+		}
 		return false, ""
 	}
 	answer := strings.TrimSpace(strings.ToLower(line))
-
+	
 	switch answer {
 	case "y", "yes":
 		return true, ""
@@ -80,6 +87,11 @@ func (t *terminalChatIO) ApproveShell(command string) (bool, string) {
 		t.rl.SetPrompt("\033[33mEnter modified command:\033[0m ")
 		edited, err := t.rl.Readline()
 		if err != nil {
+			// 在编辑模式下按 Ctrl+C 也需要处理
+			if err == readline.ErrInterrupt || err == io.EOF {
+				fmt.Println("\n\033[31m操作已取消，程序退出。\033[0m")
+				os.Exit(0)
+			}
 			return false, ""
 		}
 		cmd := strings.TrimSpace(edited)
