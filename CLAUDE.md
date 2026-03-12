@@ -102,5 +102,5 @@ go test ./...                        # 单测
 | `docs/deployment.md` | 部署指南 |
 | `design.d/` | 设计原则文档 |
 
-> **工作目录**：`/Users/it/antigravity-test/opensource/catpaw`
+> **工作目录**：`/path/to/catpaw`
 > 所有命令默认在此目录下执行，shell 操作前请先确认 pwd。
