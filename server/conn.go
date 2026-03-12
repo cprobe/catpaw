@@ -72,6 +72,8 @@ type Conn struct {
 // RunForever uses this to apply the slower auth-failure backoff.
 var errAuthFailed = errors.New("authentication failed")
 
+var errConnectionLost = errors.New("connection lost")
+
 // disconnectError wraps a server-requested disconnect with retry_after_sec.
 type disconnectError struct {
 	retryAfterSec int
@@ -79,6 +81,21 @@ type disconnectError struct {
 
 func (e *disconnectError) Error() string {
 	return fmt.Sprintf("server requested disconnect (retry_after_sec=%d)", e.retryAfterSec)
+}
+
+// reconnectError annotates retry behavior for RunForever while preserving
+// the original error text for logging.
+type reconnectError struct {
+	err          error
+	resetBackoff bool
+}
+
+func (e *reconnectError) Error() string {
+	return e.err.Error()
+}
+
+func (e *reconnectError) Unwrap() error {
+	return e.err
 }
 
 // Run performs a single connection lifecycle: dial → register → ack → loops.
@@ -170,7 +187,7 @@ func Run(ctx context.Context, startTime time.Time, plugins []string) error {
 	if c.retryAfterSec > 0 {
 		return &disconnectError{retryAfterSec: c.retryAfterSec}
 	}
-	return fmt.Errorf("connection lost")
+	return &reconnectError{err: errConnectionLost, resetBackoff: true}
 }
 
 // RunForever wraps Run with reconnect logic. It blocks until ctx is cancelled.
@@ -197,29 +214,11 @@ func RunForever(ctx context.Context, startTime time.Time, plugins []string) {
 			return
 		}
 
-		var de *disconnectError
-		var wait time.Duration
-
-		switch {
-		case errors.As(err, &de):
-			wait = time.Duration(de.retryAfterSec) * time.Second
-			if wait < normalMin {
-				wait = normalMin
-			}
-			logger.Logger.Infow("server_disconnect_retry", "error", err, "retry_in", wait)
-			backoff = normalMin
-		case errors.Is(err, errAuthFailed):
-			if backoff < authMin {
-				backoff = authMin
-			}
-			wait = backoff
-			logger.Logger.Errorw("server_auth_failed", "error", err, "retry_in", wait)
-			backoff = clampBackoff(backoff*2, authMin, authMax)
-		case err != nil:
-			wait = backoff
-			logger.Logger.Warnw("server_disconnected", "error", err, "retry_in", wait)
-			backoff = clampBackoff(backoff*2, normalMin, normalMax)
+		wait, nextBackoff, logFn := nextReconnectState(err, backoff, normalMin, normalMax, authMin, authMax)
+		if logFn != nil {
+			logFn(err, wait)
 		}
+		backoff = nextBackoff
 
 		jittered := jitter(wait, 0.25)
 		select {
@@ -489,6 +488,50 @@ func clampBackoff(d, min, max time.Duration) time.Duration {
 		return max
 	}
 	return d
+}
+
+func nextReconnectState(
+	err error,
+	backoff time.Duration,
+	normalMin time.Duration,
+	normalMax time.Duration,
+	authMin time.Duration,
+	authMax time.Duration,
+) (time.Duration, time.Duration, func(error, time.Duration)) {
+	if err == nil {
+		return 0, backoff, nil
+	}
+
+	var de *disconnectError
+	if errors.As(err, &de) {
+		wait := time.Duration(de.retryAfterSec) * time.Second
+		if wait < normalMin {
+			wait = normalMin
+		}
+		return wait, normalMin, func(err error, wait time.Duration) {
+			logger.Logger.Infow("server_disconnect_retry", "error", err, "retry_in", wait)
+		}
+	}
+
+	if errors.Is(err, errAuthFailed) {
+		if backoff < authMin {
+			backoff = authMin
+		}
+		wait := backoff
+		return wait, clampBackoff(backoff*2, authMin, authMax), func(err error, wait time.Duration) {
+			logger.Logger.Errorw("server_auth_failed", "error", err, "retry_in", wait)
+		}
+	}
+
+	var re *reconnectError
+	if errors.As(err, &re) && re.resetBackoff {
+		backoff = normalMin
+	}
+
+	wait := backoff
+	return wait, clampBackoff(backoff*2, normalMin, normalMax), func(err error, wait time.Duration) {
+		logger.Logger.Warnw("server_disconnected", "error", err, "retry_in", wait)
+	}
 }
 
 func jitter(d time.Duration, pct float64) time.Duration {
