@@ -148,6 +148,75 @@ func TestChatExtraBody(t *testing.T) {
 	}
 }
 
+func TestChatUsesMaxCompletionTokens(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var raw map[string]interface{}
+		if err := json.NewDecoder(r.Body).Decode(&raw); err != nil {
+			t.Fatalf("decode request: %v", err)
+		}
+		if _, ok := raw["max_tokens"]; ok {
+			t.Fatalf("request unexpectedly included max_tokens: %v", raw["max_tokens"])
+		}
+		if raw["max_completion_tokens"] != float64(4096) {
+			t.Fatalf("max_completion_tokens = %v, want 4096", raw["max_completion_tokens"])
+		}
+
+		json.NewEncoder(w).Encode(ChatResponse{
+			Choices: []Choice{{Message: Message{Role: "assistant", Content: "ok"}}},
+		})
+	}))
+	defer srv.Close()
+
+	client := NewClient(ClientConfig{
+		BaseURL:             srv.URL,
+		APIKey:              "k",
+		Model:               "gpt-5.2",
+		MaxCompletionTokens: 4096,
+		RequestTimeout:      5 * time.Second,
+	})
+
+	if _, err := client.Chat(context.Background(), []Message{{Role: "user", Content: "hi"}}, nil); err != nil {
+		t.Fatalf("Chat() error: %v", err)
+	}
+}
+
+func TestChatMaxCompletionTokensOverridesExtraBody(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var raw map[string]interface{}
+		if err := json.NewDecoder(r.Body).Decode(&raw); err != nil {
+			t.Fatalf("decode request: %v", err)
+		}
+		if _, ok := raw["max_tokens"]; ok {
+			t.Fatalf("request unexpectedly included max_tokens: %v", raw["max_tokens"])
+		}
+		if raw["max_completion_tokens"] != float64(2048) {
+			t.Fatalf("max_completion_tokens = %v, want 2048", raw["max_completion_tokens"])
+		}
+
+		json.NewEncoder(w).Encode(ChatResponse{
+			Choices: []Choice{{Message: Message{Role: "assistant", Content: "ok"}}},
+		})
+	}))
+	defer srv.Close()
+
+	client := NewClient(ClientConfig{
+		BaseURL:             srv.URL,
+		APIKey:              "k",
+		Model:               "gpt-5.2",
+		MaxTokens:           100,
+		MaxCompletionTokens: 2048,
+		RequestTimeout:      5 * time.Second,
+		ExtraBody: map[string]interface{}{
+			"max_tokens":            100,
+			"max_completion_tokens": 1,
+		},
+	})
+
+	if _, err := client.Chat(context.Background(), []Message{{Role: "user", Content: "hi"}}, nil); err != nil {
+		t.Fatalf("Chat() error: %v", err)
+	}
+}
+
 func TestClientModel(t *testing.T) {
 	c := NewClient(ClientConfig{Model: "test-model"})
 	if c.Model() != "test-model" {

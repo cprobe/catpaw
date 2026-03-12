@@ -66,14 +66,15 @@ type ModelConfig struct {
 	// "bedrock" for AWS Bedrock Converse API with SigV4 auth.
 	Provider string `toml:"provider"`
 
-	BaseURL       string                 `toml:"base_url"`
-	APIKey        string                 `toml:"api_key"`
-	Model         string                 `toml:"model"`
-	MaxTokens     int                    `toml:"max_tokens"`
-	ContextWindow int                    `toml:"context_window"`
-	InputPrice    float64                `toml:"input_price"`
-	OutputPrice   float64                `toml:"output_price"`
-	ExtraBody     map[string]interface{} `toml:"extra_body"`
+	BaseURL             string                 `toml:"base_url"`
+	APIKey              string                 `toml:"api_key"`
+	Model               string                 `toml:"model"`
+	MaxTokens           int                    `toml:"max_tokens"`
+	MaxCompletionTokens int                    `toml:"max_completion_tokens"`
+	ContextWindow       int                    `toml:"context_window"`
+	InputPrice          float64                `toml:"input_price"`
+	OutputPrice         float64                `toml:"output_price"`
+	ExtraBody           map[string]interface{} `toml:"extra_body"`
 }
 
 // GatewayConfig defines the server-backed AI gateway connection.
@@ -350,7 +351,7 @@ func (c *AIConfig) applyDefaults() {
 	}
 
 	for name, m := range c.Models {
-		if m.MaxTokens <= 0 {
+		if m.MaxTokens <= 0 && m.MaxCompletionTokens <= 0 {
 			m.MaxTokens = 4000
 		}
 		if m.ContextWindow <= 0 {

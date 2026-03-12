@@ -100,12 +100,13 @@ func newChatClient(m config.ModelConfig, timeout time.Duration) ChatClient {
 		})
 	}
 	return NewClient(ClientConfig{
-		BaseURL:        m.BaseURL,
-		APIKey:         m.APIKey,
-		Model:          m.Model,
-		MaxTokens:      m.MaxTokens,
-		RequestTimeout: timeout,
-		ExtraBody:      m.ExtraBody,
+		BaseURL:             m.BaseURL,
+		APIKey:              m.APIKey,
+		Model:               m.Model,
+		MaxTokens:           m.MaxTokens,
+		MaxCompletionTokens: m.MaxCompletionTokens,
+		RequestTimeout:      timeout,
+		ExtraBody:           m.ExtraBody,
 	})
 }
 

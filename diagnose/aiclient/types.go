@@ -57,10 +57,11 @@ type Property struct {
 
 // ChatRequest is the request body for /v1/chat/completions.
 type ChatRequest struct {
-	Model     string    `json:"model"`
-	Messages  []Message `json:"messages"`
-	Tools     []Tool    `json:"tools,omitempty"`
-	MaxTokens int       `json:"max_tokens,omitempty"`
+	Model               string    `json:"model"`
+	Messages            []Message `json:"messages"`
+	Tools               []Tool    `json:"tools,omitempty"`
+	MaxTokens           int       `json:"max_tokens,omitempty"`
+	MaxCompletionTokens int       `json:"max_completion_tokens,omitempty"`
 }
 
 // ChatResponse is the response from /v1/chat/completions.

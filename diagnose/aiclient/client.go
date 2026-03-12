@@ -14,32 +14,35 @@ import (
 
 // Client communicates with an OpenAI-compatible /v1/chat/completions endpoint.
 type Client struct {
-	baseURL    string
-	apiKey     string
-	model      string
-	maxTokens  int
-	extraBody  map[string]interface{}
-	httpClient *http.Client
+	baseURL             string
+	apiKey              string
+	model               string
+	maxTokens           int
+	maxCompletionTokens int
+	extraBody           map[string]interface{}
+	httpClient          *http.Client
 }
 
 // ClientConfig holds the parameters needed to create a Client.
 type ClientConfig struct {
-	BaseURL        string
-	APIKey         string
-	Model          string
-	MaxTokens      int
-	RequestTimeout time.Duration
-	ExtraBody      map[string]interface{}
+	BaseURL             string
+	APIKey              string
+	Model               string
+	MaxTokens           int
+	MaxCompletionTokens int
+	RequestTimeout      time.Duration
+	ExtraBody           map[string]interface{}
 }
 
 // NewClient creates a new AI API client.
 func NewClient(cfg ClientConfig) *Client {
 	return &Client{
-		baseURL:   strings.TrimRight(cfg.BaseURL, "/"),
-		apiKey:    cfg.APIKey,
-		model:     cfg.Model,
-		maxTokens: cfg.MaxTokens,
-		extraBody: cfg.ExtraBody,
+		baseURL:             strings.TrimRight(cfg.BaseURL, "/"),
+		apiKey:              cfg.APIKey,
+		model:               cfg.Model,
+		maxTokens:           cfg.MaxTokens,
+		maxCompletionTokens: cfg.MaxCompletionTokens,
+		extraBody:           cfg.ExtraBody,
 		httpClient: &http.Client{
 			Timeout: cfg.RequestTimeout,
 		},
@@ -132,7 +135,11 @@ func (c *Client) buildRequestPayload(messages []Message, tools []Tool) ([]byte, 
 	if len(tools) > 0 {
 		body["tools"] = tools
 	}
-	if c.maxTokens > 0 {
+	if c.maxCompletionTokens > 0 {
+		delete(body, "max_tokens")
+		body["max_completion_tokens"] = c.maxCompletionTokens
+	} else if c.maxTokens > 0 {
+		delete(body, "max_completion_tokens")
 		body["max_tokens"] = c.maxTokens
 	}
 

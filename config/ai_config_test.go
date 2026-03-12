@@ -4,6 +4,8 @@ import (
 	"os"
 	"testing"
 	"time"
+
+	"github.com/cprobe/catpaw/pkg/cfg"
 )
 
 func TestResolveAPIKeys(t *testing.T) {
@@ -271,6 +273,53 @@ func TestAIConfigApplyDefaults(t *testing.T) {
 	}
 	if m.ContextWindow != 128000 {
 		t.Errorf("m.ContextWindow = %d, want 128000", m.ContextWindow)
+	}
+}
+
+func TestAIConfigApplyDefaultsKeepsMaxCompletionTokens(t *testing.T) {
+	c := &AIConfig{
+		Models: map[string]ModelConfig{
+			"m": {BaseURL: "http://x", APIKey: "k", MaxCompletionTokens: 8192},
+		},
+	}
+	c.applyDefaults()
+
+	m := c.Models["m"]
+	if m.MaxCompletionTokens != 8192 {
+		t.Fatalf("m.MaxCompletionTokens = %d, want 8192", m.MaxCompletionTokens)
+	}
+	if m.MaxTokens != 0 {
+		t.Fatalf("m.MaxTokens = %d, want 0", m.MaxTokens)
+	}
+}
+
+func TestAIConfigLoadsMaxCompletionTokens(t *testing.T) {
+	var got struct {
+		AI AIConfig `toml:"ai"`
+	}
+	err := cfg.LoadSingleConfig(cfg.ConfigWithFormat{
+		Format: cfg.TomlFormat,
+		Config: `
+[ai]
+enabled = true
+model_priority = ["gpt5"]
+
+[ai.models.gpt5]
+base_url = "https://example.com/v1"
+api_key = "sk-test"
+model = "gpt-5.2"
+max_completion_tokens = 4096
+`,
+	}, &got)
+	if err != nil {
+		t.Fatalf("LoadSingleConfig() error = %v", err)
+	}
+	model := got.AI.Models["gpt5"]
+	if model.MaxCompletionTokens != 4096 {
+		t.Fatalf("MaxCompletionTokens = %d, want 4096", model.MaxCompletionTokens)
+	}
+	if model.MaxTokens != 0 {
+		t.Fatalf("MaxTokens = %d, want 0", model.MaxTokens)
 	}
 }
 
