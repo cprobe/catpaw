@@ -14,6 +14,12 @@ import (
 // loadOrCreateAgentID reads the agent_id from state.d/agent_id. If the file
 // does not exist, a new UUIDv4 is generated and persisted.
 func loadOrCreateAgentID() (uuid.UUID, error) {
+	if config.Config == nil {
+		return uuid.Nil, fmt.Errorf("agent config is not initialized")
+	}
+	if config.Config.StateDir == "" {
+		return uuid.Nil, fmt.Errorf("agent state_dir is empty")
+	}
 	p := filepath.Join(config.Config.StateDir, "agent_id")
 
 	data, err := os.ReadFile(p)
@@ -32,4 +38,9 @@ func loadOrCreateAgentID() (uuid.UUID, error) {
 		return uuid.Nil, fmt.Errorf("write agent_id: %w", err)
 	}
 	return id, nil
+}
+
+// LoadOrCreateAgentID returns the stable agent_id used by agent-to-server flows.
+func LoadOrCreateAgentID() (uuid.UUID, error) {
+	return loadOrCreateAgentID()
 }

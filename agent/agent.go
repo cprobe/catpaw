@@ -87,7 +87,7 @@ func (a *chatRunnerAdapter) NewSession(ctx context.Context, opts server.ChatSess
 	}
 
 	registry := eng.Registry()
-	fc := aiclient.NewFailoverClient(cfg)
+	fc := aiclient.NewFailoverClientForScene(cfg, "chat")
 
 	snapshotStart := time.Now()
 	snapshot := chat.CollectSnapshot(registry)
@@ -105,6 +105,7 @@ func (a *chatRunnerAdapter) NewSession(ctx context.Context, opts server.ChatSess
 		Language:           cfg.Language,
 		Snapshot:           snapshot,
 		ContextWindowLimit: cfg.ContextWindowLimit(),
+		GatewayMetadata:    aiclient.GatewayMetadata{RequestSource: "remote_chat"},
 	})
 
 	return &chatSessionHandle{sess: sess}, nil

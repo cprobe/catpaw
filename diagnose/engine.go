@@ -36,7 +36,7 @@ type DiagnoseEngine struct {
 
 // NewDiagnoseEngine creates a new engine from global config.
 func NewDiagnoseEngine(registry *ToolRegistry, cfg config.AIConfig) *DiagnoseEngine {
-	fc := aiclient.NewFailoverClient(cfg)
+	fc := aiclient.NewFailoverClientForScene(cfg, "diagnose")
 
 	state := NewDiagnoseState()
 	state.Load()
@@ -246,6 +246,12 @@ func (e *DiagnoseEngine) diagnose(ctx context.Context, req *DiagnoseRequest, ses
 
 	messages := make([]aiclient.Message, 0, e.maxRounds*4)
 	messages = append(messages, aiclient.Message{Role: "system", Content: prompt})
+	ctx = aiclient.WithGatewayMetadata(ctx, aiclient.GatewayMetadata{
+		DiagnoseID:    session.Record.ID,
+		Plugin:        req.Plugin,
+		Target:        req.Target,
+		RequestSource: "diagnose",
+	})
 
 	estimatedTokens := aiclient.EstimateMessageTokens(messages[0])
 	session.Record.AI.Model = e.cfg.PrimaryModelName()

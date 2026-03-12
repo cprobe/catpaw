@@ -9,12 +9,12 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/ergochat/readline"
 	"github.com/cprobe/catpaw/config"
 	"github.com/cprobe/catpaw/diagnose"
 	"github.com/cprobe/catpaw/diagnose/aiclient"
 	"github.com/cprobe/catpaw/mcp"
 	"github.com/cprobe/catpaw/plugins"
+	"github.com/ergochat/readline"
 )
 
 const chatPrompt = "\033[32m> \033[0m"
@@ -51,8 +51,11 @@ func Run(verbose bool, modelPin string) error {
 		}
 	}
 
-	fc := aiclient.NewFailoverClient(cfg)
+	fc := aiclient.NewFailoverClientForScene(cfg, "chat")
 	if modelPin != "" {
+		if fc.IsGateway() {
+			return fmt.Errorf("--model is not supported when ai.gateway.enabled=true")
+		}
 		if err := fc.PinModel(modelPin); err != nil {
 			return fmt.Errorf("--model flag: %w", err)
 		}
@@ -87,6 +90,7 @@ func Run(verbose bool, modelPin string) error {
 		Snapshot:           snapshot,
 		MCPIdentity:        mcpIdentity,
 		ContextWindowLimit: cfg.ContextWindowLimit(),
+		GatewayMetadata:    aiclient.GatewayMetadata{RequestSource: "local_chat"},
 	})
 
 	printChatBanner(fc)
@@ -146,8 +150,12 @@ func Run(verbose bool, modelPin string) error {
 
 		fmt.Println()
 		fmt.Println(reply)
-		primary := cfg.PrimaryModel()
-		printTokenUsage(usage, primary.InputPrice, primary.OutputPrice)
+		if len(cfg.ModelPriority) > 0 && len(cfg.Models) > 0 {
+			primary := cfg.PrimaryModel()
+			printTokenUsage(usage, primary.InputPrice, primary.OutputPrice)
+		} else {
+			printTokenUsage(usage, 0, 0)
+		}
 		fmt.Println()
 	}
 	return nil
@@ -155,6 +163,12 @@ func Run(verbose bool, modelPin string) error {
 
 func printChatBanner(fc *aiclient.FailoverClient) {
 	fmt.Print("catpaw chat")
+	if fc.IsGateway() {
+		fmt.Printf(" [gateway: %s]", strings.Join(fc.ModelNames(), ", "))
+		fmt.Println(" - type your question, /models for gateway info, exit or Ctrl+C to quit")
+		fmt.Println()
+		return
+	}
 	if pinned := fc.PinnedModel(); pinned != "" {
 		fmt.Printf(" [model: %s]", pinned)
 	} else {
@@ -174,6 +188,11 @@ func printChatBanner(fc *aiclient.FailoverClient) {
 func handleSlashCommand(input string, fc *aiclient.FailoverClient, cfg *config.AIConfig) bool {
 	if input == "/models" {
 		printModelList(fc, cfg)
+		return true
+	}
+	if fc.IsGateway() && strings.HasPrefix(input, "/model") {
+		fmt.Println("\033[33m/model is disabled when ai.gateway.enabled=true; routing is controlled by server\033[0m")
+		fmt.Println()
 		return true
 	}
 
@@ -203,6 +222,15 @@ func handleSlashCommand(input string, fc *aiclient.FailoverClient, cfg *config.A
 }
 
 func printModelList(fc *aiclient.FailoverClient, cfg *config.AIConfig) {
+	if fc.IsGateway() {
+		fmt.Println("  gateway mode: requests are sent to server")
+		if len(fc.ModelNames()) > 0 {
+			fmt.Printf("  route = %s\n", strings.Join(fc.ModelNames(), " -> "))
+		}
+		fmt.Println("  (/model is disabled; server selects the upstream model)")
+		fmt.Println()
+		return
+	}
 	pinned := fc.PinnedModel()
 	for i, name := range fc.ModelNames() {
 		m := cfg.Models[name]
@@ -221,5 +249,3 @@ func printModelList(fc *aiclient.FailoverClient, cfg *config.AIConfig) {
 	}
 	fmt.Println()
 }
-
-

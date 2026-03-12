@@ -26,6 +26,7 @@ type SessionConfig struct {
 	Snapshot           string
 	MCPIdentity        string
 	ContextWindowLimit int
+	GatewayMetadata    aiclient.GatewayMetadata
 }
 
 // ChatSession manages a multi-turn chat conversation with history.
@@ -37,6 +38,7 @@ type ChatSession struct {
 	toolTimeout        time.Duration
 	io                 ChatIO
 	contextWindowLimit int
+	gatewayMetadata    aiclient.GatewayMetadata
 }
 
 // NewChatSession creates a chat session with the given configuration.
@@ -52,12 +54,14 @@ func NewChatSession(cfg SessionConfig) *ChatSession {
 		toolTimeout:        cfg.ToolTimeout,
 		io:                 cfg.IO,
 		contextWindowLimit: cfg.ContextWindowLimit,
+		gatewayMetadata:    cfg.GatewayMetadata,
 	}
 }
 
 // HandleMessage processes one user message through the conversation.
 // On error, the user message is rolled back from history.
 func (s *ChatSession) HandleMessage(ctx context.Context, input string) (reply string, usage aiclient.Usage, err error) {
+	ctx = aiclient.WithGatewayMetadata(ctx, s.gatewayMetadata)
 	s.messages = append(s.messages, aiclient.Message{
 		Role:    "user",
 		Content: input,

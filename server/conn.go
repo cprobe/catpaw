@@ -102,8 +102,12 @@ func (e *reconnectError) Unwrap() error {
 // Returns nil only when ctx is cancelled (clean shutdown).
 func Run(ctx context.Context, startTime time.Time, plugins []string) error {
 	cfg := config.Config.Server
-	if !cfg.Enabled || cfg.URL == "" {
+	if !cfg.Enabled || cfg.Address == "" {
 		return nil
+	}
+	wsURL, err := cfg.WebSocketURL()
+	if err != nil {
+		return fmt.Errorf("resolve server websocket url: %w", err)
 	}
 
 	agentID, err := loadOrCreateAgentID()
@@ -111,7 +115,7 @@ func Run(ctx context.Context, startTime time.Time, plugins []string) error {
 		return fmt.Errorf("load agent_id: %w", err)
 	}
 
-	logger.Logger.Infow("server_connecting", "url", cfg.URL, "agent_id", agentID)
+	logger.Logger.Infow("server_connecting", "url", wsURL, "agent_id", agentID)
 
 	dialOpts := &websocket.DialOptions{
 		HTTPHeader: buildHeaders(cfg, agentID),
@@ -122,7 +126,7 @@ func Run(ctx context.Context, startTime time.Time, plugins []string) error {
 		dialOpts.HTTPClient = hc
 	}
 
-	ws, resp, err := websocket.Dial(ctx, cfg.URL, dialOpts)
+	ws, resp, err := websocket.Dial(ctx, wsURL, dialOpts)
 	if err != nil {
 		if resp != nil && resp.StatusCode == http.StatusUnauthorized {
 			return fmt.Errorf("%w: %v", errAuthFailed, err)
@@ -196,7 +200,7 @@ func Run(ctx context.Context, startTime time.Time, plugins []string) error {
 //   - Auth failure (401): 60s → 120s → ... → 1800s, ±25% jitter
 func RunForever(ctx context.Context, startTime time.Time, plugins []string) {
 	cfg := config.Config.Server
-	if !cfg.Enabled || cfg.URL == "" {
+	if !cfg.Enabled || cfg.Address == "" {
 		return
 	}
 

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -202,5 +203,68 @@ func TestFailover429TriggersFallback(t *testing.T) {
 	}
 	if name != "b" {
 		t.Errorf("model = %q, want %q (429 should trigger failover)", name, "b")
+	}
+}
+
+func TestNewFailoverClientForSceneGateway(t *testing.T) {
+	config.Config = &config.ConfigType{StateDir: t.TempDir()}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		json.NewEncoder(w).Encode(gatewayEnvelope{
+			Data: &GatewayChatData{
+				Message: Message{Role: "assistant", Content: "from gateway"},
+			},
+		})
+	}))
+	defer srv.Close()
+
+	fc := NewFailoverClientForScene(config.AIConfig{
+		Gateway: config.GatewayConfig{
+			Enabled:        true,
+			BaseURL:        srv.URL,
+			AgentToken:     "token",
+			RequestTimeout: config.Duration(time.Second),
+			MaxRetries:     0,
+		},
+		RetryBackoff: config.Duration(10 * time.Millisecond),
+	}, "chat")
+
+	if !fc.IsGateway() {
+		t.Fatal("expected gateway failover client")
+	}
+	if got := fc.ModelNames(); len(got) != 1 || got[0] != "server:chat" {
+		t.Fatalf("ModelNames() = %v, want [server:chat]", got)
+	}
+
+	resp, name, err := fc.Chat(context.Background(), []Message{{Role: "user", Content: "hi"}}, nil)
+	if err != nil {
+		t.Fatalf("Chat() error: %v", err)
+	}
+	if name != "server:chat" {
+		t.Fatalf("model = %q, want server:chat", name)
+	}
+	if resp.Choices[0].Message.Content != "from gateway" {
+		t.Fatalf("content = %q, want from gateway", resp.Choices[0].Message.Content)
+	}
+}
+
+func TestNewFailoverClientForSceneGatewayInitFailure(t *testing.T) {
+	config.Config = nil
+	fc := NewFailoverClientForScene(config.AIConfig{
+		Gateway: config.GatewayConfig{
+			Enabled:        true,
+			BaseURL:        "http://example.com",
+			AgentToken:     "token",
+			RequestTimeout: config.Duration(time.Second),
+			MaxRetries:     0,
+		},
+		RetryBackoff: config.Duration(10 * time.Millisecond),
+	}, "diagnose")
+
+	_, _, err := fc.Chat(context.Background(), []Message{{Role: "user", Content: "hi"}}, nil)
+	if err == nil {
+		t.Fatal("expected init error, got nil")
+	}
+	if !strings.Contains(err.Error(), "load agent_id") {
+		t.Fatalf("unexpected error: %v", err)
 	}
 }

@@ -19,12 +19,22 @@ type FailoverClient struct {
 	clients  map[string]ChatClient
 	retryCfg RetryConfig
 	pinned   string // when non-empty, only this model is used (no failover)
+	gateway  bool
+	initErr  error
 }
 
 // NewFailoverClient builds a FailoverClient from the AIConfig.
 // It creates one ChatClient per entry in ModelPriority, selecting
 // the appropriate backend (OpenAI or Bedrock) based on the provider field.
 func NewFailoverClient(cfg config.AIConfig) *FailoverClient {
+	return NewFailoverClientForScene(cfg, "diagnose")
+}
+
+// NewFailoverClientForScene builds a FailoverClient for a specific caller scene.
+func NewFailoverClientForScene(cfg config.AIConfig, scene string) *FailoverClient {
+	if cfg.Gateway.Enabled {
+		return newGatewayFailoverClient(cfg, scene)
+	}
 	clients := make(map[string]ChatClient, len(cfg.ModelPriority))
 	for _, name := range cfg.ModelPriority {
 		m := cfg.Models[name]
@@ -37,6 +47,40 @@ func NewFailoverClient(cfg config.AIConfig) *FailoverClient {
 			MaxRetries:   cfg.MaxRetries,
 			RetryBackoff: time.Duration(cfg.RetryBackoff),
 		},
+	}
+}
+
+func newGatewayFailoverClient(cfg config.AIConfig, scene string) *FailoverClient {
+	clients := make(map[string]ChatClient, 1+len(cfg.ModelPriority))
+	priority := make([]string, 0, 1+len(cfg.ModelPriority))
+	gatewayName := "server:" + scene
+	gatewayClient, err := NewServerClient(GatewayClientConfig{
+		BaseURL:        cfg.Gateway.BaseURL,
+		AgentToken:     cfg.Gateway.AgentToken,
+		Scene:          scene,
+		MaxTokens:      0,
+		RequestTimeout: time.Duration(cfg.Gateway.RequestTimeout),
+	})
+	if err == nil {
+		clients[gatewayName] = gatewayClient
+		priority = append(priority, gatewayName)
+	}
+	if cfg.Gateway.FallbackToDirect {
+		for _, name := range cfg.ModelPriority {
+			m := cfg.Models[name]
+			clients[name] = newChatClient(m, time.Duration(cfg.RequestTimeout))
+			priority = append(priority, name)
+		}
+	}
+	return &FailoverClient{
+		priority: priority,
+		clients:  clients,
+		retryCfg: RetryConfig{
+			MaxRetries:   cfg.Gateway.MaxRetries,
+			RetryBackoff: time.Duration(cfg.RetryBackoff),
+		},
+		gateway: true,
+		initErr: err,
 	}
 }
 
@@ -69,6 +113,13 @@ func newChatClient(m config.ModelConfig, timeout time.Duration) ChatClient {
 // model). Returns the response, the name of the model that answered, and any
 // error. Each model attempt uses ChatWithRetry internally.
 func (fc *FailoverClient) Chat(ctx context.Context, messages []Message, tools []Tool) (*ChatResponse, string, error) {
+	if len(fc.priority) == 0 {
+		if fc.initErr != nil {
+			return nil, "", fc.initErr
+		}
+		return nil, "", fmt.Errorf("no ai clients configured")
+	}
+
 	fc.mu.RLock()
 	pinned := fc.pinned
 	fc.mu.RUnlock()
@@ -129,6 +180,11 @@ func (fc *FailoverClient) ModelNames() []string {
 func (fc *FailoverClient) ModelClient(name string) (ChatClient, bool) {
 	c, ok := fc.clients[name]
 	return c, ok
+}
+
+// IsGateway reports whether this failover client is backed by the server gateway.
+func (fc *FailoverClient) IsGateway() bool {
+	return fc.gateway
 }
 
 // shouldFailover decides whether to try the next model after an error.

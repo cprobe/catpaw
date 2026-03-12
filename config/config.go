@@ -76,6 +76,16 @@ type ModelConfig struct {
 	ExtraBody     map[string]interface{} `toml:"extra_body"`
 }
 
+// GatewayConfig defines the server-backed AI gateway connection.
+type GatewayConfig struct {
+	Enabled          bool     `toml:"enabled"`
+	BaseURL          string   `toml:"base_url"`
+	AgentToken       string   `toml:"agent_token"`
+	RequestTimeout   Duration `toml:"request_timeout"`
+	MaxRetries       int      `toml:"max_retries"`
+	FallbackToDirect bool     `toml:"fallback_to_direct"`
+}
+
 // ExtraStr returns a string value from ExtraBody, or empty if missing.
 func (m ModelConfig) ExtraStr(key string) string {
 	if m.ExtraBody == nil {
@@ -95,6 +105,7 @@ type AIConfig struct {
 	Enabled       bool                   `toml:"enabled"`
 	ModelPriority []string               `toml:"model_priority"`
 	Models        map[string]ModelConfig `toml:"models"`
+	Gateway       GatewayConfig          `toml:"gateway"`
 
 	MaxRounds      int      `toml:"max_rounds"`
 	RequestTimeout Duration `toml:"request_timeout"`
@@ -117,16 +128,18 @@ type AIConfig struct {
 	MCP MCPConfig `toml:"mcp"`
 }
 
-// PrimaryModel returns the first model in the priority list.
-// Panics if ModelPriority is empty or references a missing model — Validate
-// should always be called before this.
+// PrimaryModel returns the first configured local model in the priority list.
+// Returns the zero value when no local model is configured.
 func (c *AIConfig) PrimaryModel() ModelConfig {
+	if len(c.ModelPriority) == 0 || len(c.Models) == 0 {
+		return ModelConfig{}
+	}
 	return c.Models[c.ModelPriority[0]]
 }
 
 // PrimaryModelName returns the name of the first model in the priority list.
 func (c *AIConfig) PrimaryModelName() string {
-	if len(c.ModelPriority) == 0 {
+	if len(c.ModelPriority) == 0 || len(c.Models) == 0 {
 		return ""
 	}
 	return c.ModelPriority[0]
@@ -136,7 +149,7 @@ func (c *AIConfig) PrimaryModelName() string {
 // used as the safe upper bound for message token budgeting. Returns 0 if no
 // models are configured.
 func (c *AIConfig) ContextWindowLimit() int {
-	if len(c.ModelPriority) == 0 {
+	if len(c.ModelPriority) == 0 || len(c.Models) == 0 {
 		return 0
 	}
 	cw := c.PrimaryModel().ContextWindow
@@ -219,6 +232,12 @@ func InitConfig(configDir string, interval int64, plugins, loglevel string) erro
 	Config.Global.Labels = expandLabels(Config.Global.Labels, builtins)
 
 	Config.Server.resolve()
+	if Config.Server.Enabled && Config.Server.Address == "" {
+		return fmt.Errorf("[server] address is required when enabled=true")
+	}
+	if err := Config.resolveGatewayConfig(); err != nil {
+		return err
+	}
 
 	// When server is enabled, alert events are sent to server and need these labels.
 	// When server is disabled, do not require them so catpaw can run in pure local mode.
@@ -228,6 +247,28 @@ func InitConfig(configDir string, interval int64, plugins, loglevel string) erro
 		}
 	}
 
+	return nil
+}
+
+func (c *ConfigType) resolveGatewayConfig() error {
+	if !c.AI.Gateway.Enabled {
+		return nil
+	}
+	if c.AI.Gateway.AgentToken == "" {
+		c.AI.Gateway.AgentToken = c.Server.AgentToken
+	}
+	if c.AI.Gateway.BaseURL != "" {
+		c.AI.Gateway.BaseURL = strings.TrimRight(c.AI.Gateway.BaseURL, "/")
+		return nil
+	}
+	if c.Server.Address == "" {
+		return nil
+	}
+	derived, err := c.Server.GatewayBaseURL()
+	if err != nil {
+		return fmt.Errorf("resolve [ai.gateway] from [server]: %w", err)
+	}
+	c.AI.Gateway.BaseURL = derived
 	return nil
 }
 
@@ -268,6 +309,12 @@ func GetOutboundIP() (net.IP, error) {
 }
 
 func (c *AIConfig) applyDefaults() {
+	if time.Duration(c.Gateway.RequestTimeout) == 0 {
+		c.Gateway.RequestTimeout = Duration(30 * time.Second)
+	}
+	if c.Gateway.Enabled && c.Gateway.MaxRetries == 0 {
+		c.Gateway.MaxRetries = 1
+	}
 	if c.MaxRounds <= 0 {
 		c.MaxRounds = 15
 	}
@@ -315,6 +362,10 @@ func (c *AIConfig) applyDefaults() {
 
 // resolveAPIKeys resolves ${ENV_VAR} references in API keys and ExtraBody string values.
 func (c *AIConfig) resolveAPIKeys() {
+	c.Gateway.AgentToken = resolveEnvRef(c.Gateway.AgentToken)
+	if c.Gateway.BaseURL != "" {
+		c.Gateway.BaseURL = strings.TrimRight(c.Gateway.BaseURL, "/")
+	}
 	for name, m := range c.Models {
 		m.APIKey = resolveEnvRef(m.APIKey)
 		// Resolve ${ENV_VAR} in all string values of ExtraBody.
@@ -359,30 +410,45 @@ func (c *AIConfig) Validate() error {
 	if !c.Enabled {
 		return nil
 	}
-	if len(c.ModelPriority) == 0 {
-		return fmt.Errorf("[ai] model_priority is required when enabled=true")
-	}
-	if len(c.Models) == 0 {
-		return fmt.Errorf("[ai] at least one model must be configured in [ai.models]")
-	}
-	for _, name := range c.ModelPriority {
-		m, ok := c.Models[name]
-		if !ok {
-			return fmt.Errorf("[ai] model_priority references unknown model %q", name)
+	hasLocalModels := len(c.Models) > 0
+	requireLocalModels := !c.Gateway.Enabled || c.Gateway.FallbackToDirect || hasLocalModels
+	if c.Gateway.Enabled {
+		if c.Gateway.BaseURL == "" {
+			return fmt.Errorf("[ai.gateway] base_url is required when enabled=true")
 		}
-		if m.Provider == "bedrock" {
-			if m.Model == "" {
-				return fmt.Errorf("[ai.models.%s] model is required for bedrock provider", name)
+		if c.Gateway.AgentToken == "" {
+			return fmt.Errorf("[ai.gateway] agent_token is required when enabled=true (supports ${ENV_VAR} syntax)")
+		}
+		if c.Gateway.MaxRetries < 0 || c.Gateway.MaxRetries > 2 {
+			return fmt.Errorf("[ai.gateway] max_retries must be between 0 and 2, got %d", c.Gateway.MaxRetries)
+		}
+	}
+	if requireLocalModels {
+		if len(c.ModelPriority) == 0 {
+			return fmt.Errorf("[ai] model_priority is required when enabled=true")
+		}
+		if len(c.Models) == 0 {
+			return fmt.Errorf("[ai] at least one model must be configured in [ai.models]")
+		}
+		for _, name := range c.ModelPriority {
+			m, ok := c.Models[name]
+			if !ok {
+				return fmt.Errorf("[ai] model_priority references unknown model %q", name)
 			}
-			if m.ExtraStr("aws_region") == "" {
-				return fmt.Errorf("[ai.models.%s] extra_body.aws_region is required for bedrock provider", name)
-			}
-		} else {
-			if m.BaseURL == "" {
-				return fmt.Errorf("[ai.models.%s] base_url is required", name)
-			}
-			if m.APIKey == "" {
-				return fmt.Errorf("[ai.models.%s] api_key is required (supports ${ENV_VAR} syntax)", name)
+			if m.Provider == "bedrock" {
+				if m.Model == "" {
+					return fmt.Errorf("[ai.models.%s] model is required for bedrock provider", name)
+				}
+				if m.ExtraStr("aws_region") == "" {
+					return fmt.Errorf("[ai.models.%s] extra_body.aws_region is required for bedrock provider", name)
+				}
+			} else {
+				if m.BaseURL == "" {
+					return fmt.Errorf("[ai.models.%s] base_url is required", name)
+				}
+				if m.APIKey == "" {
+					return fmt.Errorf("[ai.models.%s] api_key is required (supports ${ENV_VAR} syntax)", name)
+				}
 			}
 		}
 	}
