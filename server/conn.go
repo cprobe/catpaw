@@ -401,7 +401,7 @@ func (c *Conn) flushAlertEvents() {
 
 func (c *Conn) sendRegister(ctx context.Context) error {
 	hostname, _ := os.Hostname()
-	ip := config.DetectIP()
+	ip := config.AgentIP()
 
 	msg, err := newMessage(typeRegister, registerPayload{
 		Hostname:     hostname,

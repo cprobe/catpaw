@@ -55,6 +55,14 @@ func (s *MCPServerConfig) IsToolAllowed(toolName string) bool {
 // HostBuiltins computes host-level built-in variables once.
 // Callers should compute this early and pass it to expandWithBuiltins.
 func HostBuiltins() map[string]string {
+	builtins := HostBuiltinsWithoutIP()
+	builtins["IP"] = DetectIP()
+	return builtins
+}
+
+// HostBuiltinsWithoutIP returns built-in host variables that do not require
+// network probing.
+func HostBuiltinsWithoutIP() map[string]string {
 	hostname, _ := os.Hostname()
 	short := hostname
 	if idx := strings.IndexByte(short, '.'); idx > 0 {
@@ -63,7 +71,6 @@ func HostBuiltins() map[string]string {
 	return map[string]string{
 		"HOSTNAME":       hostname,
 		"SHORT_HOSTNAME": short,
-		"IP":             DetectIP(),
 	}
 }
 

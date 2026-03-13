@@ -229,8 +229,8 @@ func InitConfig(configDir string, interval int64, plugins, loglevel string) erro
 		Config.Global.Labels = make(map[string]string)
 	}
 
-	builtins := HostBuiltins()
-	Config.Global.Labels = expandLabels(Config.Global.Labels, builtins)
+	builtins := HostBuiltinsWithoutIP()
+	Config.Global.Labels = resolveGlobalLabels(Config.Global.Labels, builtins)
 
 	Config.Server.resolve()
 	if Config.Server.Enabled && Config.Server.Address == "" {
@@ -284,6 +284,17 @@ func validateRequiredLabels(labels map[string]string) error {
 		}
 	}
 	return nil
+}
+
+// AgentIP returns the IP identity exposed to the server.
+// It follows the resolved from_hostip label when present.
+func AgentIP() string {
+	if Config != nil {
+		if ip := strings.TrimSpace(Config.Global.Labels["from_hostip"]); ip != "" {
+			return ip
+		}
+	}
+	return DetectIP()
 }
 
 // Get preferred outbound ip of this machine
@@ -518,4 +529,41 @@ func expandLabels(labels map[string]string, builtins map[string]string) map[stri
 		}
 	}
 	return labels
+}
+
+func resolveGlobalLabels(labels map[string]string, builtins map[string]string) map[string]string {
+	if raw, ok := labels["from_hostip"]; ok {
+		resolvedIP := resolveConfiguredHostIP(raw, builtins)
+		if resolvedIP != "" {
+			labels["from_hostip"] = resolvedIP
+			builtins["IP"] = resolvedIP
+		}
+	}
+	return expandLabels(labels, builtins)
+}
+
+func resolveConfiguredHostIP(raw string, builtins map[string]string) string {
+	if raw == "" || !strings.Contains(raw, "$") {
+		return raw
+	}
+
+	var detectedIP string
+	return os.Expand(raw, func(key string) string {
+		if key == "IP" {
+			if v := os.Getenv(key); v != "" {
+				return v
+			}
+			if v, ok := builtins[key]; ok && v != "" {
+				return v
+			}
+			if detectedIP == "" {
+				detectedIP = DetectIP()
+			}
+			return detectedIP
+		}
+		if v, ok := builtins[key]; ok {
+			return v
+		}
+		return os.Getenv(key)
+	})
 }
