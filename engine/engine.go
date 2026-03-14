@@ -174,10 +174,12 @@ func clean(event *types.Event, now int64, pluginName string, pluginObj plugins.P
 		event.Labels[k] = v
 	}
 
-	// append label: global labels (already fully expanded at init time)
+	// append label: global labels with live identity values
 	for key, val := range config.Config.Global.Labels {
 		event.Labels[key] = val
 	}
+	event.Labels["from_hostip"] = config.AgentIP()
+	event.Labels["from_hostname"] = config.AgentHostname()
 
 	keys := make([]string, 0, len(event.Labels))
 	for k := range event.Labels {

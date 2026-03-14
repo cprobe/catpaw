@@ -400,7 +400,7 @@ func (c *Conn) flushAlertEvents() {
 }
 
 func (c *Conn) sendRegister(ctx context.Context) error {
-	hostname, _ := os.Hostname()
+	hostname := config.AgentHostname()
 	ip := config.AgentIP()
 
 	msg, err := newMessage(typeRegister, registerPayload{
@@ -408,7 +408,7 @@ func (c *Conn) sendRegister(ctx context.Context) error {
 		IP:           ip,
 		OS:           runtime.GOOS,
 		Arch:         runtime.GOARCH,
-		Labels:       config.Config.Global.Labels,
+		Labels:       config.AgentLabels(),
 		Plugins:      c.plugins,
 		AgentVersion: config.Version,
 		UptimeSec:    int64(time.Since(c.startTime).Seconds()),

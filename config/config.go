@@ -7,6 +7,7 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/cprobe/catpaw/pkg/cfg"
@@ -286,15 +287,101 @@ func validateRequiredLabels(labels map[string]string) error {
 	return nil
 }
 
-// AgentIP returns the IP identity exposed to the server.
-// It follows the resolved from_hostip label when present.
-func AgentIP() string {
-	if Config != nil {
-		if ip := strings.TrimSpace(Config.Global.Labels["from_hostip"]); ip != "" {
-			return ip
-		}
+// ---------------------------------------------------------------------------
+// Identity resolution with caching
+// ---------------------------------------------------------------------------
+//
+// from_hostip / from_hostname support three resolution modes:
+//   1. Fixed value (no "$")        → static, returned as-is.
+//   2. Variable resolved from env  → static for process lifetime.
+//   3. Variable with no env match  → auto-detected, cached for identCacheTTL.
+//
+// AgentIP / AgentHostname always return the freshest appropriate value.
+
+const identCacheTTL = time.Minute
+
+var (
+	identMu sync.Mutex
+
+	ipAutoDetect bool
+	ipCached     string
+	ipCachedAt   time.Time
+
+	hostAutoDetect bool
+	hostCached     string
+	hostCachedAt   time.Time
+)
+
+// needsAutoDetect reports whether raw references ${varName} and the
+// corresponding environment variable is empty (meaning we must auto-detect).
+func needsAutoDetect(raw string, varName string) bool {
+	if !strings.Contains(raw, "$") {
+		return false
 	}
-	return DetectIP()
+	if !strings.Contains(raw, "${"+varName+"}") && !strings.Contains(raw, "$"+varName) {
+		return false
+	}
+	return os.Getenv(varName) == ""
+}
+
+// AgentIP returns the IP identity exposed to the server.
+// For auto-detected values (no env var), results are cached for 1 minute.
+func AgentIP() string {
+	if !ipAutoDetect {
+		if Config != nil {
+			if ip := strings.TrimSpace(Config.Global.Labels["from_hostip"]); ip != "" {
+				return ip
+			}
+		}
+		return DetectIP()
+	}
+
+	identMu.Lock()
+	defer identMu.Unlock()
+	if time.Since(ipCachedAt) < identCacheTTL && ipCached != "" {
+		return ipCached
+	}
+	ipCached = DetectIP()
+	ipCachedAt = time.Now()
+	return ipCached
+}
+
+// AgentHostname returns the hostname identity exposed to the server.
+// It follows the resolved from_hostname label when present.
+// For auto-detected values (no env var), results are cached for 1 minute.
+func AgentHostname() string {
+	if !hostAutoDetect {
+		if Config != nil {
+			if h := strings.TrimSpace(Config.Global.Labels["from_hostname"]); h != "" {
+				return h
+			}
+		}
+		return DetectHostname()
+	}
+
+	identMu.Lock()
+	defer identMu.Unlock()
+	if time.Since(hostCachedAt) < identCacheTTL && hostCached != "" {
+		return hostCached
+	}
+	hostCached = DetectHostname()
+	hostCachedAt = time.Now()
+	return hostCached
+}
+
+// AgentLabels returns a snapshot of global labels with live from_hostip and
+// from_hostname values (reflecting any auto-detected changes).
+func AgentLabels() map[string]string {
+	if Config == nil {
+		return nil
+	}
+	labels := make(map[string]string, len(Config.Global.Labels))
+	for k, v := range Config.Global.Labels {
+		labels[k] = v
+	}
+	labels["from_hostip"] = AgentIP()
+	labels["from_hostname"] = AgentHostname()
+	return labels
 }
 
 // Get preferred outbound ip of this machine
@@ -532,14 +619,59 @@ func expandLabels(labels map[string]string, builtins map[string]string) map[stri
 }
 
 func resolveGlobalLabels(labels map[string]string, builtins map[string]string) map[string]string {
+	if raw, ok := labels["from_hostname"]; ok {
+		resolved := resolveConfiguredHostname(raw, builtins)
+		if resolved != "" {
+			labels["from_hostname"] = resolved
+			builtins["HOSTNAME"] = resolved
+		}
+		hostAutoDetect = needsAutoDetect(raw, "HOSTNAME")
+		if hostAutoDetect {
+			hostCached = resolved
+			hostCachedAt = time.Now()
+		}
+	}
+
 	if raw, ok := labels["from_hostip"]; ok {
 		resolvedIP := resolveConfiguredHostIP(raw, builtins)
 		if resolvedIP != "" {
 			labels["from_hostip"] = resolvedIP
 			builtins["IP"] = resolvedIP
 		}
+		ipAutoDetect = needsAutoDetect(raw, "IP")
+		if ipAutoDetect {
+			ipCached = resolvedIP
+			ipCachedAt = time.Now()
+		}
 	}
+
 	return expandLabels(labels, builtins)
+}
+
+func resolveConfiguredHostname(raw string, builtins map[string]string) string {
+	if raw == "" || !strings.Contains(raw, "$") {
+		return raw
+	}
+
+	var detected string
+	return os.Expand(raw, func(key string) string {
+		if key == "HOSTNAME" {
+			if v := os.Getenv(key); v != "" {
+				return v
+			}
+			if v, ok := builtins[key]; ok && v != "" {
+				return v
+			}
+			if detected == "" {
+				detected = DetectHostname()
+			}
+			return detected
+		}
+		if v, ok := builtins[key]; ok {
+			return v
+		}
+		return os.Getenv(key)
+	})
 }
 
 func resolveConfiguredHostIP(raw string, builtins map[string]string) string {

@@ -99,6 +99,12 @@ func autoIdentity(builtins map[string]string) string {
 	return strings.Join(parts, ", ")
 }
 
+// DetectHostname returns the current system hostname via os.Hostname.
+func DetectHostname() string {
+	h, _ := os.Hostname()
+	return h
+}
+
 // DetectIP returns the preferred outbound IPv4 address. It first tries
 // gateway-based detection via GetOutboundIP, then falls back to scanning
 // network interfaces.
