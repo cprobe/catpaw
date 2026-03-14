@@ -23,6 +23,9 @@ func RunInspect(pluginName, target string) error {
 	if !config.Config.AI.Enabled {
 		return fmt.Errorf("AI diagnose is not enabled. Set [ai] enabled=true in config")
 	}
+	if err := config.Config.AI.Validate(); err != nil {
+		return fmt.Errorf("invalid AI config: %w", err)
+	}
 
 	registry := buildFullRegistry()
 	if registry.ToolCount() == 0 {
