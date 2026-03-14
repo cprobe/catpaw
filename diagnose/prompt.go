@@ -19,8 +19,15 @@ const promptRaw = `你是一位资深运维和 DBA 专家。
 
 插件: {{.Plugin}}
 目标: {{.Target}}
+当前运行环境: {{.RuntimeOS}}
 
-这不是告警触发的诊断，而是一次主动巡检。你的任务是全面检查目标的健康状态，发现潜在问题。
+这不是告警触发的诊断，而是一次主动巡检。
+{{- if .IsSystemInspect}}
+你的任务是对整个系统做全面健康体检，发现潜在问题，并给出按优先级排序的建议。
+{{- else}}
+你的任务是围绕 {{.Plugin}} 领域做专项巡检，优先检查与该领域直接相关的指标。
+除非已经发现明确线索表明问题由其他领域引起，否则不要扩展到无关领域。
+{{- end}}
 {{- else}}
 
 catpaw 监控系统检测到以下告警：
@@ -74,10 +81,18 @@ catpaw 监控系统检测到以下告警：
 
 ## 巡检策略
 
-1. 首先使用 {{.Plugin}} 的核心工具收集关键指标
-2. 根据初步结果，针对性地深入检查可疑领域
-3. 如果是远端服务，同时关注基础设施层面可能影响服务的因素
+{{- if .IsSystemInspect}}
+1. 这是 "inspect system"，允许做跨领域系统体检
+2. 先收集 CPU、内存、磁盘、网络、进程等系统核心指标
+3. 根据异常现象再深入到具体子领域
 4. **每轮尽可能并行调用多个工具**，减少交互轮次
+{{- else}}
+1. 这是 "inspect {{.Plugin}}"，默认只做 {{.Plugin}} 领域专项巡检，不要把它当成整机体检
+2. 首先使用 {{.Plugin}} 的核心工具收集关键指标
+3. 只有在 {{.Plugin}} 结果已经显示出明确关联时，才允许扩展到 1-2 个相关领域
+4. 对 {{.Plugin}} 无直接帮助的工具不要调用
+5. **优先少而准**，不要为了“全面”而调用无关工具
+{{- end}}
 {{- else}}
 
 ## 诊断策略
@@ -93,6 +108,7 @@ catpaw 监控系统检测到以下告警：
   这些工具的结果仅在 catpaw 与目标部署在同一台机器时有参考价值
 {{- else}}
 - catpaw 与目标 {{.Target}} 在同一台机器上，本机基础设施工具可直接用于辅助诊断
+- 当前操作系统是 {{.RuntimeOS}}，只应使用该操作系统支持的工具；不要请求其他操作系统专属工具
 {{- end}}
 
 ## 输出要求
@@ -135,6 +151,8 @@ type promptData struct {
 	Mode           string
 	Plugin         string
 	Target         string
+	RuntimeOS      string
+	IsSystemInspect bool
 	Checks         []CheckSnapshot
 	Descriptions   string
 	DirectTools    string
@@ -157,6 +175,8 @@ func renderPrompt(mode string, req *DiagnoseRequest, directTools, toolCatalog, l
 		Mode:           mode,
 		Plugin:         req.Plugin,
 		Target:         req.Target,
+		RuntimeOS:      req.RuntimeOS,
+		IsSystemInspect: mode == ModeInspect && req.Plugin == "system",
 		Checks:         req.Checks,
 		Descriptions:   req.Descriptions,
 		DirectTools:    directTools,

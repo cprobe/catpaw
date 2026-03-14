@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"runtime"
 	"strconv"
 	"unicode/utf8"
 )
@@ -20,14 +21,14 @@ func executeTool(ctx context.Context, registry *ToolRegistry, session *DiagnoseS
 
 	switch name {
 	case "list_tool_categories":
-		return registry.ListCategories(), nil
+		return registry.ListCategoriesForOS(runtime.GOOS), nil
 
 	case "list_tools":
 		category := args["category"]
 		if category == "" {
 			return "", fmt.Errorf("list_tools requires 'category' parameter")
 		}
-		return registry.ListTools(category), nil
+		return registry.ListToolsForOS(category, runtime.GOOS), nil
 
 	case "call_tool":
 		toolName := args["name"]
@@ -38,6 +39,9 @@ func executeTool(ctx context.Context, registry *ToolRegistry, session *DiagnoseS
 		if !ok {
 			return "", fmt.Errorf("unknown tool: %s", toolName)
 		}
+		if !registry.ToolSupportedOn(toolName, runtime.GOOS) {
+			return "", fmt.Errorf("tool %s is not supported on %s", toolName, runtime.GOOS)
+		}
 		toolArgs := ParseToolArgs(args["tool_args"])
 		return executeToolImpl(ctx, session, *tool, toolArgs)
 
@@ -45,6 +49,9 @@ func executeTool(ctx context.Context, registry *ToolRegistry, session *DiagnoseS
 		tool, ok := registry.Get(name)
 		if !ok {
 			return "", fmt.Errorf("unknown tool: %s", name)
+		}
+		if !registry.ToolSupportedOn(name, runtime.GOOS) {
+			return "", fmt.Errorf("tool %s is not supported on %s", name, runtime.GOOS)
 		}
 		return executeToolImpl(ctx, session, *tool, args)
 	}

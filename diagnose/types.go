@@ -43,9 +43,24 @@ type DiagnoseTool struct {
 	Description string      `json:"description"`
 	Parameters  []ToolParam `json:"parameters,omitempty"`
 	Scope       ToolScope   `json:"-"`
+	SupportedOS []string    `json:"-"`
 
 	Execute       func(ctx context.Context, args map[string]string) (string, error)                    `json:"-"`
 	RemoteExecute func(ctx context.Context, session *DiagnoseSession, args map[string]string) (string, error) `json:"-"`
+}
+
+// SupportsOS reports whether the tool should be exposed on the given OS.
+// Empty SupportedOS means all operating systems are allowed.
+func (t DiagnoseTool) SupportsOS(goos string) bool {
+	if len(t.SupportedOS) == 0 {
+		return true
+	}
+	for _, os := range t.SupportedOS {
+		if os == goos {
+			return true
+		}
+	}
+	return false
 }
 
 // ToolCategory groups related diagnostic tools under a plugin.
@@ -111,6 +126,7 @@ type DiagnoseRequest struct {
 	Events      []*types.Event
 	Plugin      string
 	Target      string
+	RuntimeOS   string
 	Checks      []CheckSnapshot
 	InstanceRef any
 	Timeout     time.Duration

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"runtime"
 	"runtime/debug"
 	"sync"
 	"sync/atomic"
@@ -231,12 +232,15 @@ func (e *DiagnoseEngine) diagnose(ctx context.Context, req *DiagnoseRequest, ses
 		return "", fmt.Errorf("create accessor: %w", err)
 	}
 
+	if req.RuntimeOS == "" {
+		req.RuntimeOS = runtime.GOOS
+	}
 	aiToolDefs, directTools := buildToolSet(e.registry, req)
 
 	hostname, _ := os.Hostname()
 	isRemote := isRemoteTarget(req.Target)
 	directToolsStr := formatDirectTools(directTools)
-	toolCatalog := e.registry.ListToolCatalogSmart()
+	toolCatalog := e.registry.ListToolCatalogSmartForOS(req.RuntimeOS)
 	var prompt string
 	if req.Mode == ModeInspect {
 		prompt = buildInspectPrompt(req, directToolsStr, toolCatalog, hostname, isRemote, e.cfg.Language)
@@ -264,12 +268,12 @@ func (e *DiagnoseEngine) diagnose(ctx context.Context, req *DiagnoseRequest, ses
 			return "", ctx.Err()
 		}
 
-		if estimatedTokens > e.contextWindowLimit {
+		if e.contextWindowLimit > 0 && estimatedTokens > e.contextWindowLimit {
 			messages = aiclient.CompactMessages(messages, e.contextWindowLimit)
 			estimatedTokens = aiclient.EstimateMessagesTokens(messages)
 		}
 
-		if !contextWarned && estimatedTokens > e.contextWindowLimit*90/100 {
+		if e.contextWindowLimit > 0 && !contextWarned && estimatedTokens > e.contextWindowLimit*90/100 {
 			contextWarned = true
 			messages = append(messages, aiclient.Message{
 				Role:    "user",

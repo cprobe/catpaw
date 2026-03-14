@@ -109,6 +109,24 @@ func (r *ToolRegistry) ByPlugin(plugin string) []DiagnoseTool {
 	return result
 }
 
+// ByPluginForOS returns tools under the given plugin/category that are supported
+// on the specified operating system.
+func (r *ToolRegistry) ByPluginForOS(plugin, goos string) []DiagnoseTool {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	cat, ok := r.categories[plugin]
+	if !ok || !categorySupportsOS(cat, goos) {
+		return nil
+	}
+	filtered := make([]DiagnoseTool, 0, len(cat.Tools))
+	for _, tool := range cat.Tools {
+		if tool.SupportsOS(goos) {
+			filtered = append(filtered, tool)
+		}
+	}
+	return filtered
+}
+
 // ListCategories returns a formatted string of all categories for the AI,
 // sorted alphabetically for deterministic output.
 func (r *ToolRegistry) ListCategories() string {
@@ -133,6 +151,41 @@ func (r *ToolRegistry) ListCategories() string {
 	return b.String()
 }
 
+// ListCategoriesForOS returns a formatted string of categories that support
+// the specified operating system.
+func (r *ToolRegistry) ListCategoriesForOS(goos string) string {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	names := make([]string, 0, len(r.categories))
+	for name, cat := range r.categories {
+		if categorySupportsOS(cat, goos) {
+			names = append(names, name)
+		}
+	}
+	sort.Strings(names)
+
+	var b strings.Builder
+	for _, name := range names {
+		cat := r.categories[name]
+		desc := cat.Description
+		if desc == "" {
+			desc = cat.Name + " diagnostics"
+		}
+		count := 0
+		for _, tool := range cat.Tools {
+			if tool.SupportsOS(goos) {
+				count++
+			}
+		}
+		if count == 0 {
+			continue
+		}
+		fmt.Fprintf(&b, "%-12s (%d tools) - %s\n", cat.Name, count, desc)
+	}
+	return b.String()
+}
+
 // ListTools returns a formatted string of tools in a category for the AI.
 func (r *ToolRegistry) ListTools(category string) string {
 	r.mu.RLock()
@@ -153,6 +206,41 @@ func (r *ToolRegistry) ListTools(category string) string {
 			}
 			fmt.Fprintf(&b, "  %s (%s): %s%s\n", p.Name, p.Type, p.Description, req)
 		}
+	}
+	return b.String()
+}
+
+// ListToolsForOS returns tools in a category filtered by supported OS.
+func (r *ToolRegistry) ListToolsForOS(category, goos string) string {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	cat, ok := r.categories[category]
+	if !ok {
+		return fmt.Sprintf("unknown category: %q", category)
+	}
+	if !categorySupportsOS(cat, goos) {
+		return fmt.Sprintf("no tools in category %q support os=%q", category, goos)
+	}
+
+	var b strings.Builder
+	count := 0
+	for _, t := range cat.Tools {
+		if !t.SupportsOS(goos) {
+			continue
+		}
+		count++
+		fmt.Fprintf(&b, "%s - %s\n", t.Name, t.Description)
+		for _, p := range t.Parameters {
+			req := ""
+			if p.Required {
+				req = " (required)"
+			}
+			fmt.Fprintf(&b, "  %s (%s): %s%s\n", p.Name, p.Type, p.Description, req)
+		}
+	}
+	if count == 0 {
+		return fmt.Sprintf("no tools in category %q support os=%q", category, goos)
 	}
 	return b.String()
 }
@@ -231,6 +319,40 @@ func (r *ToolRegistry) ListAllTools() string {
 	return b.String()
 }
 
+// ToolSupportedOn reports whether the named tool should be available on the
+// specified operating system.
+func (r *ToolRegistry) ToolSupportedOn(name, goos string) bool {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	tool, ok := r.toolIndex[name]
+	if !ok || !tool.SupportsOS(goos) {
+		return false
+	}
+	for _, cat := range r.categories {
+		for _, t := range cat.Tools {
+			if t.Name == name {
+				return categorySupportsOS(cat, goos)
+			}
+		}
+	}
+	return true
+}
+
+func categorySupportsOS(cat *ToolCategory, goos string) bool {
+	desc := strings.ToLower(cat.Description)
+	switch {
+	case strings.Contains(desc, "linux only."):
+		return goos == "linux"
+	case strings.Contains(desc, "darwin only."), strings.Contains(desc, "macos only."):
+		return goos == "darwin"
+	case strings.Contains(desc, "windows only."):
+		return goos == "windows"
+	default:
+		return true
+	}
+}
+
 // ListToolCatalogSmart returns a hybrid catalog for diagnose prompts:
 //   - Built-in tool categories: full detail (name, params, description)
 //   - MCP categories (prefix "mcp:"): summary only (name, tool count, description)
@@ -262,6 +384,56 @@ func (r *ToolRegistry) ListToolCatalogSmart() string {
 
 		fmt.Fprintf(&b, "[%s] %s\n", cat.Name, desc)
 		for _, t := range cat.Tools {
+			params := formatParamsCompact(t.Parameters)
+			if params != "" {
+				fmt.Fprintf(&b, "  %s(%s) - %s\n", t.Name, params, t.Description)
+			} else {
+				fmt.Fprintf(&b, "  %s() - %s\n", t.Name, t.Description)
+			}
+		}
+	}
+	return b.String()
+}
+
+// ListToolCatalogSmartForOS returns the tool catalog filtered by supported OS.
+func (r *ToolRegistry) ListToolCatalogSmartForOS(goos string) string {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	cats := make([]*ToolCategory, 0, len(r.categories))
+	for _, cat := range r.categories {
+		cats = append(cats, cat)
+	}
+	sort.Slice(cats, func(i, j int) bool { return cats[i].Name < cats[j].Name })
+
+	var b strings.Builder
+	for _, cat := range cats {
+		if !categorySupportsOS(cat, goos) {
+			continue
+		}
+		desc := cat.Description
+		if desc == "" {
+			desc = cat.Name
+		}
+
+		filtered := make([]DiagnoseTool, 0, len(cat.Tools))
+		for _, t := range cat.Tools {
+			if t.SupportsOS(goos) {
+				filtered = append(filtered, t)
+			}
+		}
+		if len(filtered) == 0 {
+			continue
+		}
+
+		if strings.HasPrefix(cat.Name, "mcp:") {
+			fmt.Fprintf(&b, "[%s] (%d tools) %s — 使用前先 list_tools(category=\"%s\")\n",
+				cat.Name, len(filtered), desc, cat.Name)
+			continue
+		}
+
+		fmt.Fprintf(&b, "[%s] %s\n", cat.Name, desc)
+		for _, t := range filtered {
 			params := formatParamsCompact(t.Parameters)
 			if params != "" {
 				fmt.Fprintf(&b, "  %s(%s) - %s\n", t.Name, params, t.Description)

@@ -7,7 +7,7 @@ import "github.com/cprobe/catpaw/diagnose/aiclient"
 // progressive discovery of all other tools.
 func buildToolSet(registry *ToolRegistry, req *DiagnoseRequest) ([]aiclient.Tool, []DiagnoseTool) {
 	var aiTools []aiclient.Tool
-	directTools := registry.ByPlugin(req.Plugin)
+	directTools := registry.ByPluginForOS(req.Plugin, req.RuntimeOS)
 
 	for _, t := range directTools {
 		aiTools = append(aiTools, diagnoseToolToAI(t))

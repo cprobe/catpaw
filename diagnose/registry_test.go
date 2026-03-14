@@ -137,3 +137,45 @@ func TestRegistryAccessorFactory(t *testing.T) {
 		t.Fatal("expected error for unknown plugin")
 	}
 }
+
+func TestRegistryFiltersLinuxOnlyToolsOnDarwin(t *testing.T) {
+	r := NewToolRegistry()
+	r.RegisterCategory("systemd", "systemd", "Systemd diagnostic tools. Linux only.", ToolScopeLocal)
+	r.Register("systemd", DiagnoseTool{
+		Name:        "service_list_failed",
+		Description: "List failed units",
+		Scope:       ToolScopeLocal,
+	})
+	r.RegisterCategory("mem", "mem", "Memory diagnostics", ToolScopeLocal)
+	r.Register("mem", DiagnoseTool{
+		Name:        "mem_usage",
+		Description: "Memory usage",
+		Scope:       ToolScopeLocal,
+	})
+
+	if got := r.ByPluginForOS("systemd", "darwin"); len(got) != 0 {
+		t.Fatalf("ByPluginForOS(systemd, darwin) len = %d, want 0", len(got))
+	}
+	if got := r.ByPluginForOS("mem", "darwin"); len(got) != 1 {
+		t.Fatalf("ByPluginForOS(mem, darwin) len = %d, want 1", len(got))
+	}
+	if r.ToolSupportedOn("service_list_failed", "darwin") {
+		t.Fatal("service_list_failed should be filtered on darwin")
+	}
+	if !r.ToolSupportedOn("mem_usage", "darwin") {
+		t.Fatal("mem_usage should remain available on darwin")
+	}
+
+	cats := r.ListCategoriesForOS("darwin")
+	if strings.Contains(cats, "systemd") {
+		t.Fatalf("ListCategoriesForOS(darwin) should not include systemd: %q", cats)
+	}
+
+	catalog := r.ListToolCatalogSmartForOS("darwin")
+	if strings.Contains(catalog, "service_list_failed") {
+		t.Fatalf("ListToolCatalogSmartForOS(darwin) should not include linux-only tool: %q", catalog)
+	}
+	if !strings.Contains(catalog, "mem_usage") {
+		t.Fatalf("ListToolCatalogSmartForOS(darwin) should include mem_usage: %q", catalog)
+	}
+}

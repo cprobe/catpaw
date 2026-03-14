@@ -52,12 +52,13 @@ func (c *ServerClient) Model() string {
 }
 
 func (c *ServerClient) Chat(ctx context.Context, messages []Message, tools []Tool) (*ChatResponse, error) {
+	metadata := gatewayMetadataFromContext(ctx)
 	body, err := json.Marshal(GatewayChatRequest{
 		Messages:  messages,
 		Tools:     tools,
 		MaxTokens: c.maxTokens,
 		TimeoutMs: c.requestTimeout.Milliseconds(),
-		Metadata:  gatewayMetadataFromContext(ctx),
+		Metadata:  metadata,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("marshal request: %w", err)

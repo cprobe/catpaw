@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"path"
 	"reflect"
+	"runtime"
 	"sort"
 	"strings"
 	"time"
@@ -69,6 +70,7 @@ func runInspectRequest(registry *diagnose.ToolRegistry, pluginName, target strin
 		Mode:        diagnose.ModeInspect,
 		Plugin:      pluginName,
 		Target:      target,
+		RuntimeOS:   runtime.GOOS,
 		InstanceRef: instanceRef,
 		Timeout:     2 * time.Minute,
 		OnProgress:  inspectProgress(),

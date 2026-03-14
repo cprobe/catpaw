@@ -263,6 +263,109 @@ func TestDiagnoseMetaTools(t *testing.T) {
 	}
 }
 
+func TestDiagnoseDoesNotInjectContextWarningWhenLimitUnknown(t *testing.T) {
+	initTestConfig(t)
+
+	var callCount int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		n := atomic.AddInt32(&callCount, 1)
+
+		var req aiclient.ChatRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			t.Fatalf("decode request: %v", err)
+		}
+
+		if n == 1 {
+			if len(req.Messages) != 1 {
+				t.Fatalf("first request should contain only system prompt when context limit is unknown, got %d messages", len(req.Messages))
+			}
+			if req.Messages[0].Role != "system" {
+				t.Fatalf("first message role = %q, want system", req.Messages[0].Role)
+			}
+			resp := aiclient.ChatResponse{
+				ID: "test-1",
+				Choices: []aiclient.Choice{{
+					Index: 0,
+					Message: aiclient.Message{
+						Role: "assistant",
+						ToolCalls: []aiclient.ToolCall{{
+							ID:   "tc-1",
+							Type: "function",
+							Function: aiclient.FunctionCall{
+								Name:      "test_local_tool",
+								Arguments: `{}`,
+							},
+						}},
+					},
+					FinishReason: "tool_calls",
+				}},
+				Usage: aiclient.Usage{PromptTokens: 100, CompletionTokens: 20, TotalTokens: 120},
+			}
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(resp)
+			return
+		}
+
+		resp := aiclient.ChatResponse{
+			ID: "test-2",
+			Choices: []aiclient.Choice{{
+				Index: 0,
+				Message: aiclient.Message{
+					Role:    "assistant",
+					Content: "诊断完成。",
+				},
+				FinishReason: "stop",
+			}},
+			Usage: aiclient.Usage{PromptTokens: 120, CompletionTokens: 30, TotalTokens: 150},
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(resp)
+	}))
+	defer srv.Close()
+
+	registry := NewToolRegistry()
+	registry.RegisterCategory("mem", "mem", "Memory diagnostic tools", ToolScopeLocal)
+	registry.Register("mem", DiagnoseTool{
+		Name:        "test_local_tool",
+		Description: "A test tool",
+		Scope:       ToolScopeLocal,
+		Execute: func(ctx context.Context, args map[string]string) (string, error) {
+			return "ok", nil
+		},
+	})
+
+	engine := NewDiagnoseEngine(registry, config.AIConfig{
+		Enabled: true,
+		ModelPriority: []string{"test"},
+		Models: map[string]config.ModelConfig{
+			"test": {BaseURL: srv.URL, APIKey: "test", Model: "test", MaxTokens: 4000},
+		},
+		MaxRounds:              4,
+		RequestTimeout:         config.Duration(30 * time.Second),
+		MaxRetries:             0,
+		MaxConcurrentDiagnoses: 1,
+		ToolTimeout:            config.Duration(5 * time.Second),
+	})
+	engine.contextWindowLimit = 0
+
+	record := engine.RunDiagnose(&DiagnoseRequest{
+		Mode:    ModeInspect,
+		Plugin:  "mem",
+		Target:  "localhost",
+		Timeout: 30 * time.Second,
+	})
+
+	if record.Status != "success" {
+		t.Fatalf("expected success, got %s (error: %s)", record.Status, record.Error)
+	}
+	if record.AI.TotalRounds != 2 {
+		t.Fatalf("expected 2 rounds, got %d", record.AI.TotalRounds)
+	}
+	if len(record.Rounds) != 1 {
+		t.Fatalf("expected 1 round record, got %d", len(record.Rounds))
+	}
+}
+
 func TestDiagnoseShutdown(t *testing.T) {
 	initTestConfig(t)
 
@@ -381,9 +484,10 @@ func TestPromptMultipleChecks(t *testing.T) {
 
 func TestPromptInspectMode(t *testing.T) {
 	req := &DiagnoseRequest{
-		Mode:   ModeInspect,
-		Plugin: "redis",
-		Target: "10.0.0.1:6379",
+		Mode:      ModeInspect,
+		Plugin:    "redis",
+		Target:    "10.0.0.1:6379",
+		RuntimeOS: "linux",
 	}
 	prompt := buildInspectPrompt(req, "- redis_info: show info\n", "", "myhost", true, "zh")
 	if !strings.Contains(prompt, "主动健康巡检") {
@@ -394,6 +498,31 @@ func TestPromptInspectMode(t *testing.T) {
 	}
 	if strings.Contains(prompt, "告警详情") {
 		t.Fatal("inspect prompt should not contain alert details")
+	}
+	if !strings.Contains(prompt, "专项巡检") {
+		t.Fatal("domain inspect prompt should mention focused inspection")
+	}
+	if !strings.Contains(prompt, "当前运行环境: linux") {
+		t.Fatal("inspect prompt should expose runtime os")
+	}
+}
+
+func TestPromptInspectSystemMode(t *testing.T) {
+	req := &DiagnoseRequest{
+		Mode:      ModeInspect,
+		Plugin:    "system",
+		Target:    "localhost",
+		RuntimeOS: "darwin",
+	}
+	prompt := buildInspectPrompt(req, "", "", "myhost", false, "zh")
+	if !strings.Contains(prompt, "全面健康体检") {
+		t.Fatal("system inspect prompt should mention full inspection")
+	}
+	if !strings.Contains(prompt, "\"inspect system\"") {
+		t.Fatal("system inspect prompt should mention inspect system mode")
+	}
+	if !strings.Contains(prompt, "当前操作系统是 darwin") {
+		t.Fatal("system inspect prompt should mention runtime os restriction")
 	}
 }
 

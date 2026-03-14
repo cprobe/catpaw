@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"fmt"
+	"runtime"
 	"strings"
 	"sync"
 	"time"
@@ -62,9 +63,10 @@ type diagnoseRunnerAdapter struct {
 
 func (a *diagnoseRunnerAdapter) RunStreaming(ctx context.Context, mode, plugin, target string, params map[string]any, cb server.StreamCallback) (string, error) {
 	req := &diagnose.DiagnoseRequest{
-		Mode:   mode,
-		Plugin: plugin,
-		Target: target,
+		Mode:      mode,
+		Plugin:    plugin,
+		Target:    target,
+		RuntimeOS: runtime.GOOS,
 	}
 	if desc, _ := params["descriptions"].(string); desc != "" {
 		req.Descriptions = desc
