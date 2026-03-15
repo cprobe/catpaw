@@ -8,6 +8,7 @@
 |---|------|------|----------|----------|
 | 1 | [catpaw-intro.md](catpaw-intro.md) | catpaw：会自己看病的监控 Agent | 项目全景介绍：定位、架构、三种 AI 能力（自动诊断/Chat/巡检）、27 个插件总览、5 分钟快速体验、AI 编程实践、社区贡献指南 | 泛技术人群，对 AI + 监控感兴趣的开发者/运维 |
 | 2 | [linux-silent-killers.md](linux-silent-killers.md) | 那些你不知道自己需要监控的 Linux 暗坑 | 深度技术内容：拆解 8 个 Linux 内核层"沉默杀手"（conntrack、ARP 邻居表、sysctl 漂移、listen 队列溢出、CLOSE_WAIT、fd 耗尽、网卡 error/drop、挂载点漂移），每个附带故障原理和 catpaw 监控配置 | SRE / Linux 运维，有生产环境排障经验 |
+| 3 | [chat-troubleshooting.md](chat-troubleshooting.md) | 不记命令也能排障：catpaw chat 实战手册 | 实战教程：12 个高频排障场景（CPU/OOM/磁盘/网络/CLOSE_WAIT/进程/内核/证书/重传/容器/listen 溢出/日志），每个对比"传统命令行" vs "catpaw chat 一句话"，展示 AI 调用 90+ 诊断工具的完整过程 | 开发者 / 初中级运维，排障时常需要 Google 命令的人 |
 
 ## 写作原则
 
