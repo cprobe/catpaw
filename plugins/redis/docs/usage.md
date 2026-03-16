@@ -1,32 +1,31 @@
-# Redis Plugin Usage Guide
+# Redis 插件使用说明
 
-## Overview
+## 概述
 
-The `redis` plugin monitors Redis-aware health signals instead of generic TCP
-reachability only.
+`redis` 插件提供 Redis 语义层的监控和诊断能力，而不只是通用 TCP 连通性检测。
 
-It supports:
+它支持：
 
-- standalone Redis
-- master/replica Redis
-- Redis Cluster
+- 单机 Redis
+- 主从 Redis
+- Redis 集群
 
-The plugin is designed around two rules:
+这个插件围绕两个原则设计：
 
-- useful defaults should work without much tuning
-- periodic monitoring must stay lightweight
+- 默认配置尽量开箱即用
+- 周期采集必须保持轻量，不能给 Redis 增加明显负担
 
-For that reason, only a small set of low-cost checks is enabled by default.
+因此，默认只开启少量低成本检查，其他阈值类检查由用户按需打开。
 
-## Supported Checks
+## 支持的检查项
 
-### Default checks
+### 默认检查
 
 - `redis::connectivity`
-- `redis::cluster_state` when the target is detected as a Redis Cluster node
-- `redis::cluster_topology` when the target is detected as a Redis Cluster node
+- `redis::cluster_state`（仅在目标被识别为 Redis 集群节点时自动开启）
+- `redis::cluster_topology`（仅在目标被识别为 Redis 集群节点时自动开启）
 
-### Optional checks
+### 可选检查
 
 - `redis::response_time`
 - `redis::role`
@@ -43,11 +42,9 @@ For that reason, only a small set of low-cost checks is enabled by default.
 - `redis::instantaneous_ops_per_sec`
 - `redis::persistence`
 
-## Diagnosis Tools
+## 诊断工具
 
-The Redis plugin also registers diagnosis tools for AI diagnosis and `inspect`.
-
-Available tools:
+Redis 插件还会为 AI 诊断和 `inspect` 注册只读诊断工具：
 
 - `redis_info`
 - `redis_cluster_info`
@@ -58,12 +55,11 @@ Available tools:
 - `redis_memory_analysis`
 - `redis_bigkeys_scan`
 
-`redis_bigkeys_scan` is diagnosis-only and intentionally does not run during
-periodic monitoring.
+其中 `redis_bigkeys_scan` 是诊断专用工具，不会进入周期采集路径。
 
-## Quick Start
+## 快速开始
 
-Minimal config:
+最小配置：
 
 ```toml
 [[instances]]
@@ -71,64 +67,61 @@ targets = ["127.0.0.1:6379"]
 password = "your-password"
 ```
 
-This enables:
+这个配置会启用：
 
 - `redis::connectivity`
-- and, if the target is a Redis Cluster node, the default cluster checks
+- 如果目标是 Redis 集群节点，还会自动启用默认的集群检查
 
-Run in test mode:
+测试运行：
 
 ```bash
 ./catpaw -test -plugins redis
 ```
 
-## Configuration Basics
+## 基础配置字段
 
-Common fields:
+常用字段：
 
-- `targets`: Redis addresses, `host` or `host:port`
-- `concurrency`: concurrent checks per instance, default `10`
-- `timeout`: dial/write timeout, default `3s`
-- `read_timeout`: read timeout, default `2s`
-- `username`: Redis ACL username
-- `password`: Redis password
-- `db`: Redis database index, default `0`
-- `mode`: `auto` / `standalone` / `cluster`, default `auto`
-- `cluster_name`: optional cluster label for event grouping
-- `use_tls` and related TLS fields
+- `targets`：Redis 地址，支持 `host` 或 `host:port`
+- `concurrency`：单个 instance 的并发检查数，默认 `10`
+- `timeout`：建连和写超时，默认 `3s`
+- `read_timeout`：读超时，默认 `2s`
+- `username`：Redis ACL 用户名
+- `password`：Redis 密码
+- `db`：数据库编号，默认 `0`
+- `mode`：`auto` / `standalone` / `cluster`，默认 `auto`
+- `cluster_name`：可选的集群标签，仅用于事件聚合
+- `use_tls` 及相关 TLS 字段
 - `interval`
 - `labels`
 
-If a target omits the port, `:6379` is added automatically.
+如果 `targets` 没有显式带端口，会自动补成 `:6379`。
 
-## Cluster Behavior
+## 集群模式说明
 
 ### `mode = "auto"`
 
-This is the default and recommended mode.
+这是默认值，也是推荐值。
 
-Behavior:
+行为：
 
-- query `INFO server`
-- if `redis_mode=cluster`, automatically enable:
+- 先读取 `INFO server`
+- 如果 `redis_mode=cluster`，自动启用：
   - `redis::cluster_state`
   - `redis::cluster_topology`
-- if not cluster, skip cluster checks cleanly
+- 如果不是 cluster，自动跳过集群检查
 
 ### `mode = "standalone"`
 
-Use this when the target is definitely not a cluster node and you want to avoid
-even cluster detection.
+适用于明确不是 Redis 集群的实例。这样可以避免不必要的集群探测，开销最小。
 
 ### `mode = "cluster"`
 
-Use this when the target must be a cluster node. If the target is not running
-in cluster mode, catpaw emits a clear error event.
+适用于目标必须是集群节点的场景。如果实际不是 cluster，catpaw 会产出明确的错误事件。
 
-## Why Some Checks Are Off By Default
+## 为什么有些检查默认关闭
 
-The following checks depend heavily on workload or topology policy and therefore
-stay off by default:
+下面这些检查和业务流量、拓扑策略、容量模型强相关，所以默认关闭：
 
 - `redis::repl_lag`
 - `redis::used_memory`
@@ -136,12 +129,11 @@ stay off by default:
 - `redis::connected_clients`
 - `redis::connected_slaves`
 
-This avoids noisy defaults and keeps the plugin usable across very different
-Redis deployments.
+这样可以避免默认配置在不同 Redis 场景下产生大量误报。
 
-## Common Config Examples
+## 常见配置示例
 
-### 1. Standalone or simple availability
+### 1. 单机模式或最小可用监控
 
 ```toml
 [[instances]]
@@ -149,7 +141,7 @@ targets = ["127.0.0.1:6379"]
 password = "your-password"
 ```
 
-### 2. Master health
+### 2. 主节点健康检查
 
 ```toml
 [[instances]]
@@ -169,7 +161,7 @@ enabled = true
 severity = "Critical"
 ```
 
-### 3. Replica health
+### 3. 副本节点健康检查
 
 ```toml
 [[instances]]
@@ -185,7 +177,7 @@ expect = "up"
 severity = "Warning"
 ```
 
-### 4. Cluster node with default hard-failure checks
+### 4. Redis 集群节点默认硬故障检查
 
 ```toml
 [[instances]]
@@ -195,7 +187,7 @@ mode = "auto"
 cluster_name = "prod-cache"
 ```
 
-### 5. Cluster node with optional workload-specific checks
+### 5. Redis 集群节点开启可选阈值检查
 
 ```toml
 [[instances]]
@@ -213,32 +205,32 @@ warn_ge = 80
 critical_ge = 90
 ```
 
-## Check Notes
+## 检查项说明
 
 ### `redis::repl_lag`
 
-- unit: byte offset lag, not time
-- replica view: `master_repl_offset - slave_repl_offset`
-- master view: max lag across known replicas
+- 单位是“字节偏移差”，不是时间
+- 副本视角：`master_repl_offset - slave_repl_offset`
+- 主节点视角：所有副本中最大的 offset 差
 
 ### `redis::used_memory_pct`
 
-- only meaningful when `maxmemory > 0`
-- if `maxmemory = 0`, the plugin emits `Ok` with a skip explanation
+- 只有在 `maxmemory > 0` 时才有意义
+- 如果 `maxmemory = 0`，插件会输出 `Ok` 并说明该检查已跳过
 
-### Delta counters
+### 增量型计数器
 
-These checks use interval delta rather than process lifetime total:
+下面这些检查使用采集周期增量，而不是 Redis 生命周期累计值：
 
 - `redis::rejected_connections`
 - `redis::evicted_keys`
 - `redis::expired_keys`
 
-The first gather establishes baseline and does not alert.
+第一次成功采集只建立基线，不会直接告警。
 
-## TLS
+## TLS 配置
 
-Example:
+示例：
 
 ```toml
 [[instances]]
@@ -249,7 +241,7 @@ tls_ca = "/etc/catpaw/ca.pem"
 tls_server_name = "redis.example.com"
 ```
 
-Available TLS fields:
+可用 TLS 字段：
 
 - `use_tls`
 - `tls_ca`
@@ -261,9 +253,9 @@ Available TLS fields:
 - `tls_min_version`
 - `tls_max_version`
 
-## Partials
+## `partials` 复用配置
 
-Use `partials` to share auth, TLS, timeouts, and common thresholds:
+可以用 `partials` 复用认证、TLS、超时和公共阈值：
 
 ```toml
 [[partials]]
@@ -284,9 +276,7 @@ partial = "prod"
 cluster_name = "prod-cache"
 ```
 
-## Related Docs
+## 相关文档
 
 - [`../README.md`](../README.md)
 - [`design.md`](./design.md)
-- [`test-plan.md`](./test-plan.md)
-- [`cluster-test-plan.md`](./cluster-test-plan.md)

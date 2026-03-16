@@ -101,8 +101,9 @@ func (e *DiagnoseEngine) Submit(req *DiagnoseRequest) {
 // Returns the DiagnoseRecord so callers (e.g. inspect CLI) can inspect results.
 func (e *DiagnoseEngine) RunDiagnose(req *DiagnoseRequest) *DiagnoseRecord {
 	session := &DiagnoseSession{
-		Record:    NewDiagnoseRecord(req),
-		StartTime: time.Now(),
+		Record:      NewDiagnoseRecord(req),
+		StartTime:   time.Now(),
+		instanceRef: req.InstanceRef,
 	}
 
 	defer func() {
@@ -170,8 +171,9 @@ func (e *DiagnoseEngine) RunDiagnose(req *DiagnoseRequest) *DiagnoseRecord {
 // Intended for remote sessions where the server manages lifecycle.
 func (e *DiagnoseEngine) RunDiagnoseStreaming(ctx context.Context, req *DiagnoseRequest, cb StreamCallback) (report string, err error) {
 	session := &DiagnoseSession{
-		Record:    NewDiagnoseRecord(req),
-		StartTime: time.Now(),
+		Record:      NewDiagnoseRecord(req),
+		StartTime:   time.Now(),
+		instanceRef: req.InstanceRef,
 	}
 	defer session.Close()
 

@@ -48,14 +48,19 @@ func (p *RedisPlugin) RegisterDiagnoseTools(registry *diagnose.ToolRegistry) {
 	})
 
 	registry.Register("redis", diagnose.DiagnoseTool{
-		Name:        "redis_cluster_info",
-		Description: "Show Redis Cluster health and topology using CLUSTER INFO and CLUSTER NODES. Use for cluster_state or topology alerts. Gracefully reports when the target is not running in cluster mode.",
-		Scope:       diagnose.ToolScopeRemote,
+		Name: "redis_cluster_info",
+		Description: "Show Redis Cluster health, topology, and peer connectivity. " +
+			"Returns CLUSTER INFO, CLUSTER NODES, and automatically probes all peer nodes " +
+			"to report reachability and key metrics (memory, clients, ops/s, replication lag). " +
+			"Use for cluster_state, cluster_topology, or any cluster-related alerts. " +
+			"Gracefully reports when the target is not running in cluster mode.",
+		Scope: diagnose.ToolScopeRemote,
 		RemoteExecute: func(ctx context.Context, session *diagnose.DiagnoseSession, args map[string]string) (string, error) {
 			acc, err := getAccessor(session)
 			if err != nil {
 				return "", err
 			}
+			ins, _ := session.InstanceRef().(*Instance)
 
 			serverInfo, infoErr := acc.Info("server")
 			if infoErr != nil {
@@ -97,6 +102,21 @@ func (p *RedisPlugin) RegisterDiagnoseTools(registry *diagnose.ToolRegistry) {
 			fmt.Fprintf(&b, "pfail_nodes: %d\n\n", pfailNodes)
 			fmt.Fprintf(&b, "[CLUSTER INFO]\n%s\n\n", clusterInfo)
 			fmt.Fprintf(&b, "[CLUSTER NODES]\n%s\n", clusterNodes)
+
+			if ins != nil {
+				nodes := parseClusterNodes(clusterNodes)
+				if len(nodes) > 1 {
+					probeable, unprobeable := selectProbeCandidates(nodes, acc.Target())
+					if len(probeable) > 0 || len(unprobeable) > 0 {
+						var results []peerProbeResult
+						if len(probeable) > 0 {
+							results = probePeers(ctx, probeable, ins)
+						}
+						fmt.Fprintf(&b, "\n%s", formatPeerConnectivity(results, unprobeable, len(nodes), len(probeable)))
+					}
+				}
+			}
+
 			return b.String(), nil
 		},
 	})
@@ -354,6 +374,41 @@ func (p *RedisPlugin) RegisterDiagnoseTools(registry *diagnose.ToolRegistry) {
 		},
 	})
 
+	registry.Register("redis", diagnose.DiagnoseTool{
+		Name: "redis_query_peer",
+		Description: "Connect to a specific peer Redis node and run a read-only diagnostic command. " +
+			"Use after redis_cluster_info reveals issues on a specific peer that need deeper investigation. " +
+			"Peer address should come from the CLUSTER NODES output. " +
+			"Supported commands: info [section], slowlog [count], client_list, cluster_info, " +
+			"memory_doctor, memory_stats, latency, config_get [pattern].",
+		Parameters: []diagnose.ToolParam{
+			{Name: "peer", Type: "string", Description: "Peer address host:port from CLUSTER NODES output", Required: true},
+			{Name: "command", Type: "string", Description: "Command: info, slowlog, client_list, cluster_info, memory_doctor, memory_stats, latency, config_get", Required: true},
+			{Name: "args", Type: "string", Description: "Optional args: section for info, count for slowlog, pattern for config_get", Required: false},
+		},
+		Scope: diagnose.ToolScopeRemote,
+		RemoteExecute: func(ctx context.Context, session *diagnose.DiagnoseSession, args map[string]string) (string, error) {
+			ins, ok := session.InstanceRef().(*Instance)
+			if !ok || ins == nil {
+				return "", fmt.Errorf("redis_query_peer requires instance reference for authentication")
+			}
+			sessionAcc, err := getAccessor(session)
+			if err != nil {
+				return "", fmt.Errorf("redis_query_peer requires session accessor for topology validation: %w", err)
+			}
+			peer := strings.TrimSpace(args["peer"])
+			if peer == "" {
+				return "", fmt.Errorf("peer address is required")
+			}
+			command := strings.ToLower(strings.TrimSpace(args["command"]))
+			if command == "" {
+				return "", fmt.Errorf("command is required")
+			}
+			cmdArgs := strings.TrimSpace(args["args"])
+			return executePeerCommand(ctx, ins, sessionAcc, peer, command, cmdArgs)
+		},
+	})
+
 	registry.RegisterAccessorFactory("redis", func(ctx context.Context, instanceRef any, target string) (any, error) {
 		ins, ok := instanceRef.(*Instance)
 		if !ok {
@@ -402,10 +457,11 @@ func (p *RedisPlugin) RegisterDiagnoseTools(registry *diagnose.ToolRegistry) {
 - 延迟/慢查询 → redis_slowlog + redis_latency（可并行调用）
 - 连接数告警 → redis_client_list + redis_config_get pattern=maxclients
 - 复制告警 → 预采集数据中的 replication 部分已包含完整复制状态，通常无需额外工具
-- Cluster 告警 → 先分析预采集数据中的 CLUSTER INFO，再调 redis_cluster_info 获取完整拓扑
+- Cluster 告警 → 调 redis_cluster_info 获取集群快照（含 PEER CONNECTIVITY 全节点连通性和关键指标），根据异常节点决定是否用 redis_query_peer 深查（如 slowlog、memory_doctor）
 - 持久化告警 → 预采集数据中的 persistence 部分 + redis_config_get pattern=save*
 - 通用排查 → 预采集数据已含 INFO all，直接分析后按需深入
-- 首轮建议并行调用 2-3 个最相关的工具，避免逐个调用浪费轮次`)
+- 首轮建议并行调用 2-3 个最相关的工具，避免逐个调用浪费轮次
+- redis_query_peer 仅在 redis_cluster_info 的 PEER CONNECTIVITY 不足以定位问题时使用，大多数集群问题可直接从快照判断`)
 }
 
 func getAccessor(session *diagnose.DiagnoseSession) (*RedisAccessor, error) {

@@ -15,7 +15,7 @@ func TestRegisterDiagnoseTools(t *testing.T) {
 
 	expectedTools := []string{
 		"redis_info", "redis_cluster_info", "redis_slowlog", "redis_client_list", "redis_config_get",
-		"redis_bigkeys_scan",
+		"redis_bigkeys_scan", "redis_query_peer",
 		"redis_latency", "redis_memory_analysis",
 	}
 	for _, name := range expectedTools {

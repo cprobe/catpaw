@@ -1,91 +1,89 @@
-# Redis Plugin Design
+# Redis 插件设计说明
 
-## Scope
+## 适用范围
 
-The Redis plugin provides Redis-aware monitoring and diagnosis on top of
-catpaw's standard event model.
+Redis 插件在 catpaw 标准事件模型之上，提供 Redis 语义感知的监控与诊断能力。
 
-It is designed for:
+它面向以下部署形态：
 
-- standalone Redis
-- master/replica Redis
-- Redis Cluster
+- 单机 Redis
+- 主从 Redis
+- Redis 集群
 
-It is not designed to replace `redis-exporter` or continuous metrics
-collection. The plugin focuses on anomaly detection and on-demand diagnosis.
+它的目标不是替代 `redis-exporter` 或持续型指标采集系统。这个插件更关注异常发现，以及异常发生后的按需诊断。
 
-## Design Goals
+## 设计目标
 
-- keep the plugin lightweight and safe for overloaded Redis targets
-- provide useful defaults without forcing users to tune many thresholds
-- support both node-level and minimal cluster-level health detection
-- reuse the same Redis accessor for alerting and diagnosis
+- 保持插件轻量，在 Redis 已经过载时也尽量安全
+- 提供有用的默认行为，不强迫用户调很多阈值
+- 支持节点级健康检查，并提供最小但实用的集群级健康识别
+- 在告警与诊断阶段尽量复用同一个 Redis 访问器
 
-## Monitoring Model
+## 监控模型
 
-The unit of collection is still a single Redis target: `host:port`.
+采集的基本单位仍然是单个 Redis 目标：`host:port`。
 
-This is true even in Redis Cluster mode. Cluster support is added by making the
-plugin cluster-aware after it connects to a target.
+即使在 Redis 集群模式下也是如此。集群支持的方式是在连接到目标后，让插件具备集群感知能力。
 
-### Per-target checks
+### 单目标检查项
 
-| Check | Default | Notes |
+| 检查项 | 默认状态 | 说明 |
 | --- | --- | --- |
-| `redis::connectivity` | on | `PING` after optional `AUTH` / `SELECT` |
-| `redis::response_time` | off | threshold-driven |
-| `redis::role` | off | expected `master` / `slave` |
-| `redis::repl_lag` | off | workload-specific, byte offset lag |
-| `redis::connected_clients` | off | threshold-driven |
-| `redis::blocked_clients` | off | threshold-driven |
-| `redis::used_memory` | off | absolute bytes |
-| `redis::used_memory_pct` | off | requires `maxmemory > 0` |
-| `redis::rejected_connections` | off | delta per interval |
-| `redis::master_link_status` | off | replica-side check |
-| `redis::connected_slaves` | off | master-side check |
-| `redis::evicted_keys` | off | delta per interval |
-| `redis::expired_keys` | off | delta per interval |
-| `redis::instantaneous_ops_per_sec` | off | threshold-driven |
-| `redis::persistence` | off | RDB / AOF health |
+| `redis::connectivity` | 开启 | 可选 `AUTH` / `SELECT` 之后执行 `PING` |
+| `redis::response_time` | 关闭 | 基于阈值判定 |
+| `redis::role` | 关闭 | 检查期望角色是否为 `master` / `slave` |
+| `redis::repl_lag` | 关闭 | 与业务负载相关，单位为字节偏移差 |
+| `redis::connected_clients` | 关闭 | 基于阈值判定 |
+| `redis::blocked_clients` | 关闭 | 基于阈值判定 |
+| `redis::used_memory` | 关闭 | 绝对内存字节数 |
+| `redis::used_memory_pct` | 关闭 | 需要 `maxmemory > 0` |
+| `redis::rejected_connections` | 关闭 | 按采集周期计算增量 |
+| `redis::master_link_status` | 关闭 | 副本节点视角检查 |
+| `redis::connected_slaves` | 关闭 | 主节点视角检查 |
+| `redis::evicted_keys` | 关闭 | 按采集周期计算增量 |
+| `redis::expired_keys` | 关闭 | 按采集周期计算增量 |
+| `redis::instantaneous_ops_per_sec` | 关闭 | 基于阈值判定 |
+| `redis::persistence` | 关闭 | 检查 RDB / AOF 健康状态 |
 
-### Cluster-aware checks
+### 集群感知检查项
 
-| Check | Default | Notes |
+| 检查项 | 默认状态 | 说明 |
 | --- | --- | --- |
-| `redis::cluster_state` | on in cluster mode | conservative hard-failure check |
-| `redis::cluster_topology` | on in cluster mode | conservative topology hard-failure check |
+| `redis::cluster_state` | 集群模式下开启 | 保守的硬故障检查 |
+| `redis::cluster_topology` | 集群模式下开启 | 保守的拓扑硬故障检查 |
 
-## Default Strategy
+## 默认策略
 
-The Redis plugin follows catpaw's "out-of-the-box" and "monitoring must not
-become a burden" principles.
+Redis 插件遵循 catpaw 的两个原则：
 
-### Default-on checks
+- 开箱即用
+- 监控本身不能成为负担
+
+### 默认开启的检查项
 
 - `redis::connectivity`
-- `redis::cluster_state` when `INFO server` reports `redis_mode=cluster`
-- `redis::cluster_topology` when `INFO server` reports `redis_mode=cluster`
+- 当 `INFO server` 返回 `redis_mode=cluster` 时，自动开启 `redis::cluster_state`
+- 当 `INFO server` 返回 `redis_mode=cluster` 时，自动开启 `redis::cluster_topology`
 
-### Default-off checks
+### 默认关闭的检查项
 
-Everything threshold-driven or workload-specific remains off by default:
+所有依赖阈值、或者强依赖业务负载特征的检查项，都保持默认关闭：
 
-- response time
-- role expectations
-- replication lag
-- client counts
-- memory thresholds
-- delta counters
-- persistence
+- 响应时间
+- 角色期望
+- 复制延迟
+- 客户端数量
+- 内存阈值
+- 增量型计数器
+- 持久化状态
 
-This keeps the default config predictable and avoids false positives across
-different Redis deployment styles.
+这样可以让默认配置更可预测，并避免在不同 Redis 部署风格下产生误报。
 
-## Collection Cost Budget
+## 采集成本预算
 
-The periodic `Gather()` path is intentionally narrow.
+周期性的 `Gather()` 路径会刻意控制得很窄。
 
-### Commands used in normal collection
+### 正常采集路径使用的命令
 
 - `PING`
 - `INFO server`
@@ -95,97 +93,95 @@ The periodic `Gather()` path is intentionally narrow.
 - `INFO stats`
 - `INFO persistence`
 - `CLUSTER INFO`
-- `CLUSTER NODES` only when cluster topology check is enabled
+- 仅当启用了集群拓扑检查时，才执行 `CLUSTER NODES`
 
-### Commands intentionally excluded from `Gather()`
+### 明确不放入 `Gather()` 的命令
 
 - `SCAN`
 - `MEMORY USAGE`
 - `CLIENT LIST`
 - `SLOWLOG GET`
-- any large enumeration command
+- 任何大规模枚举类命令
 
-Those commands may still be used in diagnosis, but not in periodic monitoring.
+这些命令仍然可以用于诊断，但不会进入周期监控路径。
 
-## Configuration Model
+## 配置模型
 
-Key fields:
+关键字段包括：
 
 - `targets`
 - `username` / `password`
 - `db`
 - `mode = auto | standalone | cluster`
 - `cluster_name`
-- standard timeout / concurrency / alerting settings
+- 标准的超时、并发和告警设置
 
-### Redis mode
+### Redis 模式
 
-- `auto`: detect cluster mode through `INFO server`
-- `standalone`: never run cluster checks
-- `cluster`: require cluster mode; emit a clear error event otherwise
+- `auto`：通过 `INFO server` 自动识别是否为集群模式
+- `standalone`：绝不执行集群检查
+- `cluster`：要求目标必须工作在集群模式，否则产出明确错误事件
 
-### Cluster name
+### 集群名称
 
-`cluster_name` is only an event label for grouping and alert readability. It
-does not affect connection behavior.
+`cluster_name` 只是事件标签，用于聚合和提升告警可读性，不影响连接行为。
 
-## Cluster Semantics
+## 集群语义
 
 ### `redis::cluster_state`
 
-Uses `CLUSTER INFO`.
+使用 `CLUSTER INFO`。
 
-Default rule:
+默认规则：
 
-- `cluster_state != ok` -> `Critical`
+- `cluster_state != ok` 时，记为 `Critical`
 
 ### `redis::cluster_topology`
 
-Uses `CLUSTER INFO` plus `CLUSTER NODES`.
+使用 `CLUSTER INFO` 配合 `CLUSTER NODES`。
 
-Default rule set is intentionally conservative:
+默认规则集刻意保持保守：
 
-- `fail` node exists -> `Critical`
-- `cluster_slots_fail > 0` -> `Critical`
-- `cluster_slots_assigned != 16384` -> `Critical`
-- `pfail` node exists -> `Warning`
+- 存在 `fail` 节点时，记为 `Critical`
+- `cluster_slots_fail > 0` 时，记为 `Critical`
+- `cluster_slots_assigned != 16384` 时，记为 `Critical`
+- 存在 `pfail` 节点时，记为 `Warning`
 
-It intentionally does not assume:
+它不会默认假设以下条件一定成立：
 
-- required replica count
-- balanced slot distribution
-- balanced traffic or memory
+- 副本数量必须满足某个固定值
+- slot 分布必须完全均衡
+- 流量和内存必须均衡
 
-Those are real concerns, but they are not safe universal defaults.
+这些问题确实重要，但不适合作为通用默认规则。
 
-## Threshold Semantics
+## 阈值语义
 
 ### `redis::repl_lag`
 
-- unit: byte offset lag
-- replica view: `master_repl_offset - slave_repl_offset`
-- master view: max lag across parsed `slaveN:offset=...`
-- default: off
+- 单位是字节偏移差
+- 副本视角：`master_repl_offset - slave_repl_offset`
+- 主节点视角：解析所有 `slaveN:offset=...` 后取最大 lag
+- 默认关闭
 
 ### `redis::used_memory_pct`
 
-- unit: percentage of `maxmemory`
-- only meaningful when `maxmemory > 0`
-- when `maxmemory = 0`, the plugin emits `Ok` with a skip explanation
-- default: off
+- 单位是 `maxmemory` 的百分比
+- 只有在 `maxmemory > 0` 时才有意义
+- 当 `maxmemory = 0` 时，插件输出 `Ok`，并附带跳过原因说明
+- 默认关闭
 
-### Delta counters
+### 增量型计数器
 
-`rejected_connections`, `evicted_keys`, and `expired_keys` are evaluated as
-interval deltas, not process lifetime totals.
+`rejected_connections`、`evicted_keys` 和 `expired_keys` 都按采集周期增量判断，而不是使用进程生命周期累计值。
 
-The first successful gather establishes baseline and emits `Ok`.
+第一次成功采集只建立基线，并输出 `Ok`。
 
-## Diagnosis Model
+## 诊断模型
 
-The Redis plugin exposes read-only diagnosis tools.
+Redis 插件暴露的诊断工具全部为只读工具。
 
-### Low-cost tools
+### 低成本工具
 
 - `redis_info`
 - `redis_config_get`
@@ -195,49 +191,45 @@ The Redis plugin exposes read-only diagnosis tools.
 - `redis_client_list`
 - `redis_memory_analysis`
 
-### Heavy but bounded tool
+### 较重但有边界的工具
 
 - `redis_bigkeys_scan`
 
-`redis_bigkeys_scan` is diagnosis-only. It uses bounded `SCAN` sampling and
-`MEMORY USAGE` to find large keys on the current Redis node. It is never used
-in periodic `Gather()`.
+`redis_bigkeys_scan` 仅用于诊断。它会使用有边界的 `SCAN` 采样和 `MEMORY USAGE`，在当前 Redis 节点上识别大 key。它永远不会进入周期性的 `Gather()`。
 
-## PreCollector Strategy
+## 预采集策略
 
-The diagnosis pre-collector gathers:
+诊断阶段的 pre-collector 会采集：
 
 - `INFO all`
-- plus `CLUSTER INFO` when the target is in cluster mode
+- 如果目标处于集群模式，再额外采集 `CLUSTER INFO`
 
-It intentionally does not pre-collect `CLUSTER NODES`, because that output is
-larger and better fetched on demand by `redis_cluster_info`.
+它刻意不预采集 `CLUSTER NODES`，因为这部分输出更大，更适合由 `redis_cluster_info` 在需要时按需获取。
 
-## Validation Assets
+## 校验资产
 
-The Redis plugin is validated at multiple levels:
+Redis 插件通过多层校验来验证：
 
-- unit tests in [`../redis_test.go`](../redis_test.go)
-- diagnosis tests in [`../diagnose_test.go`](../diagnose_test.go)
-- standalone/master-replica Docker validation in [`../testdata/master-replica/docker-compose.yml`](../testdata/master-replica/docker-compose.yml)
-- Redis Cluster Docker validation in [`../testdata/cluster/docker-compose.yml`](../testdata/cluster/docker-compose.yml)
-- integration tests behind the `integration` build tag in [`../redis_integration_test.go`](../redis_integration_test.go)
+- 单元测试：[`../redis_test.go`](../redis_test.go)
+- 诊断测试：[`../diagnose_test.go`](../diagnose_test.go)
+- 单机 / 主从 Docker 验证：[`../testdata/master-replica/docker-compose.yml`](../testdata/master-replica/docker-compose.yml)
+- Redis 集群 Docker 验证：[`../testdata/cluster/docker-compose.yml`](../testdata/cluster/docker-compose.yml)
+- 通过 `integration` 构建标签启用的集成测试：[`../redis_integration_test.go`](../redis_integration_test.go)
 
-## Non-Goals
+## 非目标
 
-- exporter-style metrics collection
-- Sentinel-specific orchestration logic
-- periodic big key scans
-- periodic client list or slowlog sweeps
-- assuming topology policy by default
+- exporter 风格的指标采集
+- Sentinel 专用编排逻辑
+- 周期性大 key 扫描
+- 周期性客户端列表或 slowlog 扫描
+- 默认假设固定的拓扑策略
 
-## Suggested Next Work
+## 建议的后续工作
 
-The plugin is already feature-complete for catpaw's current Redis scope.
+以 catpaw 当前对 Redis 的支持范围来看，这个插件的功能已经基本完整。
 
-Future work should be driven by real user demand, not feature accumulation. The
-most reasonable follow-up items are:
+后续演进应由真实用户需求驱动，而不是为了堆功能而堆功能。比较合理的下一步包括：
 
-- more structured cluster topology summaries
-- more failure-injection integration tests
-- top-level README documentation updates
+- 输出更结构化的集群拓扑摘要
+- 增加更多故障注入型集成测试
+- 更新顶层 `README` 文档
