@@ -125,6 +125,9 @@ type Instance struct {
 	statsMu     sync.Mutex
 	prevStats   map[string]redisCounterSnapshot
 	initialized map[string]bool
+
+	inFlight sync.Map // target → int64 (unix timestamp)
+	prevHung sync.Map // target → bool
 }
 
 type redisCounterSnapshot struct {
@@ -503,9 +506,29 @@ func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
 		return
 	}
 
+	perTarget := time.Duration(ins.Timeout) + time.Duration(ins.ReadTimeout)*8
+	batches := (len(ins.Targets) + ins.Concurrency - 1) / ins.Concurrency
+	gatherTimeout := perTarget * time.Duration(batches+1)
+	if gatherTimeout < 30*time.Second {
+		gatherTimeout = 30 * time.Second
+	}
+
 	wg := new(sync.WaitGroup)
 	se := semaphore.NewSemaphore(ins.Concurrency)
 	for _, target := range ins.Targets {
+		if startTime, ok := ins.inFlight.Load(target); ok {
+			elapsed := time.Now().Unix() - startTime.(int64)
+			if elapsed > int64(gatherTimeout.Seconds()) {
+				q.PushFront(ins.buildHungEvent(target, elapsed))
+			}
+			continue
+		}
+
+		if _, wasHung := ins.prevHung.Load(target); wasHung {
+			q.PushFront(ins.buildHungRecoveryEvent(target))
+			ins.prevHung.Delete(target)
+		}
+
 		wg.Add(1)
 		go func(target string) {
 			se.Acquire()
@@ -518,18 +541,13 @@ func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
 					}).SetEventStatus(types.EventStatusCritical).
 						SetDescription(fmt.Sprintf("panic during check: %v", r)))
 				}
+				ins.inFlight.Delete(target)
 				se.Release()
 				wg.Done()
 			}()
+			ins.inFlight.Store(target, time.Now().Unix())
 			ins.gatherTarget(q, target)
 		}(target)
-	}
-
-	perTarget := time.Duration(ins.Timeout) + time.Duration(ins.ReadTimeout)*8
-	batches := (len(ins.Targets) + ins.Concurrency - 1) / ins.Concurrency
-	gatherTimeout := perTarget * time.Duration(batches+1)
-	if gatherTimeout < 30*time.Second {
-		gatherTimeout = 30 * time.Second
 	}
 
 	done := make(chan struct{})
@@ -539,6 +557,10 @@ func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
 	case <-time.After(gatherTimeout):
 		logger.Logger.Errorw("redis gather timeout, some targets may still be running",
 			"timeout", gatherTimeout, "targets", len(ins.Targets))
+		ins.inFlight.Range(func(key, value any) bool {
+			ins.prevHung.Store(key, true)
+			return true
+		})
 	}
 }
 
@@ -1166,5 +1188,23 @@ func (ins *Instance) newEvent(check, target string) *types.Event {
 		"check":  check,
 		"target": target,
 	})
+}
+
+func (ins *Instance) buildHungEvent(target string, elapsedSec int64) *types.Event {
+	return types.BuildEvent(map[string]string{
+		"check":  "redis::hung",
+		"target": target,
+	}).SetAttrs(map[string]string{
+		"elapsed_seconds": fmt.Sprintf("%d", elapsedSec),
+		"threshold_desc":  "Critical: redis check hung",
+	}).SetEventStatus(types.EventStatusCritical).
+		SetDescription(fmt.Sprintf("redis check hung for %d seconds (target may be unreachable or blocked)", elapsedSec))
+}
+
+func (ins *Instance) buildHungRecoveryEvent(target string) *types.Event {
+	return types.BuildEvent(map[string]string{
+		"check":  "redis::hung",
+		"target": target,
+	}).SetDescription("redis check recovered from hung state")
 }
 

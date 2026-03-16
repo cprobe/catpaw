@@ -203,7 +203,9 @@ type ToolCallRecord struct {
 
 // AccessorFactory creates a shared Accessor for a remote plugin.
 // The engine calls this once per DiagnoseSession.
-type AccessorFactory func(ctx context.Context, instanceRef any) (any, error)
+// target is the specific address being diagnosed (e.g. "10.0.0.2:6379"),
+// since an Instance may contain multiple targets.
+type AccessorFactory func(ctx context.Context, instanceRef any, target string) (any, error)
 
 // SeverityRank returns a numeric rank for severity comparison.
 // Higher rank = more severe.

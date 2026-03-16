@@ -105,7 +105,7 @@ func TestDiagnoseEndToEnd(t *testing.T) {
 		RetryBackoff:           config.Duration(100 * time.Millisecond),
 		MaxConcurrentDiagnoses: 3,
 		ToolTimeout:            config.Duration(5 * time.Second),
-		AggregateWindow:        config.Duration(5 * time.Second),
+		AggregateWindow:        config.Duration(2 * time.Second),
 		DiagnoseRetention:      config.Duration(7 * 24 * time.Hour),
 		DiagnoseMaxCount:       1000,
 	}
@@ -452,7 +452,7 @@ func TestPromptSingleCheck(t *testing.T) {
 			Description:   "memory high",
 		}},
 	}
-	prompt := buildSystemPrompt(req, "- redis_info: show info\n", "", "myhost", true, "zh")
+	prompt := buildSystemPrompt(req, "- redis_info: show info\n", "", "myhost", true, "zh", promptContext{})
 	if !strings.Contains(prompt, "redis::used_memory") {
 		t.Fatal("prompt should contain check name")
 	}
@@ -473,7 +473,7 @@ func TestPromptMultipleChecks(t *testing.T) {
 			{Check: "redis::connected_clients", Status: "Critical", Description: "too many"},
 		},
 	}
-	prompt := buildSystemPrompt(req, "", "", "myhost", false, "zh")
+	prompt := buildSystemPrompt(req, "", "", "myhost", false, "zh", promptContext{})
 	if !strings.Contains(prompt, "2 个异常检查项") {
 		t.Fatal("multi-check prompt should mention count")
 	}
@@ -489,7 +489,7 @@ func TestPromptInspectMode(t *testing.T) {
 		Target:    "10.0.0.1:6379",
 		RuntimeOS: "linux",
 	}
-	prompt := buildInspectPrompt(req, "- redis_info: show info\n", "", "myhost", true, "zh")
+	prompt := buildInspectPrompt(req, "- redis_info: show info\n", "", "myhost", true, "zh", promptContext{})
 	if !strings.Contains(prompt, "主动健康巡检") {
 		t.Fatal("inspect prompt should mention health inspection")
 	}
@@ -514,7 +514,7 @@ func TestPromptInspectSystemMode(t *testing.T) {
 		Target:    "localhost",
 		RuntimeOS: "darwin",
 	}
-	prompt := buildInspectPrompt(req, "", "", "myhost", false, "zh")
+	prompt := buildInspectPrompt(req, "", "", "myhost", false, "zh", promptContext{})
 	if !strings.Contains(prompt, "全面健康体检") {
 		t.Fatal("system inspect prompt should mention full inspection")
 	}
@@ -533,19 +533,109 @@ func TestPromptLanguage(t *testing.T) {
 		Checks: []CheckSnapshot{{Check: "redis::mem", Status: "Warning"}},
 	}
 
-	zhPrompt := buildSystemPrompt(req, "", "", "myhost", false, "zh")
+	zhPrompt := buildSystemPrompt(req, "", "", "myhost", false, "zh", promptContext{})
 	if strings.Contains(zhPrompt, "You MUST respond in") {
 		t.Fatal("zh prompt should not contain language override")
 	}
 
-	enPrompt := buildSystemPrompt(req, "", "", "myhost", false, "en")
+	enPrompt := buildSystemPrompt(req, "", "", "myhost", false, "en", promptContext{})
 	if !strings.Contains(enPrompt, "You MUST respond in en") {
 		t.Fatal("en prompt should contain language instruction")
 	}
 
-	jaPrompt := buildInspectPrompt(req, "", "", "myhost", false, "ja")
+	jaPrompt := buildInspectPrompt(req, "", "", "myhost", false, "ja", promptContext{})
 	if !strings.Contains(jaPrompt, "You MUST respond in ja") {
 		t.Fatal("ja prompt should contain language instruction")
+	}
+}
+
+func TestPromptWithPreCollectedContext(t *testing.T) {
+	req := &DiagnoseRequest{
+		Plugin: "redis",
+		Target: "10.0.0.1:6379",
+		Checks: []CheckSnapshot{{Check: "redis::used_memory", Status: "Warning"}},
+	}
+	pctx := promptContext{
+		PreCollectedContext: "# Memory\nused_memory:1073741824\n",
+		DiagnoseHints:      "\n- 内存告警 → redis_memory_analysis",
+	}
+	prompt := buildSystemPrompt(req, "", "", "myhost", false, "zh", pctx)
+	if !strings.Contains(prompt, "预采集数据") {
+		t.Fatal("prompt should contain pre-collected section header")
+	}
+	if !strings.Contains(prompt, "used_memory:1073741824") {
+		t.Fatal("prompt should contain pre-collected data")
+	}
+	if !strings.Contains(prompt, "诊断路线图") {
+		t.Fatal("prompt should contain diagnose hints section")
+	}
+	if !strings.Contains(prompt, "内存告警") {
+		t.Fatal("prompt should contain hint content")
+	}
+}
+
+func TestPromptWithoutPreCollectedContext(t *testing.T) {
+	req := &DiagnoseRequest{
+		Plugin: "redis",
+		Target: "10.0.0.1:6379",
+		Checks: []CheckSnapshot{{Check: "redis::mem", Status: "Warning"}},
+	}
+	prompt := buildSystemPrompt(req, "", "", "myhost", false, "zh", promptContext{})
+	if strings.Contains(prompt, "预采集数据") {
+		t.Fatal("prompt should not contain pre-collected section when empty")
+	}
+	if strings.Contains(prompt, "诊断路线图") {
+		t.Fatal("prompt should not contain hints section when empty")
+	}
+}
+
+func TestPromptWithSystemBaseline(t *testing.T) {
+	req := &DiagnoseRequest{
+		Plugin: "redis",
+		Target: "localhost:6379",
+		Checks: []CheckSnapshot{{Check: "redis::used_memory", Status: "Warning"}},
+	}
+	pctx := promptContext{
+		PreCollectedContext: "# Memory\nused_memory:1073741824\n",
+		SystemBaseline: map[string]string{
+			"cpu":  "Total CPU usage: 45.2%\nLoad average: 2.10 (1m)\n",
+			"mem":  "[Physical Memory]\nUsed: 12.3G (78.5%)\n",
+			"disk": "[Space Usage]\n/dev/sda1  100G  80G  20G  80.0%  /\n",
+		},
+	}
+	prompt := buildSystemPrompt(req, "", "", "myhost", false, "zh", pctx)
+
+	if !strings.Contains(prompt, "redis 预采集数据") {
+		t.Fatal("prompt should contain plugin pre-collected section header")
+	}
+	if !strings.Contains(prompt, "系统基线") {
+		t.Fatal("prompt should contain system baseline section")
+	}
+	if !strings.Contains(prompt, `system_baseline plugin="cpu"`) {
+		t.Fatal("prompt should contain cpu baseline tag")
+	}
+	if !strings.Contains(prompt, `system_baseline plugin="mem"`) {
+		t.Fatal("prompt should contain mem baseline tag")
+	}
+	if !strings.Contains(prompt, `system_baseline plugin="disk"`) {
+		t.Fatal("prompt should contain disk baseline tag")
+	}
+	if !strings.Contains(prompt, "Total CPU usage: 45.2%") {
+		t.Fatal("prompt should contain cpu baseline data")
+	}
+}
+
+func TestPromptWithoutSystemBaseline(t *testing.T) {
+	req := &DiagnoseRequest{
+		Plugin: "redis",
+		Target: "10.0.0.1:6379",
+		Checks: []CheckSnapshot{{Check: "redis::mem", Status: "Warning"}},
+	}
+	prompt := buildSystemPrompt(req, "", "", "myhost", true, "zh", promptContext{
+		PreCollectedContext: "some data",
+	})
+	if strings.Contains(prompt, "系统基线") {
+		t.Fatal("prompt should not contain system baseline when map is nil/empty")
 	}
 }
 

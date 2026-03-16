@@ -212,8 +212,8 @@ critical_ge = 20000
 
 说明：
 
-- `rejected_connections` 使用 `INFO stats` 中的累计值。
-- `evicted_keys` 和 `expired_keys` 使用采集周期内的 delta，不是 Redis 启动以来累计值。
+- `rejected_connections`、`evicted_keys` 和 `expired_keys` 均使用采集周期内的 delta，不是 Redis 启动以来累计值。
+- 首次采集只建立 baseline，不产出告警。
 
 ## 使用 Partials 复用配置
 

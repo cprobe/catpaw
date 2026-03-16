@@ -413,7 +413,7 @@ daily_token_limit = 500000     # 每日 token 消耗上限，0 表示不限
 tool_timeout = "10s"           # 单个工具执行的最大耗时，避免挂起耗尽总超时
 
 # 聚合窗口
-aggregate_window = "5s"        # 同一 target 的告警聚合窗口
+aggregate_window = "2s"        # 同一 target 的告警聚合窗口
 ```
 
 ### 状态持久化
@@ -1291,7 +1291,7 @@ max_tokens = 4000
 max_rounds = 8
 request_timeout = "60s"
 tool_timeout = "10s"
-aggregate_window = "5s"
+aggregate_window = "2s"
 daily_token_limit = 500000
 max_concurrent_diagnoses = 3
 ```

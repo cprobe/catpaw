@@ -212,8 +212,8 @@ critical_ge = 20000
 
 Notes:
 
-- `rejected_connections` uses the Redis lifetime total from `INFO stats`.
-- `evicted_keys` and `expired_keys` use delta within the collection interval, not Redis lifetime totals.
+- `rejected_connections`, `evicted_keys`, and `expired_keys` all use delta within the collection interval, not Redis lifetime totals.
+- The first collection cycle only establishes a baseline and does not produce alerts.
 
 ## Partials
 

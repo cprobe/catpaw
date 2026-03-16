@@ -14,57 +14,53 @@ import (
 
 var _ plugins.Diagnosable = (*DiskPlugin)(nil)
 
+func diskOverviewReport(ctx context.Context) string {
+	partitions, err := godisk.PartitionsWithContext(ctx, true)
+	if err != nil {
+		return fmt.Sprintf("get partitions: %v", err)
+	}
+
+	var b strings.Builder
+
+	fmt.Fprintf(&b, "[Space Usage]\n")
+	fmt.Fprintf(&b, "%-30s %10s %10s %10s %6s  %s\n",
+		"Filesystem", "Size", "Used", "Avail", "Use%", "Mounted on")
+	for _, p := range partitions {
+		usage, err := godisk.UsageWithContext(ctx, p.Mountpoint)
+		if err != nil {
+			continue
+		}
+		fmt.Fprintf(&b, "%-30s %10s %10s %10s %5.1f%%  %s\n",
+			p.Device,
+			humanBytes(usage.Total),
+			humanBytes(usage.Used),
+			humanBytes(usage.Free),
+			usage.UsedPercent,
+			p.Mountpoint)
+	}
+
+	fmt.Fprintf(&b, "\n[Partitions]\n")
+	fmt.Fprintf(&b, "%-20s %-30s %-10s %s\n", "Device", "Mountpoint", "FSType", "Opts")
+	for _, p := range partitions {
+		opts := strings.Join(p.Opts, ",")
+		if len(opts) > 60 {
+			opts = opts[:57] + "..."
+		}
+		fmt.Fprintf(&b, "%-20s %-30s %-10s %s\n", p.Device, p.Mountpoint, p.Fstype, opts)
+	}
+
+	return b.String()
+}
+
 func (p *DiskPlugin) RegisterDiagnoseTools(registry *diagnose.ToolRegistry) {
-	registry.RegisterCategory("disk", "disk", "Disk diagnostic tools (usage, partitions, I/O stats)", diagnose.ToolScopeLocal)
+	registry.RegisterCategory("disk", "disk", "Disk diagnostic tools (overview, I/O stats)", diagnose.ToolScopeLocal)
 
 	registry.Register("disk", diagnose.DiagnoseTool{
-		Name:        "disk_usage",
-		Description: "Show disk space usage for all mounted filesystems (similar to df -h)",
+		Name:        "disk_overview",
+		Description: "Combined disk snapshot: space usage per filesystem (size/used/avail/use%, like df -h) plus partition details (device, mountpoint, fstype, mount options). NOTE: pre-collected in system baseline — use only when refreshing.",
 		Scope:       diagnose.ToolScopeLocal,
 		Execute: func(ctx context.Context, args map[string]string) (string, error) {
-			partitions, err := godisk.PartitionsWithContext(ctx, true)
-			if err != nil {
-				return "", fmt.Errorf("get partitions: %w", err)
-			}
-			var b strings.Builder
-			fmt.Fprintf(&b, "%-30s %10s %10s %10s %6s  %s\n",
-				"Filesystem", "Size", "Used", "Avail", "Use%", "Mounted on")
-			for _, p := range partitions {
-				usage, err := godisk.UsageWithContext(ctx, p.Mountpoint)
-				if err != nil {
-					continue
-				}
-				fmt.Fprintf(&b, "%-30s %10s %10s %10s %5.1f%%  %s\n",
-					p.Device,
-					humanBytes(usage.Total),
-					humanBytes(usage.Used),
-					humanBytes(usage.Free),
-					usage.UsedPercent,
-					p.Mountpoint)
-			}
-			return b.String(), nil
-		},
-	})
-
-	registry.Register("disk", diagnose.DiagnoseTool{
-		Name:        "disk_partitions",
-		Description: "List all disk partitions with filesystem type and mount options",
-		Scope:       diagnose.ToolScopeLocal,
-		Execute: func(ctx context.Context, args map[string]string) (string, error) {
-			partitions, err := godisk.PartitionsWithContext(ctx, true)
-			if err != nil {
-				return "", fmt.Errorf("get partitions: %w", err)
-			}
-			var b strings.Builder
-			fmt.Fprintf(&b, "%-20s %-30s %-10s %s\n", "Device", "Mountpoint", "FSType", "Opts")
-			for _, p := range partitions {
-				opts := strings.Join(p.Opts, ",")
-				if len(opts) > 60 {
-					opts = opts[:57] + "..."
-				}
-				fmt.Fprintf(&b, "%-20s %-30s %-10s %s\n", p.Device, p.Mountpoint, p.Fstype, opts)
-			}
-			return b.String(), nil
+			return diskOverviewReport(ctx), nil
 		},
 	})
 
@@ -100,6 +96,16 @@ func (p *DiskPlugin) RegisterDiagnoseTools(registry *diagnose.ToolRegistry) {
 			return b.String(), nil
 		},
 	})
+
+	registry.SetDiagnoseHints("disk", `
+- 磁盘空间告警 → disk_overview（已包含使用率 + 分区信息，含 fstype 和挂载选项）
+- I/O 延迟告警 → disk_io_counters 查看各设备读写延迟和队列深度
+- 首轮建议并行调用 disk_overview + disk_io_counters，一次拿到空间和 I/O 全貌`)
+
+	registry.RegisterPreCollector("disk", func(ctx context.Context, _ any) string {
+		return diskOverviewReport(ctx)
+	})
+	registry.RegisterBaselinePlugin("disk")
 }
 
 func detectDeviceType(name string) string {

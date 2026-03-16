@@ -55,7 +55,7 @@ enabled = true
 #
 ## 工具与聚合
 # tool_timeout = "10s"               # 单个诊断工具执行超时
-# aggregate_window = "5s"            # 同目标告警聚合窗口
+# aggregate_window = "2s"            # 同目标告警聚合窗口
 #
 ## 诊断记录保留策略（保存在 state.d/diagnoses/）
 # diagnose_retention = "168h"        # 7 天

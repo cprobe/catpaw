@@ -436,7 +436,7 @@ func (c *AIConfig) applyDefaults() {
 		c.ToolTimeout = Duration(10 * time.Second)
 	}
 	if time.Duration(c.AggregateWindow) == 0 {
-		c.AggregateWindow = Duration(5 * time.Second)
+		c.AggregateWindow = Duration(2 * time.Second)
 	}
 	if time.Duration(c.DiagnoseRetention) == 0 {
 		c.DiagnoseRetention = Duration(7 * 24 * time.Hour)

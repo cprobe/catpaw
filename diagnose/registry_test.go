@@ -120,21 +120,60 @@ func TestRegistryListAllToolsEmpty(t *testing.T) {
 
 func TestRegistryAccessorFactory(t *testing.T) {
 	r := NewToolRegistry()
-	r.RegisterAccessorFactory("redis", func(ctx context.Context, insRef any) (any, error) {
-		return "mock-accessor", nil
+	r.RegisterAccessorFactory("redis", func(ctx context.Context, insRef any, target string) (any, error) {
+		return "mock-accessor-" + target, nil
 	})
 
-	acc, err := r.CreateAccessor(context.Background(), "redis", nil)
+	acc, err := r.CreateAccessor(context.Background(), "redis", nil, "10.0.0.1:6379")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if acc != "mock-accessor" {
-		t.Errorf("accessor = %v, want mock-accessor", acc)
+	if acc != "mock-accessor-10.0.0.1:6379" {
+		t.Errorf("accessor = %v, want mock-accessor-10.0.0.1:6379", acc)
 	}
 
-	_, err = r.CreateAccessor(context.Background(), "unknown", nil)
+	_, err = r.CreateAccessor(context.Background(), "unknown", nil, "")
 	if err == nil {
 		t.Fatal("expected error for unknown plugin")
+	}
+}
+
+func TestRegistryBaselinePlugins(t *testing.T) {
+	r := NewToolRegistry()
+
+	r.RegisterPreCollector("cpu", func(ctx context.Context, _ any) string { return "cpu data" })
+	r.RegisterPreCollector("mem", func(ctx context.Context, _ any) string { return "mem data" })
+	r.RegisterPreCollector("disk", func(ctx context.Context, _ any) string { return "disk data" })
+
+	r.RegisterBaselinePlugin("cpu")
+	r.RegisterBaselinePlugin("mem")
+	r.RegisterBaselinePlugin("disk")
+	r.RegisterBaselinePlugin("cpu") // duplicate should be ignored
+
+	baseline := r.RunBaselinePreCollectors(context.Background(), "")
+	if len(baseline) != 3 {
+		t.Fatalf("expected 3 baseline entries, got %d", len(baseline))
+	}
+
+	baseline2 := r.RunBaselinePreCollectors(context.Background(), "mem")
+	if len(baseline2) != 2 {
+		t.Fatalf("expected 2 baseline entries (mem excluded), got %d", len(baseline2))
+	}
+	if _, ok := baseline2["mem"]; ok {
+		t.Fatal("mem should be excluded")
+	}
+	if baseline2["cpu"] != "cpu data" {
+		t.Fatalf("cpu baseline mismatch: %q", baseline2["cpu"])
+	}
+}
+
+func TestRegistryPreCollectorNoAccessor(t *testing.T) {
+	r := NewToolRegistry()
+	r.RegisterPreCollector("cpu", func(ctx context.Context, _ any) string { return "ok" })
+
+	data := r.RunPreCollector(context.Background(), "cpu", nil)
+	if data != "ok" {
+		t.Fatalf("local PreCollector should work with nil accessor, got %q", data)
 	}
 }
 

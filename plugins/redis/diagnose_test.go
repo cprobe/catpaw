@@ -15,7 +15,7 @@ func TestRegisterDiagnoseTools(t *testing.T) {
 
 	expectedTools := []string{
 		"redis_info", "redis_slowlog", "redis_client_list", "redis_config_get",
-		"redis_dbsize", "redis_latency", "redis_memory_doctor", "redis_memory_stats",
+		"redis_latency", "redis_memory_analysis",
 	}
 	for _, name := range expectedTools {
 		tool, ok := registry.Get(name)
@@ -27,6 +27,13 @@ func TestRegisterDiagnoseTools(t *testing.T) {
 		}
 		if tool.RemoteExecute == nil {
 			t.Fatalf("tool %q has nil RemoteExecute", name)
+		}
+	}
+
+	removedTools := []string{"redis_dbsize", "redis_memory_doctor", "redis_memory_stats"}
+	for _, name := range removedTools {
+		if _, ok := registry.Get(name); ok {
+			t.Fatalf("tool %q should have been removed/merged but is still registered", name)
 		}
 	}
 
@@ -44,6 +51,36 @@ func TestRegisterDiagnoseTools(t *testing.T) {
 		if !strings.Contains(listing, name) {
 			t.Fatalf("ListTools output missing %q:\n%s", name, listing)
 		}
+	}
+}
+
+func TestPreCollectorRegistered(t *testing.T) {
+	registry := diagnose.NewToolRegistry()
+	p := &RedisPlugin{}
+	p.RegisterDiagnoseTools(registry)
+
+	result := registry.RunPreCollector(context.Background(), "redis", nil)
+	if result != "" {
+		t.Fatal("PreCollector with nil accessor should return empty string")
+	}
+
+	result = registry.RunPreCollector(context.Background(), "unknown", nil)
+	if result != "" {
+		t.Fatal("PreCollector for unregistered plugin should return empty string")
+	}
+}
+
+func TestDiagnoseHintsRegistered(t *testing.T) {
+	registry := diagnose.NewToolRegistry()
+	p := &RedisPlugin{}
+	p.RegisterDiagnoseTools(registry)
+
+	hints := registry.GetDiagnoseHints("redis")
+	if hints == "" {
+		t.Fatal("DiagnoseHints for redis should not be empty")
+	}
+	if !strings.Contains(hints, "内存告警") {
+		t.Fatal("DiagnoseHints should contain memory alert route")
 	}
 }
 
@@ -84,7 +121,7 @@ func TestAccessorFactoryRegistered(t *testing.T) {
 	p.RegisterDiagnoseTools(registry)
 
 	// Factory should fail with wrong type
-	_, err := registry.CreateAccessor(context.Background(), "redis", "not-an-instance")
+	_, err := registry.CreateAccessor(context.Background(), "redis", "not-an-instance", "127.0.0.1:6379")
 	if err == nil {
 		t.Fatal("expected error for wrong instanceRef type")
 	}

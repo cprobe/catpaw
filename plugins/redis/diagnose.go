@@ -16,13 +16,16 @@ var _ plugins.Diagnosable = (*RedisPlugin)(nil)
 // RegisterDiagnoseTools implements plugins.Diagnosable for RedisPlugin.
 // It registers read-only diagnostic tools and the accessor factory.
 func (p *RedisPlugin) RegisterDiagnoseTools(registry *diagnose.ToolRegistry) {
-	registry.RegisterCategory("redis", "redis", "Redis diagnostic tools (INFO, SLOWLOG, CLIENT LIST, CONFIG GET, DBSIZE, LATENCY, MEMORY DOCTOR/STATS)", diagnose.ToolScopeRemote)
+	registry.RegisterCategory("redis", "redis", "Redis diagnostic tools (INFO, SLOWLOG, CLIENT LIST, CONFIG GET, LATENCY, MEMORY ANALYSIS)", diagnose.ToolScopeRemote)
 
 	registry.Register("redis", diagnose.DiagnoseTool{
-		Name:        "redis_info",
-		Description: "Execute Redis INFO command for a specific section (server, clients, memory, stats, replication, cpu, keyspace, persistence, all)",
+		Name: "redis_info",
+		Description: "Execute Redis INFO command. Sections: server (version/uptime/mode), clients (connections/blocked), " +
+			"memory (used/peak/fragmentation), stats (ops/hits/misses/evictions), replication (role/lag/slaves), " +
+			"cpu, keyspace (per-db keys/expires/avg_ttl), persistence (rdb/aof status), all (everything). " +
+			"Default: all. NOTE: INFO all is pre-collected in context — use this only for refreshing specific sections.",
 		Parameters: []diagnose.ToolParam{
-			{Name: "section", Type: "string", Description: "INFO section name, e.g. memory, replication, all", Required: false},
+			{Name: "section", Type: "string", Description: "INFO section: server, clients, memory, stats, replication, cpu, keyspace, persistence, all", Required: false},
 		},
 		Scope: diagnose.ToolScopeRemote,
 		RemoteExecute: func(ctx context.Context, session *diagnose.DiagnoseSession, args map[string]string) (string, error) {
@@ -116,23 +119,6 @@ func (p *RedisPlugin) RegisterDiagnoseTools(registry *diagnose.ToolRegistry) {
 	})
 
 	registry.Register("redis", diagnose.DiagnoseTool{
-		Name:        "redis_dbsize",
-		Description: "Get the number of keys in the current Redis database (DBSIZE)",
-		Scope:       diagnose.ToolScopeRemote,
-		RemoteExecute: func(ctx context.Context, session *diagnose.DiagnoseSession, args map[string]string) (string, error) {
-			acc, err := getAccessor(session)
-			if err != nil {
-				return "", err
-			}
-			result, dbErr := acc.DBSize()
-			if dbErr != nil {
-				return "", fmt.Errorf("redis DBSIZE: %w", dbErr)
-			}
-			return result, nil
-		},
-	})
-
-	registry.Register("redis", diagnose.DiagnoseTool{
 		Name:        "redis_latency",
 		Description: "Show latest latency events by event type (LATENCY LATEST). Requires latency-monitor-threshold to be set (e.g. CONFIG SET latency-monitor-threshold 100). Returns event name, timestamp, latest latency ms, max latency ms.",
 		Scope:       diagnose.ToolScopeRemote,
@@ -153,46 +139,47 @@ func (p *RedisPlugin) RegisterDiagnoseTools(registry *diagnose.ToolRegistry) {
 	})
 
 	registry.Register("redis", diagnose.DiagnoseTool{
-		Name:        "redis_memory_doctor",
-		Description: "Run Redis built-in memory health check (MEMORY DOCTOR). Returns diagnostic advice about memory issues: fragmentation, peak usage, RSS overhead, etc.",
+		Name:        "redis_memory_analysis",
+		Description: "Combined memory diagnosis: runs both MEMORY DOCTOR (health advice) and MEMORY STATS (detailed breakdown including dataset size, overhead, fragmentation ratio, allocator stats, replication/AOF buffers). More granular than INFO memory.",
 		Scope:       diagnose.ToolScopeRemote,
 		RemoteExecute: func(ctx context.Context, session *diagnose.DiagnoseSession, args map[string]string) (string, error) {
 			acc, err := getAccessor(session)
 			if err != nil {
 				return "", err
 			}
-			result, memErr := acc.Command("MEMORY", "DOCTOR")
-			if memErr != nil {
-				return "", fmt.Errorf("redis MEMORY DOCTOR: %w", memErr)
+			var b strings.Builder
+
+			doctor, doctorErr := acc.Command("MEMORY", "DOCTOR")
+			if doctorErr != nil {
+				fmt.Fprintf(&b, "[MEMORY DOCTOR] error: %v\n\n", doctorErr)
+			} else {
+				fmt.Fprintf(&b, "[MEMORY DOCTOR]\n%s\n\n", doctor)
 			}
-			return result, nil
+
+			stats, statsErr := acc.Command("MEMORY", "STATS")
+			if statsErr != nil {
+				fmt.Fprintf(&b, "[MEMORY STATS] error: %v\n", statsErr)
+			} else {
+				fmt.Fprintf(&b, "[MEMORY STATS]\n%s\n", stats)
+			}
+
+			if doctorErr != nil && statsErr != nil {
+				return "", fmt.Errorf("redis MEMORY DOCTOR: %w; MEMORY STATS: %w", doctorErr, statsErr)
+			}
+			return b.String(), nil
 		},
 	})
 
-	registry.Register("redis", diagnose.DiagnoseTool{
-		Name:        "redis_memory_stats",
-		Description: "Show detailed memory breakdown (MEMORY STATS): dataset size, overhead, fragmentation ratio, allocator stats, replication/AOF buffers. More granular than INFO memory.",
-		Scope:       diagnose.ToolScopeRemote,
-		RemoteExecute: func(ctx context.Context, session *diagnose.DiagnoseSession, args map[string]string) (string, error) {
-			acc, err := getAccessor(session)
-			if err != nil {
-				return "", err
-			}
-			result, memErr := acc.Command("MEMORY", "STATS")
-			if memErr != nil {
-				return "", fmt.Errorf("redis MEMORY STATS: %w", memErr)
-			}
-			return result, nil
-		},
-	})
-
-	registry.RegisterAccessorFactory("redis", func(ctx context.Context, instanceRef any) (any, error) {
+	registry.RegisterAccessorFactory("redis", func(ctx context.Context, instanceRef any, target string) (any, error) {
 		ins, ok := instanceRef.(*Instance)
 		if !ok {
 			return nil, fmt.Errorf("redis accessor factory: expected *Instance, got %T", instanceRef)
 		}
+		if target == "" && len(ins.Targets) > 0 {
+			target = ins.Targets[0]
+		}
 		return NewRedisAccessor(RedisAccessorConfig{
-			Target:      ins.Targets[0],
+			Target:      target,
 			Username:    ins.Username,
 			Password:    ins.Password,
 			DB:          ins.DB,
@@ -202,6 +189,27 @@ func (p *RedisPlugin) RegisterDiagnoseTools(registry *diagnose.ToolRegistry) {
 			DialFunc:    ins.dialFunc,
 		})
 	})
+
+	registry.RegisterPreCollector("redis", func(ctx context.Context, accessor any) string {
+		acc, ok := accessor.(*RedisAccessor)
+		if !ok {
+			return ""
+		}
+		raw, err := acc.InfoRaw("all")
+		if err != nil {
+			return ""
+		}
+		return raw
+	})
+
+	registry.SetDiagnoseHints("redis", `
+- 内存告警 → 先分析预采集数据中的 memory 部分，再调 redis_memory_analysis + redis_config_get pattern=maxmemory*
+- 延迟/慢查询 → redis_slowlog + redis_latency（可并行调用）
+- 连接数告警 → redis_client_list + redis_config_get pattern=maxclients
+- 复制告警 → 预采集数据中的 replication 部分已包含完整复制状态，通常无需额外工具
+- 持久化告警 → 预采集数据中的 persistence 部分 + redis_config_get pattern=save*
+- 通用排查 → 预采集数据已含 INFO all，直接分析后按需深入
+- 首轮建议并行调用 2-3 个最相关的工具，避免逐个调用浪费轮次`)
 }
 
 func getAccessor(session *diagnose.DiagnoseSession) (*RedisAccessor, error) {

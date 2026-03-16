@@ -13,46 +13,46 @@ import (
 
 var _ plugins.Diagnosable = (*MemPlugin)(nil)
 
+func memOverviewReport(ctx context.Context) string {
+	var b strings.Builder
+
+	v, err := gomem.VirtualMemoryWithContext(ctx)
+	if err != nil {
+		fmt.Fprintf(&b, "[Physical Memory] error: %v\n", err)
+	} else {
+		fmt.Fprintf(&b, "[Physical Memory]\n")
+		fmt.Fprintf(&b, "Total:     %s\n", humanBytes(v.Total))
+		fmt.Fprintf(&b, "Used:      %s (%.1f%%)\n", humanBytes(v.Used), v.UsedPercent)
+		fmt.Fprintf(&b, "Available: %s\n", humanBytes(v.Available))
+		fmt.Fprintf(&b, "Buffers:   %s\n", humanBytes(v.Buffers))
+		fmt.Fprintf(&b, "Cached:    %s\n", humanBytes(v.Cached))
+		fmt.Fprintf(&b, "Free:      %s\n", humanBytes(v.Free))
+	}
+
+	fmt.Fprintf(&b, "\n[Swap]\n")
+	s, swapErr := gomem.SwapMemoryWithContext(ctx)
+	if swapErr != nil {
+		fmt.Fprintf(&b, "error: %v\n", swapErr)
+	} else if s.Total == 0 {
+		fmt.Fprintf(&b, "Swap: not configured (total = 0)\n")
+	} else {
+		fmt.Fprintf(&b, "Total: %s\n", humanBytes(s.Total))
+		fmt.Fprintf(&b, "Used:  %s (%.1f%%)\n", humanBytes(s.Used), s.UsedPercent)
+		fmt.Fprintf(&b, "Free:  %s\n", humanBytes(s.Free))
+	}
+
+	return b.String()
+}
+
 func (p *MemPlugin) RegisterDiagnoseTools(registry *diagnose.ToolRegistry) {
-	registry.RegisterCategory("mem", "mem", "Memory diagnostic tools (usage, swap, top processes)", diagnose.ToolScopeLocal)
+	registry.RegisterCategory("mem", "mem", "Memory diagnostic tools (overview, top processes)", diagnose.ToolScopeLocal)
 
 	registry.Register("mem", diagnose.DiagnoseTool{
-		Name:        "mem_usage",
-		Description: "Show system memory usage (total, used, available, buffers, cached, usage percent)",
+		Name:        "mem_overview",
+		Description: "Combined memory snapshot: physical memory (total/used/available/buffers/cached/free with usage%) and swap (total/used/free with usage%). NOTE: pre-collected in system baseline — use only when refreshing.",
 		Scope:       diagnose.ToolScopeLocal,
 		Execute: func(ctx context.Context, args map[string]string) (string, error) {
-			v, err := gomem.VirtualMemoryWithContext(ctx)
-			if err != nil {
-				return "", fmt.Errorf("get virtual memory: %w", err)
-			}
-			var b strings.Builder
-			fmt.Fprintf(&b, "Total:     %s\n", humanBytes(v.Total))
-			fmt.Fprintf(&b, "Used:      %s (%.1f%%)\n", humanBytes(v.Used), v.UsedPercent)
-			fmt.Fprintf(&b, "Available: %s\n", humanBytes(v.Available))
-			fmt.Fprintf(&b, "Buffers:   %s\n", humanBytes(v.Buffers))
-			fmt.Fprintf(&b, "Cached:    %s\n", humanBytes(v.Cached))
-			fmt.Fprintf(&b, "Free:      %s\n", humanBytes(v.Free))
-			return b.String(), nil
-		},
-	})
-
-	registry.Register("mem", diagnose.DiagnoseTool{
-		Name:        "swap_usage",
-		Description: "Show swap memory usage (total, used, free, usage percent)",
-		Scope:       diagnose.ToolScopeLocal,
-		Execute: func(ctx context.Context, args map[string]string) (string, error) {
-			s, err := gomem.SwapMemoryWithContext(ctx)
-			if err != nil {
-				return "", fmt.Errorf("get swap memory: %w", err)
-			}
-			if s.Total == 0 {
-				return "Swap: not configured (total = 0)\n", nil
-			}
-			var b strings.Builder
-			fmt.Fprintf(&b, "Total: %s\n", humanBytes(s.Total))
-			fmt.Fprintf(&b, "Used:  %s (%.1f%%)\n", humanBytes(s.Used), s.UsedPercent)
-			fmt.Fprintf(&b, "Free:  %s\n", humanBytes(s.Free))
-			return b.String(), nil
+			return memOverviewReport(ctx), nil
 		},
 	})
 
@@ -120,6 +120,16 @@ func (p *MemPlugin) RegisterDiagnoseTools(registry *diagnose.ToolRegistry) {
 			return b.String(), nil
 		},
 	})
+
+	registry.SetDiagnoseHints("mem", `
+- 内存使用率告警 → mem_overview（已包含 physical + swap），若 usage 高则 top_mem_processes 定位进程
+- Swap 告警 → mem_overview 查看 swap 使用率，top_mem_processes 找内存大户
+- 首轮建议并行调用 mem_overview + top_mem_processes，一次拿到全部所需数据`)
+
+	registry.RegisterPreCollector("mem", func(ctx context.Context, _ any) string {
+		return memOverviewReport(ctx)
+	})
+	registry.RegisterBaselinePlugin("mem")
 }
 
 func humanBytes(b uint64) string {
