@@ -2,7 +2,8 @@
 
 - catpaw 配合 Flashduty、PagerDuty 等 On-call 产品使用
 - catpaw 的实现可以参考 Sensu、Nagios 等同类产品，站在巨人的肩膀上，自然要超越他们
-- catpaw 的职能不能和 Prometheus + Node-Exporter 重叠
+- catpaw 的职能不能和 Prometheus + Exporter 生态重叠（包括 node-exporter、redis-exporter、mysqld-exporter 等），不做指标采集，不暴露 `/metrics`
+- catpaw 可以配置服务认证信息（Redis 密码、MySQL 账号等），但仅用于按需诊断，不用于持续采集。详见 [产品边界](product-boundary.md)
 - catpaw 应该更加关注异常，而不是关注历史指标趋势
 
 ## 1. 设计优雅、灵活、易用
