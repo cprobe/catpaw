@@ -40,11 +40,11 @@ enabled = true
 #
 ## 模型优先级列表（按顺序尝试，第一个可用的就用它；故障时自动切换下一个）
 ## 调整顺序即可切换模型用于对比测试，也可用 catpaw chat --model <name> 固定某个模型
-# model_priority = ["gpt4o", "deepseek"]
+# model_priority = ["deepseek"]
 #
 ## 运行时参数（与模型无关）
 # max_rounds = 15                    # AI Agent 最大交互轮次（工具多时建议 12~20）
-# request_timeout = "60s"            # 单次 AI 请求超时
+# request_timeout = "90s"            # 单次 AI 请求超时
 # max_retries = 2                    # AI API 失败重试次数
 # retry_backoff = "2s"               # 重试间隔
 #
@@ -75,7 +75,7 @@ enabled = true
 # [ai.models.deepseek]
 # base_url = "https://api.deepseek.com/v1"
 # api_key = "${DEEPSEEK_API_KEY}"
-# model = "deepseek-reasoner"
+# model = "deepseek-chat"
 # max_tokens = 8000
 # context_window = 64000
 # input_price = 0.55
