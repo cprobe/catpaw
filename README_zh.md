@@ -67,6 +67,7 @@ catpaw 是一个轻量的监控 Agent，具备 **AI 智能诊断**能力。
 | `ping` | ICMP 可达性、丢包率、时延检查 |
 | `procfd` | 进程级 fd 使用率监控，预防 nofile 耗尽 |
 | `procnum` | 进程数量检查（多种查找方式） |
+| `redis` | Redis 监控插件，支持单机、主从和 Redis Cluster，并提供 Redis 专用 AI 诊断工具 |
 | `scriptfilter` | 脚本输出行过滤匹配告警 |
 | `secmod` | SELinux/AppArmor 基线检查（Linux） |
 | `sockstat` | TCP listen 队列溢出检测（Linux） |
@@ -93,6 +94,8 @@ AI 诊断被触发时（告警、巡检或 Chat），AI Agent 可调用以下工
 🐳 **服务**：systemd 服务状态、失败服务列表、定时器列表、Docker ps/inspect
 
 🔌 **远程插件**（如 Redis）会注册专用诊断工具，用于对目标实例进行深入检查。
+
+Redis 插件的检查项、集群语义和诊断工具见 [plugins/redis/README.md](plugins/redis/README.md)。
 
 🔗 **MCP 外部工具**：接入 Prometheus、Jaeger、CMDB 或任何 MCP 兼容数据源后，AI 自动发现并使用其提供的工具。
 
