@@ -10,6 +10,10 @@ plugins/
     └── myplugin.go
 ```
 
+对于简单插件，这样的单文件结构已经足够；对于 remote 类、诊断能力较强、
+支持多 target / partial / accessor / cluster 扩展的插件，建议参考
+[`plugins/redis/`](../plugins/redis/README.md) 的拆分方式。
+
 ## 步骤
 
 ### 1. 定义 Instance 和 Plugin 结构体
@@ -142,6 +146,25 @@ repeat_number = 3
 ## 多维度检查
 
 一个 Instance 可以检查多个维度（如 disk 插件同时检查空间使用率、inode 使用率、可写性）。每个维度产出独立的 Event，通过不同的 `check` label 区分。
+
+## Remote 插件参考实现
+
+下面这些插件适合用来参考不同复杂度的 remote 采集模式：
+
+- `plugins/ping/`：简单 remote target、多 target 基础模式
+- `plugins/http/`：远端请求 + richer attrs 的模式
+- [`plugins/redis/`](../plugins/redis/README.md)：**推荐标杆**
+
+`plugins/redis/` 适合作为后续 MySQL、MongoDB 等 remote 类插件的模板，
+因为它已经覆盖了这些常见需求：
+
+- 多 target 并发采集
+- `inFlight` 防重入和 hung 检测
+- partial 配置复用
+- `Init()` 集中校验与默认值
+- Accessor 抽象（Gather 与 Diagnose 共用）
+- 诊断工具、PreCollector、DiagnoseHints
+- 单元测试、协议级 fake server 测试、integration 测试
 
 ## Partial 模式
 

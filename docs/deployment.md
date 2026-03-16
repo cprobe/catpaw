@@ -6,26 +6,15 @@
 
 从 [GitHub Releases](https://github.com/cprobe/catpaw/releases) 下载对应平台的压缩包并解压。
 
-### 2. 配置
-
-编辑 `conf.d/config.toml`，填入 FlashDuty 的 integration_key：
-
-```toml
-[flashduty]
-url = "https://api.flashcat.cloud/event/push/alert/standard?integration_key=YOUR_KEY"
-```
-
-按需启用或调整 `conf.d/p.*` 下的插件配置。
-
-### 3. 测试运行
+### 2. 测试运行
 
 ```bash
-./catpaw -test
+./catpaw run
 ```
 
 确认输出无误后，正式启动。
 
-### 4. systemd 服务（推荐）
+### 3. systemd 服务（推荐）
 
 创建 `/etc/systemd/system/catpaw.service`：
 
@@ -36,7 +25,7 @@ After=network.target
 
 [Service]
 Type=simple
-ExecStart=/opt/catpaw/catpaw -configs /opt/catpaw/conf.d
+ExecStart=/opt/catpaw/catpaw run
 WorkingDirectory=/opt/catpaw
 Restart=always
 RestartSec=5
@@ -60,7 +49,7 @@ sudo systemctl start catpaw
 sudo journalctl -u catpaw -f
 ```
 
-### 5. 热加载
+### 4. 热加载
 
 catpaw 支持通过 `SIGHUP` 信号热加载插件配置（新增/修改/删除插件目录），无需重启：
 

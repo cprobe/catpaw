@@ -7,13 +7,13 @@
 ## Related Files
 
 - [`test-plan.md`](./test-plan.md)
-- [`docker-compose.yml`](./docker-compose.yml)
-- [`redis.go`](./redis.go)
-- [`redis_test.go`](./redis_test.go)
+- [`../testdata/master-replica/docker-compose.yml`](../testdata/master-replica/docker-compose.yml)
+- [`../redis.go`](../redis.go)
+- [`../redis_test.go`](../redis_test.go)
 
 ## Environment
 
-- Docker Compose stack from `plugins/redis/docker-compose.yml`
+- Docker Compose stack from `plugins/redis/testdata/master-replica/docker-compose.yml`
 - `redis-master`: `127.0.0.1:6379`
 - `redis-replica`: `127.0.0.1:6380`
 - password: `catpaw-test`

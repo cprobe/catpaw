@@ -8,13 +8,13 @@
 
 - [`test-plan.md`](./test-plan.md)
 - [`test-report.md`](./test-report.md)
-- [`docker-compose.yml`](./docker-compose.yml)
-- [`redis.go`](./redis.go)
-- [`redis_test.go`](./redis_test.go)
+- [`../testdata/master-replica/docker-compose.yml`](../testdata/master-replica/docker-compose.yml)
+- [`../redis.go`](../redis.go)
+- [`../redis_test.go`](../redis_test.go)
 
 ## 测试环境
 
-- 使用 `plugins/redis/docker-compose.yml` 启动测试环境
+- 使用 `plugins/redis/testdata/master-replica/docker-compose.yml` 启动测试环境
 - `redis-master`：`127.0.0.1:6379`
 - `redis-replica`：`127.0.0.1:6380`
 - Redis 密码：`catpaw-test`

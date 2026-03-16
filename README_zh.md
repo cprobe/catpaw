@@ -240,7 +240,6 @@ kill -HUP $(pidof catpaw)
 | 文档 | 说明 |
 | --- | --- |
 | [开发必读](docs/dev-guide.md) | 架构全貌与代码导航 — **新人请先读这篇** |
-| [命令行参数](docs/cli.md) | 完整的命令行参数说明 |
 | [部署指南](docs/deployment.md) | 二进制部署、systemd 服务、Docker 部署 |
 | [事件数据模型](docs/event-model.md) | Event 结构、Labels 设计、AlertKey 规则、告警生命周期 |
 | [插件开发指南](docs/plugin-development.md) | 如何新增一个 catpaw 插件 |

@@ -2,7 +2,12 @@
 ## ===== 最小可用示例（30 秒跑起来）=====
 ## 1) 在 instances.targets 里填 Redis 地址，支持 host 或 host:port
 ## 2) 如果 Redis 需要认证，填 password 或 username + password
-## 3) 默认只做 connectivity；其他维度按需开启
+## 3) 默认一定会做 connectivity
+## 4) 如果目标是 Redis Cluster 节点，默认还会自动做两项低开销检查：
+##    - redis::cluster_state：集群状态是否为 ok
+##    - redis::cluster_topology：是否存在 fail/pfail 节点、slot 缺失
+## 5) 其他阈值类检查（内存、连接数、QPS、复制角色等）默认关闭，按需开启
+## 6) 高开销操作不会进入周期采集；大 key 等问题留给 diagnose / inspect 阶段处理
 ## 例子：
 ## targets = ["127.0.0.1", "10.0.0.8:6379"]
 ## password = "pa$$word"
@@ -31,6 +36,16 @@ id = "default"
 ## 选择数据库（默认 0）
 # db = 0
 
+## Redis 运行模式：
+## - auto(默认)：自动探测 standalone / cluster
+## - standalone：永不执行 cluster 检查，适合明确不是 Cluster 的实例
+## - cluster：强制要求目标是 Redis Cluster 节点；若不是，会产出配置/运行错误事件
+# mode = "auto"
+
+## 可选：给同一 Redis Cluster 的多个节点打统一标签，方便在告警平台聚合查看
+## 只影响事件 label，不参与连接
+# cluster_name = "prod-cache"
+
 ## TLS 可选配置（原生 TLS / stunnel / 云 Redis）
 # use_tls = false
 # tls_ca = "/etc/catpaw/ca.pem"
@@ -57,6 +72,16 @@ severity = "Critical"
 # expect = "master"
 # severity = "Warning"
 
+## 复制延迟检测（默认关闭）
+## 指标单位是“字节偏移差”，不是时间
+## - replica 节点：master_repl_offset - slave_repl_offset
+## - master 节点：取所有 replica 中的最大 offset 差
+## 这个阈值高度依赖业务写入速率，默认不建议开箱即用就开启
+## check 标签固定为 "redis::repl_lag"
+# [partials.repl_lag]
+# warn_ge = "1MB"
+# critical_ge = "10MB"
+
 ## 客户端连接数检测（两个阈值都为 0 则关闭）
 ## check 标签固定为 "redis::connected_clients"
 # [partials.connected_clients]
@@ -75,6 +100,15 @@ severity = "Critical"
 # [partials.used_memory]
 # warn_ge = "512MB"
 # critical_ge = "1GB"
+
+## maxmemory 使用百分比检测（默认关闭）
+## 只有 Redis 配置了 maxmemory > 0 时才有意义
+## 如果 maxmemory = 0（无限制），该检查会输出 Ok 并说明已跳过
+## 百分比阈值必须在 0-100 之间
+## check 标签固定为 "redis::used_memory_pct"
+# [partials.used_memory_pct]
+# warn_ge = 80
+# critical_ge = 90
 
 ## 每周期被拒绝连接数检测（两个阈值都为 0 则关闭）
 ## 注意：这是采集周期内 delta，不是 Redis 启动以来累计值
@@ -126,6 +160,26 @@ severity = "Critical"
 # enabled = true
 # severity = "Critical"
 
+## Redis Cluster 状态检测
+## 默认行为：
+## - mode=auto 且目标是 cluster 节点时，自动启用
+## - mode=standalone 时自动跳过
+## 这是低成本、低误报的硬故障检测，建议保持默认开启
+## check 标签固定为 "redis::cluster_state"
+# [partials.cluster_state]
+# disabled = false
+# severity = "Critical"
+
+## Redis Cluster 拓扑硬故障检测
+## 默认行为：
+## - mode=auto 且目标是 cluster 节点时，自动启用
+## - 只检查保守的硬故障：fail/pfail 节点、slot 缺失、cluster_slots_fail > 0
+## - 不默认检查“master 是否有 replica”“负载是否均衡”这类依赖业务拓扑的策略
+## 这个检查会额外执行一次 CLUSTER NODES，仍然是轻量命令，但比 cluster_state 略重
+## check 标签固定为 "redis::cluster_topology"
+# [partials.cluster_topology]
+# disabled = false
+
 
 [[instances]]
 targets = [
@@ -140,6 +194,13 @@ partial = "default"
 ## 追加标签（可选）
 # labels = { env="production", team="middleware" }
 
+## 如果这个实例明确不是 Cluster，可以显式写 mode = "standalone"
+## 这样 agent 不会额外做 cluster 探测，最省开销
+# mode = "auto"
+
+## 可选：给该实例所属的 Cluster 打标签
+# cluster_name = "prod-cache"
+
 [instances.alerting]
 for_duration = 0
 repeat_interval = "5m"
@@ -148,7 +209,8 @@ repeat_number = 3
 # disable_recovery_notification = false
 
 ## AI 智能诊断（生效前提：config.toml 中已配置 [ai]）
-## Redis 有 8 个深度诊断工具（slowlog、内存分析、连接状态等）
+## Redis 有多种深度诊断工具（slowlog、cluster info、内存分析、连接状态等）
+## 注意：重操作只在诊断时触发，不会进入周期采集
 [instances.diagnose]
 enabled = true
 # min_severity = "Warning"           # 最低触发级别: Warning(默认) / Critical

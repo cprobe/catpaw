@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"path"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -41,28 +43,43 @@ type fakeRedisServer struct {
 }
 
 type fakeRedisConfig struct {
-	username         string
-	password         string
-	role             string
-	masterLinkStatus string
-	masterHost       string
-	masterPort       string
-	connectedSlaves  int
-	connectedClients int
-	blockedClients   int
-	rejectedConn     int
-	evictedKeys      uint64
-	expiredKeys      uint64
-	opsPerSecond     int
-	usedMemory       int64
-	maxMemory        int64
-	loading          int
-	rdbLastBgsave    string
-	rdbInProgress    int
-	aofEnabled       int
-	aofLastWrite     string
-	aofRewrite       int
-	pingDelay        time.Duration
+	username             string
+	password             string
+	redisMode            string
+	role                 string
+	masterReplOffset     int64
+	slaveReplOffset      int64
+	replicaOffsets       []int64
+	masterLinkStatus     string
+	masterHost           string
+	masterPort           string
+	connectedSlaves      int
+	connectedClients     int
+	blockedClients       int
+	rejectedConn         int
+	evictedKeys          uint64
+	expiredKeys          uint64
+	opsPerSecond         int
+	usedMemory           int64
+	maxMemory            int64
+	loading              int
+	rdbLastBgsave        string
+	rdbInProgress        int
+	aofEnabled           int
+	aofLastWrite         string
+	aofRewrite           int
+	clusterState         string
+	clusterSlotsAssigned int
+	clusterSlotsFail     int
+	clusterKnownNodes    int
+	clusterNodes         string
+	keys                 map[string]fakeRedisKey
+	pingDelay            time.Duration
+}
+
+type fakeRedisKey struct {
+	Type string
+	Size int64
 }
 
 func startFakeRedisServer(t *testing.T, cfg fakeRedisConfig) *fakeRedisServer {
@@ -136,10 +153,26 @@ func (s *fakeRedisServer) handleConn(conn net.Conn) {
 			if len(args) > 1 {
 				section = strings.ToLower(args[1])
 			}
+			redisMode := cfg.redisMode
+			if redisMode == "" {
+				redisMode = redisModeStandalone
+			}
 			switch section {
+			case "server":
+				writeRESPBulkString(conn, fmt.Sprintf("# Server\r\nredis_mode:%s\r\n", redisMode))
 			case "replication":
-				writeRESPBulkString(conn, fmt.Sprintf("# Replication\r\nrole:%s\r\nmaster_link_status:%s\r\nmaster_host:%s\r\nmaster_port:%s\r\nconnected_slaves:%d\r\n",
-					cfg.role, cfg.masterLinkStatus, cfg.masterHost, cfg.masterPort, cfg.connectedSlaves))
+				replication := fmt.Sprintf("# Replication\r\nrole:%s\r\nmaster_link_status:%s\r\nmaster_host:%s\r\nmaster_port:%s\r\nconnected_slaves:%d\r\n",
+					cfg.role, cfg.masterLinkStatus, cfg.masterHost, cfg.masterPort, cfg.connectedSlaves)
+				if cfg.role == "master" && cfg.masterReplOffset > 0 {
+					replication += fmt.Sprintf("master_repl_offset:%d\r\n", cfg.masterReplOffset)
+					for i, offset := range cfg.replicaOffsets {
+						replication += fmt.Sprintf("slave%d:ip=10.0.0.%d,port=6379,state=online,offset=%d,lag=1\r\n", i, i+10, offset)
+					}
+				}
+				if (cfg.role == "slave" || cfg.role == "replica") && (cfg.masterReplOffset > 0 || cfg.slaveReplOffset > 0) {
+					replication += fmt.Sprintf("master_repl_offset:%d\r\nslave_repl_offset:%d\r\n", cfg.masterReplOffset, cfg.slaveReplOffset)
+				}
+				writeRESPBulkString(conn, replication)
 			case "clients":
 				writeRESPBulkString(conn, fmt.Sprintf("# Clients\r\nconnected_clients:%d\r\nblocked_clients:%d\r\n",
 					cfg.connectedClients, cfg.blockedClients))
@@ -155,6 +188,107 @@ func (s *fakeRedisServer) handleConn(conn net.Conn) {
 			default:
 				writeRESPBulkString(conn, "")
 			}
+		case "CLUSTER":
+			if cfg.redisMode != redisModeCluster {
+				writeRESPError(conn, "ERR This instance has cluster support disabled")
+				continue
+			}
+			if len(args) < 2 {
+				writeRESPError(conn, "ERR wrong number of arguments for 'cluster' command")
+				continue
+			}
+			switch strings.ToUpper(args[1]) {
+			case "INFO":
+				clusterState := cfg.clusterState
+				if clusterState == "" {
+					clusterState = "ok"
+				}
+				slotsAssigned := cfg.clusterSlotsAssigned
+				if slotsAssigned == 0 {
+					slotsAssigned = clusterSlotsFull
+				}
+				clusterKnownNodes := cfg.clusterKnownNodes
+				if clusterKnownNodes == 0 {
+					clusterKnownNodes = 6
+				}
+				writeRESPBulkString(conn, fmt.Sprintf("# Cluster\r\ncluster_state:%s\r\ncluster_slots_assigned:%d\r\ncluster_slots_ok:%d\r\ncluster_slots_fail:%d\r\ncluster_known_nodes:%d\r\ncluster_size:3\r\n",
+					clusterState, slotsAssigned, slotsAssigned-cfg.clusterSlotsFail, cfg.clusterSlotsFail, clusterKnownNodes))
+			case "NODES":
+				clusterNodes := cfg.clusterNodes
+				if clusterNodes == "" {
+					clusterNodes = strings.Join([]string{
+						"07c37dfeb2352e0b2f91c9f3f2f7f3f7a4f9c1aa 10.0.0.10:6379@16379 master - 0 0 1 connected 0-5460",
+						"18c37dfeb2352e0b2f91c9f3f2f7f3f7a4f9c1ab 10.0.0.11:6379@16379 master - 0 0 2 connected 5461-10922",
+						"29c37dfeb2352e0b2f91c9f3f2f7f3f7a4f9c1ac 10.0.0.12:6379@16379 master - 0 0 3 connected 10923-16383",
+					}, "\n")
+				}
+				writeRESPBulkString(conn, clusterNodes)
+			default:
+				writeRESPError(conn, "ERR unknown subcommand for CLUSTER")
+			}
+		case "SCAN":
+			cursor := "0"
+			if len(args) > 1 {
+				cursor = args[1]
+			}
+			match := "*"
+			count := 10
+			for i := 2; i+1 < len(args); i += 2 {
+				switch strings.ToUpper(args[i]) {
+				case "MATCH":
+					match = args[i+1]
+				case "COUNT":
+					if n, err := strconv.Atoi(args[i+1]); err == nil && n > 0 {
+						count = n
+					}
+				}
+			}
+			var keys []string
+			for key := range cfg.keys {
+				ok, err := path.Match(match, key)
+				if err == nil && ok {
+					keys = append(keys, key)
+				}
+			}
+			sort.Strings(keys)
+			start, _ := strconv.Atoi(cursor)
+			if start < 0 {
+				start = 0
+			}
+			end := start + count
+			if end > len(keys) {
+				end = len(keys)
+			}
+			nextCursor := "0"
+			if end < len(keys) {
+				nextCursor = strconv.Itoa(end)
+			}
+			reply := []any{nextCursor, make([]any, 0, end-start)}
+			for _, key := range keys[start:end] {
+				reply[1] = append(reply[1].([]any), key)
+			}
+			writeRESPValue(conn, reply)
+		case "TYPE":
+			if len(args) < 2 {
+				writeRESPError(conn, "ERR wrong number of arguments for 'type' command")
+				continue
+			}
+			if key, ok := cfg.keys[args[1]]; ok {
+				writeRESPSimpleString(conn, key.Type)
+			} else {
+				writeRESPSimpleString(conn, "none")
+			}
+		case "MEMORY":
+			if len(args) < 3 || strings.ToUpper(args[1]) != "USAGE" {
+				writeRESPError(conn, "ERR unsupported MEMORY command")
+				continue
+			}
+			key, ok := cfg.keys[args[2]]
+			if !ok {
+				writeRESPNull(conn)
+				continue
+			}
+			writeRESPInteger(conn, key.Size)
 		default:
 			writeRESPError(conn, "ERR unknown command")
 		}
@@ -209,6 +343,36 @@ func writeRESPError(conn net.Conn, s string) {
 
 func writeRESPBulkString(conn net.Conn, s string) {
 	_, _ = conn.Write([]byte(fmt.Sprintf("$%d\r\n%s\r\n", len(s), s)))
+}
+
+func writeRESPNull(conn net.Conn) {
+	_, _ = conn.Write([]byte("$-1\r\n"))
+}
+
+func writeRESPInteger(conn net.Conn, n int64) {
+	_, _ = conn.Write([]byte(fmt.Sprintf(":%d\r\n", n)))
+}
+
+func writeRESPArray(conn net.Conn, arr []any) {
+	_, _ = conn.Write([]byte(fmt.Sprintf("*%d\r\n", len(arr))))
+	for _, item := range arr {
+		writeRESPValue(conn, item)
+	}
+}
+
+func writeRESPValue(conn net.Conn, v any) {
+	switch val := v.(type) {
+	case string:
+		writeRESPBulkString(conn, val)
+	case []any:
+		writeRESPArray(conn, val)
+	case int:
+		writeRESPInteger(conn, int64(val))
+	case int64:
+		writeRESPInteger(conn, val)
+	default:
+		writeRESPBulkString(conn, fmt.Sprintf("%v", val))
+	}
 }
 
 func collectByCheck(events []*types.Event) map[string]*types.Event {
@@ -276,6 +440,46 @@ func TestInitValidation(t *testing.T) {
 				},
 			},
 			wantErr: "instantaneous_ops_per_sec.warn_ge",
+		},
+		{
+			name: "bad repl lag threshold",
+			ins: &Instance{
+				Targets: []string{"127.0.0.1"},
+				ReplLag: ReplLagCheck{
+					WarnGe:     config.Size(10 * 1024 * 1024),
+					CriticalGe: config.Size(1024 * 1024),
+				},
+			},
+			wantErr: "repl_lag.warn_ge",
+		},
+		{
+			name: "bad used memory pct threshold",
+			ins: &Instance{
+				Targets: []string{"127.0.0.1"},
+				UsedMemoryPct: PercentCheck{
+					WarnGe:     95,
+					CriticalGe: 80,
+				},
+			},
+			wantErr: "used_memory_pct.warn_ge",
+		},
+		{
+			name: "used memory pct too large",
+			ins: &Instance{
+				Targets: []string{"127.0.0.1"},
+				UsedMemoryPct: PercentCheck{
+					CriticalGe: 101,
+				},
+			},
+			wantErr: "used_memory_pct thresholds must be <= 100",
+		},
+		{
+			name: "invalid mode",
+			ins: &Instance{
+				Targets: []string{"127.0.0.1"},
+				Mode:    "sentinel",
+			},
+			wantErr: "invalid mode",
 		},
 	}
 
@@ -544,6 +748,273 @@ func TestGatherRoleMismatch(t *testing.T) {
 	}
 }
 
+func TestGatherClusterHealthy(t *testing.T) {
+	initTestConfig(t)
+
+	srv := startFakeRedisServer(t, fakeRedisConfig{
+		redisMode:            redisModeCluster,
+		clusterState:         "ok",
+		clusterSlotsAssigned: clusterSlotsFull,
+		clusterSlotsFail:     0,
+		clusterKnownNodes:    6,
+	})
+	defer srv.Close()
+
+	ins := &Instance{
+		Targets:     []string{"redis.local:6379"},
+		ClusterName: "prod-cache",
+		dialFunc:    srv.Dial,
+	}
+	if err := ins.Init(); err != nil {
+		t.Fatal(err)
+	}
+
+	q := safe.NewQueue[*types.Event]()
+	ins.Gather(q)
+	events := q.PopBackAll()
+	if len(events) != 3 {
+		t.Fatalf("expected 3 events, got %d", len(events))
+	}
+
+	byCheck := collectByCheck(events)
+	if byCheck["redis::connectivity"].EventStatus != types.EventStatusOk {
+		t.Fatalf("connectivity: expected Ok, got %s", byCheck["redis::connectivity"].EventStatus)
+	}
+	if byCheck["redis::cluster_state"].EventStatus != types.EventStatusOk {
+		t.Fatalf("cluster_state: expected Ok, got %s", byCheck["redis::cluster_state"].EventStatus)
+	}
+	if byCheck["redis::cluster_topology"].EventStatus != types.EventStatusOk {
+		t.Fatalf("cluster_topology: expected Ok, got %s", byCheck["redis::cluster_topology"].EventStatus)
+	}
+	if byCheck["redis::cluster_state"].Labels["cluster_name"] != "prod-cache" {
+		t.Fatalf("expected cluster_name label, got %q", byCheck["redis::cluster_state"].Labels["cluster_name"])
+	}
+}
+
+func TestGatherClusterFailure(t *testing.T) {
+	initTestConfig(t)
+
+	srv := startFakeRedisServer(t, fakeRedisConfig{
+		redisMode:            redisModeCluster,
+		clusterState:         "fail",
+		clusterSlotsAssigned: 12000,
+		clusterSlotsFail:     128,
+		clusterNodes: strings.Join([]string{
+			"07c37dfeb2352e0b2f91c9f3f2f7f3f7a4f9c1aa 10.0.0.10:6379@16379 master,fail - 0 0 1 connected 0-5460",
+			"18c37dfeb2352e0b2f91c9f3f2f7f3f7a4f9c1ab 10.0.0.11:6379@16379 master - 0 0 2 connected 5461-10922",
+			"29c37dfeb2352e0b2f91c9f3f2f7f3f7a4f9c1ac 10.0.0.12:6379@16379 master - 0 0 3 connected 10923-12000",
+		}, "\n"),
+	})
+	defer srv.Close()
+
+	ins := &Instance{
+		Targets:  []string{"redis.local:6379"},
+		dialFunc: srv.Dial,
+	}
+	if err := ins.Init(); err != nil {
+		t.Fatal(err)
+	}
+
+	q := safe.NewQueue[*types.Event]()
+	ins.Gather(q)
+	events := q.PopBackAll()
+	if len(events) != 3 {
+		t.Fatalf("expected 3 events, got %d", len(events))
+	}
+
+	byCheck := collectByCheck(events)
+	if byCheck["redis::cluster_state"].EventStatus != types.EventStatusCritical {
+		t.Fatalf("cluster_state: expected Critical, got %s", byCheck["redis::cluster_state"].EventStatus)
+	}
+	if byCheck["redis::cluster_topology"].EventStatus != types.EventStatusCritical {
+		t.Fatalf("cluster_topology: expected Critical, got %s", byCheck["redis::cluster_topology"].EventStatus)
+	}
+	if !strings.Contains(byCheck["redis::cluster_topology"].Description, "fail node") {
+		t.Fatalf("expected fail node detail, got %q", byCheck["redis::cluster_topology"].Description)
+	}
+}
+
+func TestGatherClusterModeMismatch(t *testing.T) {
+	initTestConfig(t)
+
+	srv := startFakeRedisServer(t, fakeRedisConfig{
+		redisMode: redisModeStandalone,
+	})
+	defer srv.Close()
+
+	ins := &Instance{
+		Targets:  []string{"redis.local:6379"},
+		Mode:     redisModeCluster,
+		dialFunc: srv.Dial,
+	}
+	if err := ins.Init(); err != nil {
+		t.Fatal(err)
+	}
+
+	q := safe.NewQueue[*types.Event]()
+	ins.Gather(q)
+	events := q.PopBackAll()
+	if len(events) != 3 {
+		t.Fatalf("expected 3 events, got %d", len(events))
+	}
+
+	byCheck := collectByCheck(events)
+	if byCheck["redis::cluster_state"].EventStatus != types.EventStatusCritical {
+		t.Fatalf("cluster_state: expected Critical, got %s", byCheck["redis::cluster_state"].EventStatus)
+	}
+	if byCheck["redis::cluster_topology"].EventStatus != types.EventStatusCritical {
+		t.Fatalf("cluster_topology: expected Critical, got %s", byCheck["redis::cluster_topology"].EventStatus)
+	}
+}
+
+func TestGatherReplicaReplLag(t *testing.T) {
+	initTestConfig(t)
+
+	srv := startFakeRedisServer(t, fakeRedisConfig{
+		role:             "slave",
+		masterLinkStatus: "up",
+		masterReplOffset: 10 * 1024 * 1024,
+		slaveReplOffset:  8 * 1024 * 1024,
+	})
+	defer srv.Close()
+
+	ins := &Instance{
+		Targets: []string{"redis.local:6379"},
+		ReplLag: ReplLagCheck{
+			WarnGe:     config.Size(1024 * 1024),
+			CriticalGe: config.Size(5 * 1024 * 1024),
+		},
+		dialFunc: srv.Dial,
+	}
+	if err := ins.Init(); err != nil {
+		t.Fatal(err)
+	}
+
+	q := safe.NewQueue[*types.Event]()
+	ins.Gather(q)
+	events := q.PopBackAll()
+	if len(events) != 2 {
+		t.Fatalf("expected 2 events, got %d", len(events))
+	}
+
+	byCheck := collectByCheck(events)
+	if byCheck["redis::repl_lag"].EventStatus != types.EventStatusWarning {
+		t.Fatalf("repl_lag: expected Warning, got %s", byCheck["redis::repl_lag"].EventStatus)
+	}
+}
+
+func TestGatherMasterReplLag(t *testing.T) {
+	initTestConfig(t)
+
+	srv := startFakeRedisServer(t, fakeRedisConfig{
+		role:             "master",
+		connectedSlaves:  2,
+		masterReplOffset: 10 * 1024 * 1024,
+		replicaOffsets: []int64{
+			9 * 1024 * 1024,
+			4 * 1024 * 1024,
+		},
+	})
+	defer srv.Close()
+
+	ins := &Instance{
+		Targets: []string{"redis.local:6379"},
+		ReplLag: ReplLagCheck{
+			WarnGe:     config.Size(1024 * 1024),
+			CriticalGe: config.Size(5 * 1024 * 1024),
+		},
+		dialFunc: srv.Dial,
+	}
+	if err := ins.Init(); err != nil {
+		t.Fatal(err)
+	}
+
+	q := safe.NewQueue[*types.Event]()
+	ins.Gather(q)
+	events := q.PopBackAll()
+	if len(events) != 2 {
+		t.Fatalf("expected 2 events, got %d", len(events))
+	}
+
+	byCheck := collectByCheck(events)
+	if byCheck["redis::repl_lag"].EventStatus != types.EventStatusCritical {
+		t.Fatalf("repl_lag: expected Critical, got %s", byCheck["redis::repl_lag"].EventStatus)
+	}
+}
+
+func TestGatherUsedMemoryPct(t *testing.T) {
+	initTestConfig(t)
+
+	srv := startFakeRedisServer(t, fakeRedisConfig{
+		role:       "master",
+		usedMemory: 90 * 1024 * 1024,
+		maxMemory:  100 * 1024 * 1024,
+	})
+	defer srv.Close()
+
+	ins := &Instance{
+		Targets: []string{"redis.local:6379"},
+		UsedMemoryPct: PercentCheck{
+			WarnGe:     80,
+			CriticalGe: 95,
+		},
+		dialFunc: srv.Dial,
+	}
+	if err := ins.Init(); err != nil {
+		t.Fatal(err)
+	}
+
+	q := safe.NewQueue[*types.Event]()
+	ins.Gather(q)
+	events := q.PopBackAll()
+	if len(events) != 2 {
+		t.Fatalf("expected 2 events, got %d", len(events))
+	}
+
+	byCheck := collectByCheck(events)
+	if byCheck["redis::used_memory_pct"].EventStatus != types.EventStatusWarning {
+		t.Fatalf("used_memory_pct: expected Warning, got %s", byCheck["redis::used_memory_pct"].EventStatus)
+	}
+}
+
+func TestGatherUsedMemoryPctUnlimitedMaxmemory(t *testing.T) {
+	initTestConfig(t)
+
+	srv := startFakeRedisServer(t, fakeRedisConfig{
+		role:       "master",
+		usedMemory: 90 * 1024 * 1024,
+		maxMemory:  0,
+	})
+	defer srv.Close()
+
+	ins := &Instance{
+		Targets: []string{"redis.local:6379"},
+		UsedMemoryPct: PercentCheck{
+			WarnGe:     80,
+			CriticalGe: 95,
+		},
+		dialFunc: srv.Dial,
+	}
+	if err := ins.Init(); err != nil {
+		t.Fatal(err)
+	}
+
+	q := safe.NewQueue[*types.Event]()
+	ins.Gather(q)
+	events := q.PopBackAll()
+	if len(events) != 2 {
+		t.Fatalf("expected 2 events, got %d", len(events))
+	}
+
+	byCheck := collectByCheck(events)
+	if byCheck["redis::used_memory_pct"].EventStatus != types.EventStatusOk {
+		t.Fatalf("used_memory_pct: expected Ok, got %s", byCheck["redis::used_memory_pct"].EventStatus)
+	}
+	if !strings.Contains(byCheck["redis::used_memory_pct"].Description, "skipped") {
+		t.Fatalf("expected skip description, got %q", byCheck["redis::used_memory_pct"].Description)
+	}
+}
+
 func TestGatherPersistenceFailure(t *testing.T) {
 	initTestConfig(t)
 
@@ -687,6 +1158,8 @@ func TestNormalizeTarget(t *testing.T) {
 func TestApplyPartials(t *testing.T) {
 	initTestConfig(t)
 
+	boolPtr := func(v bool) *bool { return &v }
+
 	plugin := &RedisPlugin{
 		Partials: []Partial{
 			{
@@ -710,6 +1183,12 @@ func TestApplyPartials(t *testing.T) {
 					Expect:   "master",
 					Severity: types.EventStatusWarning,
 				},
+				ClusterState: ClusterStateCheck{
+					Disabled: boolPtr(true),
+				},
+				ClusterTopology: ClusterTopologyCheck{
+					Disabled: boolPtr(true),
+				},
 			},
 		},
 		Instances: []*Instance{
@@ -718,6 +1197,12 @@ func TestApplyPartials(t *testing.T) {
 				Targets: []string{"redis.local:6379"},
 				ConnectedClients: CountCheck{
 					WarnGe: 200,
+				},
+				ClusterState: ClusterStateCheck{
+					Disabled: boolPtr(false),
+				},
+				ClusterTopology: ClusterTopologyCheck{
+					Disabled: boolPtr(false),
 				},
 			},
 			{
@@ -754,6 +1239,12 @@ func TestApplyPartials(t *testing.T) {
 	if ins0.Connectivity.Severity != types.EventStatusWarning {
 		t.Fatalf("ins0 connectivity.severity: expected Warning, got %s", ins0.Connectivity.Severity)
 	}
+	if ins0.ClusterState.Disabled == nil || *ins0.ClusterState.Disabled {
+		t.Fatalf("ins0 cluster_state.disabled: expected explicit false to be preserved, got %+v", ins0.ClusterState.Disabled)
+	}
+	if ins0.ClusterTopology.Disabled == nil || *ins0.ClusterTopology.Disabled {
+		t.Fatalf("ins0 cluster_topology.disabled: expected explicit false to be preserved, got %+v", ins0.ClusterTopology.Disabled)
+	}
 
 	ins1 := plugin.Instances[1]
 	if ins1.Password != "override-pass" {
@@ -761,6 +1252,12 @@ func TestApplyPartials(t *testing.T) {
 	}
 	if ins1.Concurrency != 5 {
 		t.Fatalf("ins1 concurrency: expected 5, got %d", ins1.Concurrency)
+	}
+	if ins1.ClusterState.Disabled == nil || !*ins1.ClusterState.Disabled {
+		t.Fatalf("ins1 cluster_state.disabled: expected partial true to apply, got %+v", ins1.ClusterState.Disabled)
+	}
+	if ins1.ClusterTopology.Disabled == nil || !*ins1.ClusterTopology.Disabled {
+		t.Fatalf("ins1 cluster_topology.disabled: expected partial true to apply, got %+v", ins1.ClusterTopology.Disabled)
 	}
 
 	ins2 := plugin.Instances[2]

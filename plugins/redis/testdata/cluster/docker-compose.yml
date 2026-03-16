@@ -1,0 +1,265 @@
+services:
+  redis-cluster-node-1:
+    image: redis:7.2-alpine
+    container_name: catpaw-redis-cluster-node-1
+    command:
+      - redis-server
+      - --bind
+      - 0.0.0.0
+      - --protected-mode
+      - "no"
+      - --port
+      - "7000"
+      - --cluster-enabled
+      - "yes"
+      - --cluster-config-file
+      - nodes.conf
+      - --cluster-node-timeout
+      - "5000"
+      - --appendonly
+      - "yes"
+      - --dir
+      - /data
+      - --requirepass
+      - catpaw-test
+      - --masterauth
+      - catpaw-test
+    ports:
+      - "7000:7000"
+    volumes:
+      - redis-cluster-node-1-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-p", "7000", "-a", "catpaw-test", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  redis-cluster-node-2:
+    image: redis:7.2-alpine
+    container_name: catpaw-redis-cluster-node-2
+    command:
+      - redis-server
+      - --bind
+      - 0.0.0.0
+      - --protected-mode
+      - "no"
+      - --port
+      - "7001"
+      - --cluster-enabled
+      - "yes"
+      - --cluster-config-file
+      - nodes.conf
+      - --cluster-node-timeout
+      - "5000"
+      - --appendonly
+      - "yes"
+      - --dir
+      - /data
+      - --requirepass
+      - catpaw-test
+      - --masterauth
+      - catpaw-test
+    ports:
+      - "7001:7001"
+    volumes:
+      - redis-cluster-node-2-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-p", "7001", "-a", "catpaw-test", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  redis-cluster-node-3:
+    image: redis:7.2-alpine
+    container_name: catpaw-redis-cluster-node-3
+    command:
+      - redis-server
+      - --bind
+      - 0.0.0.0
+      - --protected-mode
+      - "no"
+      - --port
+      - "7002"
+      - --cluster-enabled
+      - "yes"
+      - --cluster-config-file
+      - nodes.conf
+      - --cluster-node-timeout
+      - "5000"
+      - --appendonly
+      - "yes"
+      - --dir
+      - /data
+      - --requirepass
+      - catpaw-test
+      - --masterauth
+      - catpaw-test
+    ports:
+      - "7002:7002"
+    volumes:
+      - redis-cluster-node-3-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-p", "7002", "-a", "catpaw-test", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  redis-cluster-node-4:
+    image: redis:7.2-alpine
+    container_name: catpaw-redis-cluster-node-4
+    command:
+      - redis-server
+      - --bind
+      - 0.0.0.0
+      - --protected-mode
+      - "no"
+      - --port
+      - "7003"
+      - --cluster-enabled
+      - "yes"
+      - --cluster-config-file
+      - nodes.conf
+      - --cluster-node-timeout
+      - "5000"
+      - --appendonly
+      - "yes"
+      - --dir
+      - /data
+      - --requirepass
+      - catpaw-test
+      - --masterauth
+      - catpaw-test
+    ports:
+      - "7003:7003"
+    volumes:
+      - redis-cluster-node-4-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-p", "7003", "-a", "catpaw-test", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  redis-cluster-node-5:
+    image: redis:7.2-alpine
+    container_name: catpaw-redis-cluster-node-5
+    command:
+      - redis-server
+      - --bind
+      - 0.0.0.0
+      - --protected-mode
+      - "no"
+      - --port
+      - "7004"
+      - --cluster-enabled
+      - "yes"
+      - --cluster-config-file
+      - nodes.conf
+      - --cluster-node-timeout
+      - "5000"
+      - --appendonly
+      - "yes"
+      - --dir
+      - /data
+      - --requirepass
+      - catpaw-test
+      - --masterauth
+      - catpaw-test
+    ports:
+      - "7004:7004"
+    volumes:
+      - redis-cluster-node-5-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-p", "7004", "-a", "catpaw-test", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  redis-cluster-node-6:
+    image: redis:7.2-alpine
+    container_name: catpaw-redis-cluster-node-6
+    command:
+      - redis-server
+      - --bind
+      - 0.0.0.0
+      - --protected-mode
+      - "no"
+      - --port
+      - "7005"
+      - --cluster-enabled
+      - "yes"
+      - --cluster-config-file
+      - nodes.conf
+      - --cluster-node-timeout
+      - "5000"
+      - --appendonly
+      - "yes"
+      - --dir
+      - /data
+      - --requirepass
+      - catpaw-test
+      - --masterauth
+      - catpaw-test
+    ports:
+      - "7005:7005"
+    volumes:
+      - redis-cluster-node-6-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-p", "7005", "-a", "catpaw-test", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  redis-cluster-init:
+    image: redis:7.2-alpine
+    container_name: catpaw-redis-cluster-init
+    depends_on:
+      redis-cluster-node-1:
+        condition: service_healthy
+      redis-cluster-node-2:
+        condition: service_healthy
+      redis-cluster-node-3:
+        condition: service_healthy
+      redis-cluster-node-4:
+        condition: service_healthy
+      redis-cluster-node-5:
+        condition: service_healthy
+      redis-cluster-node-6:
+        condition: service_healthy
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - >
+        echo "yes" |
+        redis-cli --cluster create
+        redis-cluster-node-1:7000
+        redis-cluster-node-2:7001
+        redis-cluster-node-3:7002
+        redis-cluster-node-4:7003
+        redis-cluster-node-5:7004
+        redis-cluster-node-6:7005
+        --cluster-replicas 1
+        -a catpaw-test;
+        tail -f /dev/null
+
+  redis-cluster-loadgen:
+    image: redis:7.2-alpine
+    container_name: catpaw-redis-cluster-loadgen
+    profiles: ["tools"]
+    depends_on:
+      redis-cluster-init:
+        condition: service_started
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - >
+        echo "Cluster load generator is idle.";
+        echo "Examples:";
+        echo "  docker compose -f docker-compose.cluster.yml exec redis-cluster-loadgen redis-cli -c -h redis-cluster-node-1 -p 7000 -a catpaw-test set cart:1 payload";
+        echo "  docker compose -f docker-compose.cluster.yml exec redis-cluster-loadgen redis-benchmark -c 20 -n 5000 -h redis-cluster-node-1 -p 7000 -a catpaw-test -t set,get";
+        tail -f /dev/null
+
+volumes:
+  redis-cluster-node-1-data:
+  redis-cluster-node-2-data:
+  redis-cluster-node-3-data:
+  redis-cluster-node-4-data:
+  redis-cluster-node-5-data:
+  redis-cluster-node-6-data:
