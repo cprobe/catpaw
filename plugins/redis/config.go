@@ -16,60 +16,69 @@ import (
 // partial template merge, Init defaults, validation, and normalization helpers.
 
 func (p *RedisPlugin) ApplyPartials() error {
+	partialByID := make(map[string]Partial, len(p.Partials))
+	for _, partial := range p.Partials {
+		if partial.ID == "" {
+			return fmt.Errorf("redis partial id must not be empty")
+		}
+		if _, exists := partialByID[partial.ID]; exists {
+			return fmt.Errorf("duplicate redis partial id %q", partial.ID)
+		}
+		partialByID[partial.ID] = partial
+	}
+
 	for i := 0; i < len(p.Instances); i++ {
 		id := p.Instances[i].Partial
 		if id == "" {
 			continue
 		}
-		for _, partial := range p.Partials {
-			if partial.ID != id {
-				continue
-			}
-			ins := p.Instances[i]
-			if ins.Concurrency == 0 {
-				ins.Concurrency = partial.Concurrency
-			}
-			if ins.Timeout == 0 {
-				ins.Timeout = partial.Timeout
-			}
-			if ins.ReadTimeout == 0 {
-				ins.ReadTimeout = partial.ReadTimeout
-			}
-			if ins.Username == "" {
-				ins.Username = partial.Username
-			}
-			if ins.Password == "" {
-				ins.Password = partial.Password
-			}
-			if ins.DB == 0 {
-				ins.DB = partial.DB
-			}
-			if ins.Mode == "" {
-				ins.Mode = partial.Mode
-			}
-			if ins.ClusterName == "" {
-				ins.ClusterName = partial.ClusterName
-			}
-			mergeClientConfig(&ins.ClientConfig, partial.ClientConfig)
-			mergeConnectivityCheck(&ins.Connectivity, partial.Connectivity)
-			mergeResponseTimeCheck(&ins.ResponseTime, partial.ResponseTime)
-			mergeRoleCheck(&ins.Role, partial.Role)
-			mergeReplLagCheck(&ins.ReplLag, partial.ReplLag)
-			mergeCountCheck(&ins.ConnectedClients, partial.ConnectedClients)
-			mergeCountCheck(&ins.BlockedClients, partial.BlockedClients)
-			mergeMemoryUsageCheck(&ins.UsedMemory, partial.UsedMemory)
-			mergePercentCheck(&ins.UsedMemoryPct, partial.UsedMemoryPct)
-			mergeCountCheck(&ins.RejectedConn, partial.RejectedConn)
-			mergeMasterLinkCheck(&ins.MasterLink, partial.MasterLink)
-			mergeMinCountCheck(&ins.ConnectedSlaves, partial.ConnectedSlaves)
-			mergeCountCheck(&ins.EvictedKeys, partial.EvictedKeys)
-			mergeCountCheck(&ins.ExpiredKeys, partial.ExpiredKeys)
-			mergeOpsPerSecondCheck(&ins.OpsPerSecond, partial.OpsPerSecond)
-			mergePersistenceCheck(&ins.Persistence, partial.Persistence)
-			mergeClusterStateCheck(&ins.ClusterState, partial.ClusterState)
-			mergeClusterTopologyCheck(&ins.ClusterTopology, partial.ClusterTopology)
-			break
+		partial, ok := partialByID[id]
+		if !ok {
+			return fmt.Errorf("redis partial %q not found", id)
 		}
+		ins := p.Instances[i]
+		if ins.Concurrency == 0 {
+			ins.Concurrency = partial.Concurrency
+		}
+		if ins.Timeout == 0 {
+			ins.Timeout = partial.Timeout
+		}
+		if ins.ReadTimeout == 0 {
+			ins.ReadTimeout = partial.ReadTimeout
+		}
+		if ins.Username == "" {
+			ins.Username = partial.Username
+		}
+		if ins.Password == "" {
+			ins.Password = partial.Password
+		}
+		if ins.DB == 0 {
+			ins.DB = partial.DB
+		}
+		if ins.Mode == "" {
+			ins.Mode = partial.Mode
+		}
+		if ins.ClusterName == "" {
+			ins.ClusterName = partial.ClusterName
+		}
+		mergeClientConfig(&ins.ClientConfig, partial.ClientConfig)
+		mergeConnectivityCheck(&ins.Connectivity, partial.Connectivity)
+		mergeResponseTimeCheck(&ins.ResponseTime, partial.ResponseTime)
+		mergeRoleCheck(&ins.Role, partial.Role)
+		mergeReplLagCheck(&ins.ReplLag, partial.ReplLag)
+		mergeCountCheck(&ins.ConnectedClients, partial.ConnectedClients)
+		mergeCountCheck(&ins.BlockedClients, partial.BlockedClients)
+		mergeMemoryUsageCheck(&ins.UsedMemory, partial.UsedMemory)
+		mergePercentCheck(&ins.UsedMemoryPct, partial.UsedMemoryPct)
+		mergeCountCheck(&ins.RejectedConn, partial.RejectedConn)
+		mergeMasterLinkCheck(&ins.MasterLink, partial.MasterLink)
+		mergeMinCountCheck(&ins.ConnectedSlaves, partial.ConnectedSlaves)
+		mergeCountCheck(&ins.EvictedKeys, partial.EvictedKeys)
+		mergeCountCheck(&ins.ExpiredKeys, partial.ExpiredKeys)
+		mergeOpsPerSecondCheck(&ins.OpsPerSecond, partial.OpsPerSecond)
+		mergePersistenceCheck(&ins.Persistence, partial.Persistence)
+		mergeClusterStateCheck(&ins.ClusterState, partial.ClusterState)
+		mergeClusterTopologyCheck(&ins.ClusterTopology, partial.ClusterTopology)
 	}
 	return nil
 }
@@ -162,8 +171,8 @@ func mergeOpsPerSecondCheck(dst *OpsPerSecondCheck, src OpsPerSecondCheck) {
 }
 
 func mergePersistenceCheck(dst *PersistenceCheck, src PersistenceCheck) {
-	if !dst.Enabled {
-		dst.Enabled = src.Enabled
+	if dst.Enabled == nil {
+		dst.Enabled = cloneBoolPtr(src.Enabled)
 	}
 	if dst.Severity == "" {
 		dst.Severity = src.Severity
@@ -292,7 +301,7 @@ func (ins *Instance) Init() error {
 			return fmt.Errorf("invalid master_link_status.severity %q", ins.MasterLink.Severity)
 		}
 	}
-	if ins.Persistence.Enabled {
+	if ins.persistenceEnabled() {
 		if ins.Persistence.Severity == "" {
 			ins.Persistence.Severity = types.EventStatusCritical
 		} else if !types.EventStatusValid(ins.Persistence.Severity) {
@@ -344,6 +353,10 @@ func (ins *Instance) clusterTopologyEnabled() bool {
 	return ins.ClusterTopology.Disabled == nil || !*ins.ClusterTopology.Disabled
 }
 
+func (ins *Instance) persistenceEnabled() bool {
+	return ins.Persistence.Enabled != nil && *ins.Persistence.Enabled
+}
+
 func normalizeMasterLinkStatus(status string) (string, error) {
 	status = strings.ToLower(strings.TrimSpace(status))
 	switch status {
@@ -371,8 +384,8 @@ func normalizeRedisMode(mode string) (string, error) {
 }
 
 func mergeClientConfig(dst *tlscfg.ClientConfig, src tlscfg.ClientConfig) {
-	if !dst.UseTLS {
-		dst.UseTLS = src.UseTLS
+	if dst.UseTLS == nil {
+		dst.UseTLS = cloneBoolPtr(src.UseTLS)
 	}
 	if dst.TLSCA == "" {
 		dst.TLSCA = src.TLSCA
@@ -386,8 +399,8 @@ func mergeClientConfig(dst *tlscfg.ClientConfig, src tlscfg.ClientConfig) {
 	if dst.TLSKeyPwd == "" {
 		dst.TLSKeyPwd = src.TLSKeyPwd
 	}
-	if !dst.InsecureSkipVerify {
-		dst.InsecureSkipVerify = src.InsecureSkipVerify
+	if dst.InsecureSkipVerify == nil {
+		dst.InsecureSkipVerify = cloneBoolPtr(src.InsecureSkipVerify)
 	}
 	if dst.ServerName == "" {
 		dst.ServerName = src.ServerName

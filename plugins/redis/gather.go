@@ -139,12 +139,12 @@ func (ins *Instance) gatherTarget(q *safe.Queue[*types.Event], target string) {
 	if ins.Mode != redisModeStandalone {
 		serverInfo, err := infoSection("server")
 		if err != nil {
-			if ins.clusterStateEnabled() {
+			if ins.Mode == redisModeCluster && ins.clusterStateEnabled() {
 				q.PushFront(ins.newEvent("redis::cluster_state", target).
 					SetEventStatus(types.EventStatusCritical).
 					SetDescription(fmt.Sprintf("failed to query redis server info: %v", err)))
 			}
-			if ins.clusterTopologyEnabled() {
+			if ins.Mode == redisModeCluster && ins.clusterTopologyEnabled() {
 				q.PushFront(ins.newEvent("redis::cluster_topology", target).
 					SetEventStatus(types.EventStatusCritical).
 					SetDescription(fmt.Sprintf("failed to query redis server info: %v", err)))
@@ -327,7 +327,7 @@ func (ins *Instance) gatherTarget(q *safe.Queue[*types.Event], target string) {
 		}
 	}
 
-	if ins.Persistence.Enabled {
+	if ins.persistenceEnabled() {
 		info, err := infoSection("persistence")
 		if err != nil {
 			q.PushFront(ins.newEvent("redis::persistence", target).

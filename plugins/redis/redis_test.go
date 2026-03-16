@@ -45,6 +45,8 @@ type fakeRedisServer struct {
 type fakeRedisConfig struct {
 	username             string
 	password             string
+	configGet            map[string]string
+	infoErrors           map[string]string
 	redisMode            string
 	role                 string
 	masterReplOffset     int64
@@ -153,6 +155,10 @@ func (s *fakeRedisServer) handleConn(conn net.Conn) {
 			if len(args) > 1 {
 				section = strings.ToLower(args[1])
 			}
+			if msg, ok := cfg.infoErrors[section]; ok {
+				writeRESPError(conn, msg)
+				continue
+			}
 			redisMode := cfg.redisMode
 			if redisMode == "" {
 				redisMode = redisModeStandalone
@@ -226,6 +232,28 @@ func (s *fakeRedisServer) handleConn(conn net.Conn) {
 			default:
 				writeRESPError(conn, "ERR unknown subcommand for CLUSTER")
 			}
+		case "CONFIG":
+			if len(args) < 3 || strings.ToUpper(args[1]) != "GET" {
+				writeRESPError(conn, "ERR unsupported CONFIG command")
+				continue
+			}
+			pattern := args[2]
+			if pattern == "" {
+				pattern = "*"
+			}
+			keys := make([]string, 0, len(cfg.configGet))
+			for key := range cfg.configGet {
+				ok, err := path.Match(pattern, key)
+				if err == nil && ok {
+					keys = append(keys, key)
+				}
+			}
+			sort.Strings(keys)
+			reply := make([]any, 0, len(keys)*2)
+			for _, key := range keys {
+				reply = append(reply, key, cfg.configGet[key])
+			}
+			writeRESPValue(conn, reply)
 		case "SCAN":
 			cursor := "0"
 			if len(args) > 1 {
@@ -522,6 +550,7 @@ func TestInitDefaultsAndNormalization(t *testing.T) {
 
 func TestGatherSuccess(t *testing.T) {
 	initTestConfig(t)
+	boolPtr := func(v bool) *bool { return &v }
 
 	srv := startFakeRedisServer(t, fakeRedisConfig{
 		password:         "secret",
@@ -590,7 +619,7 @@ func TestGatherSuccess(t *testing.T) {
 			CriticalGe: 10000,
 		},
 		Persistence: PersistenceCheck{
-			Enabled:  true,
+			Enabled:  boolPtr(true),
 			Severity: types.EventStatusCritical,
 		},
 		dialFunc: srv.Dial,
@@ -1017,6 +1046,7 @@ func TestGatherUsedMemoryPctUnlimitedMaxmemory(t *testing.T) {
 
 func TestGatherPersistenceFailure(t *testing.T) {
 	initTestConfig(t)
+	boolPtr := func(v bool) *bool { return &v }
 
 	srv := startFakeRedisServer(t, fakeRedisConfig{
 		role:          "master",
@@ -1030,7 +1060,7 @@ func TestGatherPersistenceFailure(t *testing.T) {
 	ins := &Instance{
 		Targets: []string{"redis.local:6379"},
 		Persistence: PersistenceCheck{
-			Enabled:  true,
+			Enabled:  boolPtr(true),
 			Severity: types.EventStatusCritical,
 		},
 		dialFunc: srv.Dial,
@@ -1097,10 +1127,11 @@ func TestGatherDeltaCountersBaseline(t *testing.T) {
 func TestInitTLSConfig(t *testing.T) {
 	initTestConfig(t)
 
+	boolPtr := func(v bool) *bool { return &v }
 	ins := &Instance{
 		Targets: []string{"redis.internal"},
 		ClientConfig: tlscfg.ClientConfig{
-			UseTLS: true,
+			UseTLS: boolPtr(true),
 		},
 	}
 	if err := ins.Init(); err != nil {
@@ -1183,6 +1214,13 @@ func TestApplyPartials(t *testing.T) {
 					Expect:   "master",
 					Severity: types.EventStatusWarning,
 				},
+				ClientConfig: tlscfg.ClientConfig{
+					UseTLS:             boolPtr(true),
+					InsecureSkipVerify: boolPtr(true),
+				},
+				Persistence: PersistenceCheck{
+					Enabled: boolPtr(true),
+				},
 				ClusterState: ClusterStateCheck{
 					Disabled: boolPtr(true),
 				},
@@ -1197,6 +1235,13 @@ func TestApplyPartials(t *testing.T) {
 				Targets: []string{"redis.local:6379"},
 				ConnectedClients: CountCheck{
 					WarnGe: 200,
+				},
+				ClientConfig: tlscfg.ClientConfig{
+					UseTLS:             boolPtr(false),
+					InsecureSkipVerify: boolPtr(false),
+				},
+				Persistence: PersistenceCheck{
+					Enabled: boolPtr(false),
 				},
 				ClusterState: ClusterStateCheck{
 					Disabled: boolPtr(false),
@@ -1239,6 +1284,15 @@ func TestApplyPartials(t *testing.T) {
 	if ins0.Connectivity.Severity != types.EventStatusWarning {
 		t.Fatalf("ins0 connectivity.severity: expected Warning, got %s", ins0.Connectivity.Severity)
 	}
+	if ins0.ClientConfig.UseTLS == nil || *ins0.ClientConfig.UseTLS {
+		t.Fatalf("ins0 use_tls: expected explicit false to be preserved, got %+v", ins0.ClientConfig.UseTLS)
+	}
+	if ins0.ClientConfig.InsecureSkipVerify == nil || *ins0.ClientConfig.InsecureSkipVerify {
+		t.Fatalf("ins0 insecure_skip_verify: expected explicit false to be preserved, got %+v", ins0.ClientConfig.InsecureSkipVerify)
+	}
+	if ins0.Persistence.Enabled == nil || *ins0.Persistence.Enabled {
+		t.Fatalf("ins0 persistence.enabled: expected explicit false to be preserved, got %+v", ins0.Persistence.Enabled)
+	}
 	if ins0.ClusterState.Disabled == nil || *ins0.ClusterState.Disabled {
 		t.Fatalf("ins0 cluster_state.disabled: expected explicit false to be preserved, got %+v", ins0.ClusterState.Disabled)
 	}
@@ -1253,6 +1307,15 @@ func TestApplyPartials(t *testing.T) {
 	if ins1.Concurrency != 5 {
 		t.Fatalf("ins1 concurrency: expected 5, got %d", ins1.Concurrency)
 	}
+	if ins1.ClientConfig.UseTLS == nil || !*ins1.ClientConfig.UseTLS {
+		t.Fatalf("ins1 use_tls: expected partial true to apply, got %+v", ins1.ClientConfig.UseTLS)
+	}
+	if ins1.ClientConfig.InsecureSkipVerify == nil || !*ins1.ClientConfig.InsecureSkipVerify {
+		t.Fatalf("ins1 insecure_skip_verify: expected partial true to apply, got %+v", ins1.ClientConfig.InsecureSkipVerify)
+	}
+	if ins1.Persistence.Enabled == nil || !*ins1.Persistence.Enabled {
+		t.Fatalf("ins1 persistence.enabled: expected partial true to apply, got %+v", ins1.Persistence.Enabled)
+	}
 	if ins1.ClusterState.Disabled == nil || !*ins1.ClusterState.Disabled {
 		t.Fatalf("ins1 cluster_state.disabled: expected partial true to apply, got %+v", ins1.ClusterState.Disabled)
 	}
@@ -1266,6 +1329,65 @@ func TestApplyPartials(t *testing.T) {
 	}
 	if ins2.Password != "" {
 		t.Fatalf("ins2 password: expected empty (no partial), got %s", ins2.Password)
+	}
+}
+
+func TestApplyPartialsMissing(t *testing.T) {
+	initTestConfig(t)
+
+	plugin := &RedisPlugin{
+		Instances: []*Instance{
+			{
+				Partial: "missing",
+				Targets: []string{"redis.local:6379"},
+			},
+		},
+	}
+
+	err := plugin.ApplyPartials()
+	if err == nil {
+		t.Fatal("expected missing partial error")
+	}
+	if !strings.Contains(err.Error(), `partial "missing" not found`) {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestConfigGetRedactsStructuredReply(t *testing.T) {
+	initTestConfig(t)
+
+	srv := startFakeRedisServer(t, fakeRedisConfig{
+		configGet: map[string]string{
+			"maxmemory":   "104857600",
+			"requirepass": "super-secret",
+			"masterauth":  "upstream-secret",
+		},
+	})
+	defer srv.Close()
+
+	acc, err := NewRedisAccessor(RedisAccessorConfig{
+		Target:      "redis.local:6379",
+		Timeout:     time.Second,
+		ReadTimeout: time.Second,
+		DialFunc:    srv.Dial,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer acc.Close()
+
+	out, err := acc.ConfigGet("*")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(out, "super-secret") || strings.Contains(out, "upstream-secret") {
+		t.Fatalf("sensitive config should be redacted, got:\n%s", out)
+	}
+	if strings.Count(out, "***REDACTED***") != 2 {
+		t.Fatalf("expected 2 redactions, got %d:\n%s", strings.Count(out, "***REDACTED***"), out)
+	}
+	if !strings.Contains(out, "maxmemory") || !strings.Contains(out, "104857600") {
+		t.Fatalf("non-sensitive config should be preserved, got:\n%s", out)
 	}
 }
 
@@ -1343,8 +1465,12 @@ func TestGatherRejectedConnectionsDelta(t *testing.T) {
 
 func TestGatherClientsErrorDoesNotBlockOtherChecks(t *testing.T) {
 	initTestConfig(t)
+	boolPtr := func(v bool) *bool { return &v }
 
 	srv := startFakeRedisServer(t, fakeRedisConfig{
+		infoErrors: map[string]string{
+			"clients": "ERR clients section unavailable",
+		},
 		role:          "master",
 		loading:       0,
 		rdbLastBgsave: "ok",
@@ -1365,7 +1491,7 @@ func TestGatherClientsErrorDoesNotBlockOtherChecks(t *testing.T) {
 			CriticalGe: config.Size(1024 * 1024 * 1024),
 		},
 		Persistence: PersistenceCheck{
-			Enabled:  true,
+			Enabled:  boolPtr(true),
 			Severity: types.EventStatusCritical,
 		},
 		dialFunc: srv.Dial,
@@ -1390,5 +1516,40 @@ func TestGatherClientsErrorDoesNotBlockOtherChecks(t *testing.T) {
 	}
 	if _, ok := byCheck["redis::persistence"]; !ok {
 		t.Fatal("expected persistence event (should not be blocked by clients check)")
+	}
+}
+
+func TestGatherAutoModeServerInfoFailureDoesNotEmitClusterEvents(t *testing.T) {
+	initTestConfig(t)
+
+	srv := startFakeRedisServer(t, fakeRedisConfig{
+		infoErrors: map[string]string{
+			"server": "ERR server section unavailable",
+		},
+		role: "master",
+	})
+	defer srv.Close()
+
+	ins := &Instance{
+		Targets:  []string{"redis.local:6379"},
+		dialFunc: srv.Dial,
+	}
+	if err := ins.Init(); err != nil {
+		t.Fatal(err)
+	}
+
+	q := safe.NewQueue[*types.Event]()
+	ins.Gather(q)
+	events := q.PopBackAll()
+	byCheck := collectByCheck(events)
+
+	if _, ok := byCheck["redis::cluster_state"]; ok {
+		t.Fatal("did not expect cluster_state event in auto mode when INFO server fails")
+	}
+	if _, ok := byCheck["redis::cluster_topology"]; ok {
+		t.Fatal("did not expect cluster_topology event in auto mode when INFO server fails")
+	}
+	if byCheck["redis::connectivity"].EventStatus != types.EventStatusOk {
+		t.Fatalf("connectivity: expected Ok, got %s", byCheck["redis::connectivity"].EventStatus)
 	}
 }

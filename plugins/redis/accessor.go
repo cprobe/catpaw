@@ -186,11 +186,11 @@ func (a *RedisAccessor) ConfigGet(pattern string) (string, error) {
 	if pattern == "" {
 		pattern = "*"
 	}
-	raw, err := a.client.command("CONFIG", "GET", pattern)
+	reply, err := a.client.rawCommand("CONFIG", "GET", pattern)
 	if err != nil {
 		return "", err
 	}
-	return filterSensitiveConfig(raw), nil
+	return formatRedactedConfigReply(reply)
 }
 
 // DBSize executes DBSIZE and returns the reply.
@@ -205,6 +205,26 @@ var redisConfigDenyList = map[string]bool{
 	"tls-key-file-pass": true,
 	"tls-cert-file":     true,
 	"tls-ca-cert-file":  true,
+}
+
+func formatRedactedConfigReply(reply any) (string, error) {
+	arr, ok := reply.([]any)
+	if !ok {
+		return "", fmt.Errorf("unexpected CONFIG GET reply type %T", reply)
+	}
+
+	redacted := make([]any, len(arr))
+	copy(redacted, arr)
+	for i := 0; i+1 < len(redacted); i += 2 {
+		key, ok := redacted[i].(string)
+		if !ok {
+			return "", fmt.Errorf("unexpected CONFIG GET key type %T", redacted[i])
+		}
+		if redisConfigDenyList[strings.TrimSpace(key)] {
+			redacted[i+1] = "***REDACTED***"
+		}
+	}
+	return formatReply(redacted), nil
 }
 
 func filterSensitiveConfig(raw string) string {

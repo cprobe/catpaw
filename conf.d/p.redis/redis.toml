@@ -47,7 +47,6 @@ id = "default"
 # cluster_name = "prod-cache"
 
 ## TLS 可选配置（原生 TLS / stunnel / 云 Redis）
-# use_tls = false
 # tls_ca = "/etc/catpaw/ca.pem"
 # tls_cert = "/etc/catpaw/cert.pem"
 # tls_key = "/etc/catpaw/key.pem"

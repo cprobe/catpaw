@@ -65,7 +65,7 @@ type MasterLinkCheck struct {
 }
 
 type PersistenceCheck struct {
-	Enabled  bool   `toml:"enabled"`
+	Enabled  *bool  `toml:"enabled"`
 	Severity string `toml:"severity"`
 }
 
