@@ -70,7 +70,7 @@ docker run -d \
 
 ## 目录结构
 
-```
+```text
 /opt/catpaw/
 ├── catpaw                  # 二进制文件
 └── conf.d/
