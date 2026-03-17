@@ -16,7 +16,7 @@ Cluster:
 
 - target process is Sentinel, not a Redis data node
 - default port is different (`26379`)
-- command surface is different (`SENTINEL *`, `ROLE`, Pub/Sub events)
+- command surface is different (`SENTINEL *`, `ROLE`, optional `INFO`)
 - health semantics are different (quorum, peer discovery, master address
   resolution, failover state)
 
@@ -33,39 +33,196 @@ The recommended design is:
 - `redis` plugin monitors Redis data nodes
 - `redis_sentinel` plugin monitors Sentinel control-plane nodes
 
-Implementation may still reuse the same RESP transport style and some parsing
-helpers, but product semantics should remain separate.
+Implementation should still reuse RESP transport style and selected parsing
+helpers from `plugins/redis`, but product semantics must remain separate.
 
-## Design Goals
+## Industry-Aligned Operating Assumptions
 
-- make Sentinel monitoring usable out of the box with low-noise defaults
-- keep periodic collection lightweight
-- monitor Sentinel as a control-plane service, not as a data node
-- support both node-level Sentinel health and monitored-master health
-- provide read-only diagnosis tools for failover and quorum troubleshooting
+This design follows Redis Sentinel official command semantics and common
+exporter / observability practice:
 
-## Non-Goals
+- `SENTINEL CKQUORUM <master>` is treated as a first-class monitoring check
+- health is evaluated from both Sentinel-node and monitored-master viewpoints
+- default periodic collection stays bounded and pull-only
+- topology-size-dependent checks remain opt-in
+- the configured master list is treated as desired state when present
+- Sentinel ACL should be minimal and read-only
 
-- not replacing exporter-style metrics collection
-- not subscribing continuously to Pub/Sub channels in periodic `Gather()`
-- not performing automated repair or failover actions
-- not mixing Sentinel checks into the `redis` plugin
-- not requiring the user to model the full Sentinel topology to get value
+Operational assumptions the plugin should document, but not enforce:
+
+- production deployments normally run at least three Sentinel nodes
+- Sentinel nodes should live in separate failure domains when possible
+- NAT / hostname / `announce-ip` mistakes can break peer visibility and master
+  resolution even when TCP connectivity is fine
+
+## Requirements Summary
+
+### Functional requirements
+
+- monitor a Sentinel node via RESP
+- emit node-level health events
+- emit per-master health events
+- support explicit master configuration for per-master alert identity
+- use discovery only for overview and diagnosis context
+- provide read-only diagnosis tools for quorum and failover troubleshooting
+- support ACL auth and TLS in the same way as existing remote plugins
+
+### Non-functional requirements
+
+- keep `Gather()` lightweight and bounded
+- avoid default checks that depend on site-specific topology policy
+- keep configuration explicit and predictable
+- reuse existing remote plugin patterns for concurrency, timeouts, and
+  diagnosis
+- make failure messages directly actionable
+
+## High-Level Architecture
+
+```text
+instance
+  -> normalize targets and check config
+  -> for each target
+       -> connect/auth/tls
+       -> PING
+       -> ROLE
+       -> SENTINEL MASTERS
+       -> derive effective master set
+       -> run per-master lightweight checks
+       -> emit node + master scoped events
+
+diagnosis
+  -> reuse accessor
+  -> pre-collect ROLE + SENTINEL MASTERS
+  -> fetch REPLICAS / SENTINELS / CKQUORUM / GET-MASTER-ADDR-BY-NAME on demand
+```
 
 ## Monitoring Model
 
-The unit of collection is still a single target: one Sentinel node
-`host:port`.
+The unit of collection is still one target: one Sentinel node `host:port`.
 
-The plugin should support:
+The plugin must support:
 
 - node-level checks against the Sentinel process itself
-- per-monitored-master checks derived from Sentinel's view of masters
+- per-master checks derived from Sentinel's view of monitored masters
 
-This means one gather cycle against one Sentinel target may emit:
+One gather cycle against one Sentinel target may emit:
 
-- one node-level event, such as connectivity or quorum health
-- zero or more master-scoped events, one for each monitored master name
+- node-level events such as connectivity, role, and masters overview
+- per-master events such as quorum health, down state, and master address
+  resolution
+
+## Key Design Decisions
+
+### ADR-1: `redis_sentinel` is a dedicated plugin
+
+Decision:
+
+- build a separate plugin instead of extending `redis`
+
+Why:
+
+- Sentinel semantics are control-plane specific
+- safe defaults differ from Redis data-node defaults
+- user-facing configuration is clearer
+
+Trade-off:
+
+- some RESP and config code will be duplicated or lightly wrapped
+
+### ADR-2: `ckquorum` emits per-master events
+
+Decision:
+
+- `redis_sentinel::ckquorum` is a per-master check, not a node-aggregate check
+
+Why:
+
+- the command input is `master`
+- the result is only meaningful for one master at a time
+- per-master events preserve alert routing and diagnosis context
+
+Trade-off:
+
+- one target can emit multiple quorum events in one gather cycle
+
+### ADR-3: explicit `masters` are the only source of per-master alert identity
+
+Decision:
+
+- if `instances.masters` is configured, that list is authoritative for
+  per-master checks
+- if `instances.masters` is empty, skip all per-master checks
+- discovery from `SENTINEL MASTERS` is used only for overview and diagnosis
+  context
+
+Why:
+
+- explicit configuration gives stable behavior and predictable alerts
+- recovery events require stable labels and therefore stable `master_name`
+- discovery data is too volatile to serve as AlertKey identity
+
+Trade-off:
+
+- users who want per-master alerting must model intended masters explicitly
+- explicit configuration can still produce critical events for masters that
+  Sentinel no longer reports; this is intentional because it usually indicates
+  drift, misconfiguration, or monitoring blindness
+
+### ADR-4: default-on checks must cover both node and master health
+
+Decision:
+
+- default-on checks are:
+  - `redis_sentinel::connectivity`
+  - `redis_sentinel::role`
+  - `redis_sentinel::masters_overview`
+  - `redis_sentinel::ckquorum`
+  - `redis_sentinel::master_sdown`
+  - `redis_sentinel::master_odown`
+  - `redis_sentinel::master_addr_resolution`
+
+Why:
+
+- Sentinel is valuable only if it both runs and correctly tracks masters
+- these checks are lightweight and high-signal
+- they do not require deployment-specific thresholds
+
+Trade-off:
+
+- per-master event volume is higher than a node-only default set
+
+### ADR-5: transport behavior reuses Redis patterns, not Redis config surface
+
+Decision:
+
+- reuse RESP transport, ACL auth, TLS, timeout, and concurrency patterns from
+  `plugins/redis`
+- do not reuse Redis-only config such as `db`, `mode`, or `cluster_name`
+
+Why:
+
+- transport behavior is the same class of problem
+- Sentinel-facing product semantics are different
+
+Trade-off:
+
+- a dedicated Sentinel config model must still be maintained
+
+### ADR-6: topology-count checks stay opt-in
+
+Decision:
+
+- `peer_count`, `known_replicas`, `known_sentinels`, `failover_in_progress`,
+  and `tilt` are disabled by default
+
+Why:
+
+- these checks depend heavily on operator policy and deployment shape
+- defaulting them on would create noisy cross-environment behavior
+
+Trade-off:
+
+- deeper topology guarantees require explicit operator intent
 
 ## Default Strategy
 
@@ -75,45 +232,22 @@ The plugin should follow catpaw's existing principles:
 - default checks should be low-cost and low-false-positive
 - workload-specific or topology-policy-specific checks should default to off
 
-### Default-on checks
-
-- `redis_sentinel::connectivity`
-- `redis_sentinel::role`
-- `redis_sentinel::ckquorum`
-- `redis_sentinel::masters_overview`
-
-### Default-off checks
-
-- peer count thresholds
-- per-master replica count thresholds
-- failover duration thresholds
-- script queue / pending script thresholds
-- tilt mode thresholds
-- any check that assumes a specific deployment size or operational policy
-
 ## Check Set
 
-### Node-level checks
-
-| Check | Default | Source | Notes |
-| --- | --- | --- | --- |
-| `redis_sentinel::connectivity` | on | `PING` | basic reachability |
-| `redis_sentinel::role` | on | `ROLE` | should report `sentinel` |
-| `redis_sentinel::ckquorum` | on | `SENTINEL CKQUORUM <master>` | low-noise quorum health |
-| `redis_sentinel::masters_overview` | on | `SENTINEL MASTERS` | Sentinel is actually monitoring masters |
-| `redis_sentinel::peer_count` | off | `SENTINEL SENTINELS <master>` | policy-dependent |
-| `redis_sentinel::tilt` | off | `INFO` / Sentinel state | advanced operational signal |
-
-### Per-master checks
-
-| Check | Default | Source | Notes |
-| --- | --- | --- | --- |
-| `redis_sentinel::master_sdown` | on | `SENTINEL MASTERS` | subjectively down according to this Sentinel |
-| `redis_sentinel::master_odown` | on | `SENTINEL MASTERS` | objectively down / quorum reached |
-| `redis_sentinel::master_addr_resolution` | on | `SENTINEL GET-MASTER-ADDR-BY-NAME` | Sentinel can resolve active master |
-| `redis_sentinel::known_replicas` | off | `SENTINEL REPLICAS <master>` | topology-policy-specific |
-| `redis_sentinel::known_sentinels` | off | `SENTINEL SENTINELS <master>` | topology-policy-specific |
-| `redis_sentinel::failover_in_progress` | off | `SENTINEL MASTER <master>` flags/state | noisy unless explicitly wanted |
+| Check | Scope | Default | Source | Notes |
+| --- | --- | --- | --- | --- |
+| `redis_sentinel::connectivity` | node | on | `PING` | basic reachability |
+| `redis_sentinel::role` | node | on | `ROLE` | must report `sentinel` |
+| `redis_sentinel::masters_overview` | node | on | `SENTINEL MASTERS` | Sentinel is monitoring masters |
+| `redis_sentinel::ckquorum` | master | on | `SENTINEL CKQUORUM <master>` | primary quorum health signal |
+| `redis_sentinel::master_sdown` | master | on | `SENTINEL MASTERS` | subjective down according to this Sentinel |
+| `redis_sentinel::master_odown` | master | on | `SENTINEL MASTERS` | objective down / quorum reached |
+| `redis_sentinel::master_addr_resolution` | master | on | `SENTINEL GET-MASTER-ADDR-BY-NAME <master>` | resolve active master |
+| `redis_sentinel::peer_count` | master | off | `SENTINEL SENTINELS <master>` | policy-dependent |
+| `redis_sentinel::known_replicas` | master | off | `SENTINEL REPLICAS <master>` | policy-dependent |
+| `redis_sentinel::known_sentinels` | master | off | `SENTINEL SENTINELS <master>` | policy-dependent |
+| `redis_sentinel::failover_in_progress` | master | off | `SENTINEL MASTER <master>` | noisy unless explicitly desired |
+| `redis_sentinel::tilt` | node | off | `INFO` | advanced operational signal |
 
 ## Recommended Default Semantics
 
@@ -130,66 +264,106 @@ The plugin should follow catpaw's existing principles:
 
 This prevents accidental use of the Sentinel plugin against a Redis data node.
 
-### `redis_sentinel::ckquorum`
-
-This should be one of the most important default checks.
-
-Behavior:
-
-- for each configured master name, execute `SENTINEL CKQUORUM <master>`
-- success => `Ok`
-- failure text such as "NOQUORUM" or "NOGOODSLAVE" => `Critical`
-
-This is a control-plane health check and aligns well with Sentinel's own
-operational model.
-
 ### `redis_sentinel::masters_overview`
 
-Behavior:
-
 - execute `SENTINEL MASTERS`
-- if zero masters are returned, emit `Warning` or `Critical` depending on
-  configuration
+- if zero masters are returned, emit `Warning` by default
+- operators may raise empty-master severity to `Critical`
 - otherwise emit `Ok` with summary attrs
 
 This is useful because a reachable Sentinel with no monitored masters is often
 misconfigured or not useful.
 
+### `redis_sentinel::ckquorum`
+
+- for each effective master, execute `SENTINEL CKQUORUM <master>`
+- success => `Ok`
+- error text such as `NOQUORUM` or `NOGOODSLAVE` => `Critical`
+- if the configured master is unknown to this Sentinel, emit configured
+  `ckquorum.severity`
+
+This should be one of the most important default checks.
+
 ### `redis_sentinel::master_sdown`
 
-Per monitored master:
+Per effective master:
 
+- read master flags from `SENTINEL MASTERS`
 - if flags contain `s_down`, emit `Warning`
 - otherwise `Ok`
+- if an explicitly configured master is absent from `SENTINEL MASTERS`, emit
+  `Critical`
 
 ### `redis_sentinel::master_odown`
 
-Per monitored master:
+Per effective master:
 
+- read master flags from `SENTINEL MASTERS`
 - if flags contain `o_down`, emit `Critical`
 - otherwise `Ok`
+- if an explicitly configured master is absent from `SENTINEL MASTERS`, emit
+  `Critical`
 
 ### `redis_sentinel::master_addr_resolution`
 
-Per monitored master:
+Per effective master:
 
-- run `SENTINEL GET-MASTER-ADDR-BY-NAME`
+- run `SENTINEL GET-MASTER-ADDR-BY-NAME <master>`
 - if address is missing or malformed, emit `Critical`
 - otherwise `Ok`
 
+### Default-off checks
+
+Recommended default meanings when explicitly enabled:
+
+- `peer_count`: compare number of returned peers against operator thresholds
+- `known_replicas`: compare number of returned replicas against operator
+  thresholds
+- `known_sentinels`: compare number of returned peer Sentinels against operator
+  thresholds
+- `failover_in_progress`: emit `Warning` when master flags indicate failover
+  state
+- `tilt`: emit configured severity when `sentinel_tilt:1`
+
 ## Configuration Model
 
-Key fields should be:
+Key instance fields:
 
 - `targets`
 - `username` / `password`
 - `timeout`
 - `read_timeout`
+- `concurrency`
 - `masters`
-- `cluster_name` is not applicable here; use Sentinel-specific naming instead
 - `labels`
+- TLS client config fields reused from `plugins/redis`
 
-Suggested master config style:
+Not applicable:
+
+- `db`
+- `mode`
+- `cluster_name`
+
+### Target normalization
+
+- `host:port` is accepted as-is
+- bare `host` is normalized to `host:26379`
+- duplicate normalized targets should be rejected during validation
+
+### Transport and auth reuse
+
+The Sentinel accessor should reuse the Redis accessor approach for:
+
+- TCP/TLS dialing
+- ACL `AUTH`
+- timeouts
+- bounded RESP parsing
+
+It must not issue `SELECT`, because Sentinel is not a logical DB endpoint.
+
+### Masters config
+
+Suggested config style:
 
 ```toml
 [[instances]]
@@ -201,26 +375,130 @@ name = "mymaster"
 
 [[instances.masters]]
 name = "cache-master"
+```
 
-[instances.ckquorum]
+Rules:
+
+- `name` is required and must be unique within one instance
+- if `masters` is empty, the plugin skips all per-master checks
+- if `masters` is non-empty, that list is authoritative for per-master checks
+- discovered masters not listed in config may still appear in
+  `masters_overview`, but do not get per-master checks
+
+### Effective master set
+
+For one target in one gather cycle:
+
+1. fetch `SENTINEL MASTERS`
+2. parse the discovered masters into a map keyed by name
+3. if `instances.masters` is empty, stop at node-level checks
+4. otherwise run per-master checks only for configured names
+
+This preserves stable alert identity and guarantees that recovery events can
+reuse the same AlertKey.
+
+### Check config schema
+
+To stay consistent with existing plugin patterns, Sentinel checks should use a
+small number of config shapes.
+
+#### Severity-only checks
+
+Used for:
+
+- `connectivity`
+- `role`
+- `ckquorum`
+- `master_sdown`
+- `master_odown`
+- `master_addr_resolution`
+- `failover_in_progress`
+- `tilt`
+
+Suggested fields:
+
+```toml
+[instances.role]
 enabled = true
 severity = "Critical"
 ```
 
-### Why `masters` should be explicit
+Rules:
 
-Sentinel commands such as `CKQUORUM`, `MASTER`, `REPLICAS`, `SENTINELS`, and
-`GET-MASTER-ADDR-BY-NAME` are keyed by master name.
+- `enabled` defaults according to the check default
+- `severity` defaults to the documented default for that check
 
-An explicit `masters` list gives:
+#### Empty-result check
 
-- clear configuration semantics
-- predictable default behavior
-- simple mapping between events and monitored masters
+Used for:
 
-The plugin may still use `SENTINEL MASTERS` as a discovery source, but explicit
-master names should remain the primary configuration for diagnosis and quorum
-checks.
+- `masters_overview`
+
+Suggested fields:
+
+```toml
+[instances.masters_overview]
+enabled = true
+empty_severity = "Warning"
+```
+
+Rules:
+
+- `empty_severity` controls the status when zero masters are returned
+- non-empty results remain `Ok` unless parsing fails
+
+#### Minimum-count threshold checks
+
+Used for:
+
+- `peer_count`
+- `known_replicas`
+- `known_sentinels`
+
+Suggested fields:
+
+```toml
+[instances.peer_count]
+enabled = true
+warn_lt = 2
+critical_lt = 1
+```
+
+Rules:
+
+- these checks default to disabled
+- at least one of `warn_lt` or `critical_lt` must be > 0 when enabled
+- if both are set, `critical_lt` must be less than `warn_lt`
+
+### Partial config support
+
+The plugin should support partial/template reuse in the same style as
+`plugins/redis`:
+
+- shared connection options
+- shared TLS config
+- shared check defaults
+
+This reduces duplication without pulling in Redis-only fields.
+
+## Gather Algorithm
+
+For each target:
+
+1. connect with timeout, optional TLS, optional ACL auth
+2. `PING`
+3. `ROLE`
+4. `SENTINEL MASTERS`
+5. emit `masters_overview`
+6. if `instances.masters` is empty, stop at node-level checks
+7. otherwise for each configured master:
+   - `SENTINEL CKQUORUM <master>`
+   - inspect flags from `SENTINEL MASTERS`
+   - `SENTINEL GET-MASTER-ADDR-BY-NAME <master>`
+8. if optional checks are enabled, fetch additional per-master detail on demand
+
+Concurrency, hung-gather detection, and timeout budgeting should follow the
+same patterns already used in `plugins/redis`.
 
 ## Event Model
 
@@ -235,6 +513,23 @@ checks.
 - `target`
 - `master_name`
 
+### Recommended attrs
+
+Node-level attrs:
+
+- `masters_total`
+- `discovered_masters`
+- `response_time`
+- `threshold_desc`
+
+Per-master attrs:
+
+- `flags`
+- `resolved_master`
+- `known_peers`
+- `known_replicas`
+- `threshold_desc`
+
 Description style should stay consistent with catpaw:
 
 - pure text
@@ -246,6 +541,7 @@ Examples:
 - `sentinel ckquorum for master mymaster failed: NOQUORUM 2 usable Sentinels`
 - `sentinel master mymaster is objectively down`
 - `sentinel resolved master mymaster to 10.0.0.20:6379`
+- `configured master mymaster is not present in SENTINEL MASTERS`
 
 ## Collection Cost Budget
 
@@ -263,6 +559,7 @@ The periodic `Gather()` path must remain lightweight.
 
 - `SENTINEL SENTINELS <master>`
 - `SENTINEL REPLICAS <master>`
+- `SENTINEL MASTER <master>`
 - `INFO`
 - Pub/Sub subscriptions
 
@@ -276,19 +573,57 @@ The plugin should avoid:
 
 The Sentinel plugin should register read-only diagnosis tools.
 
+### Granularity principles
+
+Diagnosis tools should be shaped for LLM interaction, not for one-to-one Redis
+command mapping.
+
+Target shape:
+
+- one first-round overview tool for target-level context
+- one first-round master-focused tool for most master-related alerts
+- detailed topology tools only when the first-round result is insufficient
+- one advanced fallback tool for low-frequency deep inspection
+
+The plugin should avoid:
+
+- exposing one tool per Redis command when those commands are usually consumed
+  together
+- building one giant catch-all tool that returns too much irrelevant data
+
 ### Core tools
 
-- `sentinel_masters`
-- `sentinel_master`
+- `sentinel_overview`
+- `sentinel_master_health`
 - `sentinel_replicas`
 - `sentinel_sentinels`
-- `sentinel_ckquorum`
-- `sentinel_get_master_addr_by_name`
+- `sentinel_info`
+
+Recommended semantics:
+
+- `sentinel_overview`
+  - target-scoped snapshot
+  - returns `ROLE` plus a compact `SENTINEL MASTERS` summary
+  - first call when the alert context does not yet identify one master
+- `sentinel_master_health`
+  - master-scoped snapshot
+  - combines `SENTINEL MASTER <master>`, `SENTINEL CKQUORUM <master>`,
+    `SENTINEL GET-MASTER-ADDR-BY-NAME <master>`, and compact counts for
+    replicas / peer Sentinels
+  - first call for quorum, down-state, or address-resolution alerts
+- `sentinel_replicas`
+  - detailed replica list for one master
+  - only used when replica visibility or topology depth matters
+- `sentinel_sentinels`
+  - detailed peer-Sentinel list for one master
+  - only used for quorum or view-disagreement drill-down
+- `sentinel_info`
+  - advanced fallback
+  - returns bounded `INFO` output for expert troubleshooting
 
 ### Optional advanced tools
 
-- `sentinel_info`
-- `sentinel_pubsub_events_recent` if a bounded implementation becomes useful
+- `sentinel_events_recent` if a bounded event implementation becomes useful
 
 ## PreCollector Strategy
 
@@ -305,14 +640,17 @@ Do not pre-collect:
 
 Those are better fetched on demand by diagnosis tools.
 
-## Diagnosis Hints
+## Diagnose Hints
 
 Suggested routes:
 
-- quorum alert -> `sentinel_ckquorum` + `sentinel_sentinels`
-- master down alert -> `sentinel_master` + `sentinel_get_master_addr_by_name`
-- replica visibility issue -> `sentinel_replicas`
-- topology disagreement -> `sentinel_masters` + `sentinel_sentinels`
+- unknown / generic Sentinel alert -> `sentinel_overview`
+- quorum alert -> `sentinel_master_health` + `sentinel_sentinels` if needed
+- master down alert -> `sentinel_master_health`
+- replica visibility issue -> `sentinel_master_health` + `sentinel_replicas`
+- topology disagreement -> `sentinel_overview` + `sentinel_sentinels`
+- first round should prefer one overview tool or one master-health tool, not
+  multiple command-shaped tools
 
 ## Parsing Notes
 
@@ -323,7 +661,15 @@ Implementation should:
 - parse those into structured maps
 - validate odd/even field count
 - tolerate missing optional fields
+- normalize common fields such as `name`, `ip`, `port`, `flags`
 - limit output size before sending to AI
+
+## Security Considerations
+
+- use least-privilege Sentinel ACL accounts
+- never log raw passwords
+- redact sensitive config or auth material in diagnosis output
+- keep diagnosis tools read-only
 
 ## Validation Plan
 
@@ -359,6 +705,19 @@ The most valuable integration scenarios are:
 - master `o_down`
 - successful failover and new master resolution
 - Sentinel node reachable but monitoring zero masters
+- explicit configured master missing from `SENTINEL MASTERS`
+- bad `announce-ip` / address resolution behavior
+
+## Risks And Mitigations
+
+- Sentinel can be reachable while logically blind to peers or masters
+  - mitigate with `ckquorum`, `masters_overview`, and address-resolution checks
+- topology-dependent checks are noisy across environments
+  - mitigate by keeping them opt-in
+- NAT / DNS mistakes can distort Sentinel discovery
+  - mitigate with diagnosis tools and explicit operator documentation
+- per-master event count grows with monitored masters
+  - mitigate by keeping commands lightweight and avoiding default heavy calls
 
 ## Suggested Directory Layout
 
@@ -385,6 +744,8 @@ Reuse:
 
 - RESP transport patterns from `plugins/redis`
 - timeout / concurrency / alerting patterns from existing remote plugins
+- diagnose accessor and pre-collector registration patterns from
+  `plugins/redis`
 
 Do not reuse the existing `redis` plugin config surface directly. The control
 plane is different enough that a dedicated config model will be clearer and

@@ -1,0 +1,124 @@
+[[partials]]
+## ===== 最小可用示例（30 秒跑起来）=====
+## 1) 在 instances.targets 里填 Sentinel 地址，支持 host 或 host:port，未写端口时默认补 26379
+## 2) 如果 Sentinel 开启 ACL，填 password 或 username + password
+## 3) 默认启用低成本高信号检查：
+##    - redis_sentinel::connectivity
+##    - redis_sentinel::role
+##    - redis_sentinel::masters_overview
+##    - redis_sentinel::ckquorum
+##    - redis_sentinel::master_sdown
+##    - redis_sentinel::master_odown
+##    - redis_sentinel::master_addr_resolution
+## 4) peer / replica / failover / tilt 等更依赖拓扑策略的检查默认关闭，按需开启
+## 5) diagnose 工具采用任务粒度：overview / master_health / replicas / sentinels / info
+## 例子：
+## targets = ["10.0.0.10", "10.0.0.11:26379"]
+## password = "pa$$word"
+## [[instances.masters]]
+## name = "mymaster"
+## [instances.peer_count]
+## enabled = true
+## warn_lt = 2
+## critical_lt = 1
+
+id = "default"
+
+## 每个 instance 并发探测数
+# concurrency = 10
+
+## 建连和写超时（默认 3s）
+# timeout = "3s"
+
+## 读超时（默认 2s）
+# read_timeout = "2s"
+
+## Sentinel ACL 用户名（Redis 6+）
+# username = "default"
+
+## Sentinel 密码
+# password = "pa$$word"
+
+## TLS 可选配置（原生 TLS / stunnel / 云 Redis）
+# tls_ca = "/etc/catpaw/ca.pem"
+# tls_cert = "/etc/catpaw/cert.pem"
+# tls_key = "/etc/catpaw/key.pem"
+# tls_server_name = "sentinel.example.com"
+# insecure_skip_verify = false
+
+[partials.connectivity]
+severity = "Critical"
+
+[partials.role]
+severity = "Critical"
+
+[partials.masters_overview]
+empty_severity = "Warning"
+
+[partials.ckquorum]
+severity = "Critical"
+
+[partials.master_sdown]
+severity = "Warning"
+
+[partials.master_odown]
+severity = "Critical"
+
+[partials.master_addr_resolution]
+severity = "Critical"
+
+## 以下几项默认建议关闭，只在你确认拓扑策略后再开启
+# [partials.peer_count]
+# enabled = true
+# warn_lt = 2
+# critical_lt = 1
+
+# [partials.known_replicas]
+# enabled = true
+# warn_lt = 2
+# critical_lt = 1
+
+# [partials.known_sentinels]
+# enabled = true
+# warn_lt = 2
+# critical_lt = 1
+
+# [partials.failover_in_progress]
+# enabled = true
+# severity = "Warning"
+
+# [partials.tilt]
+# enabled = true
+# severity = "Warning"
+
+
+[[instances]]
+targets = [
+#    "127.0.0.1",
+]
+
+partial = "default"
+
+## 如果你希望有 per-master 告警（ckquorum / sdown / odown / master_addr_resolution），
+## 就必须显式声明要监控的 master
+## [[instances.masters]]
+## name = "mymaster"
+
+## 采集间隔
+# interval = "30s"
+
+## 追加标签（可选）
+# labels = { env="production", team="middleware" }
+
+[instances.alerting]
+for_duration = 0
+repeat_interval = "5m"
+repeat_number = 3
+# disabled = false
+# disable_recovery_notification = false
+
+[instances.diagnose]
+enabled = true
+# min_severity = "Warning"
+# timeout = "120s"
+# cooldown = "10m"

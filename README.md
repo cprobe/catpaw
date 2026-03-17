@@ -68,6 +68,7 @@ Events can be forwarded to any alert platform (Flashduty, PagerDuty, or any HTTP
 | `procfd` | Per-process fd usage — prevent nofile exhaustion |
 | `procnum` | Process count check (multiple lookup methods) |
 | `redis` | Redis monitoring for standalone, master/replica, and Redis Cluster; includes Redis-specific AI diagnosis tools |
+| `redis_sentinel` | Redis Sentinel monitoring for quorum, master reachability from Sentinel's view, and Sentinel-specific AI diagnosis tools |
 | `scriptfilter` | Script output filter-rule matching |
 | `secmod` | SELinux/AppArmor baseline (Linux) |
 | `sockstat` | TCP listen queue overflow detection (Linux) |
@@ -93,9 +94,10 @@ When AI diagnosis is triggered (by alert, inspection, or chat), the AI agent has
 
 🐳 **Services**: systemd service status, failed services list, timer list, Docker ps/inspect
 
-🔌 **Remote plugins** (Redis, etc.) contribute their own specialized diagnostic tools for deep introspection.
+🔌 **Remote plugins** (Redis, Redis Sentinel, etc.) contribute their own specialized diagnostic tools for deep introspection.
 
 For Redis-specific checks, cluster semantics, and diagnosis tools, see [plugins/redis/README.md](plugins/redis/README.md).
+For Redis Sentinel-specific checks, diagnosis tools, and config semantics, see [plugins/redis_sentinel/README.md](plugins/redis_sentinel/README.md).
 
 🔗 **MCP external tools**: Connect Prometheus, Jaeger, CMDB, or any MCP-compatible data source — the AI automatically discovers and uses their tools.
 
