@@ -1,8 +1,15 @@
 package chat
 
 import (
+	"context"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"testing"
+	"time"
 
+	"github.com/cprobe/catpaw/config"
+	"github.com/cprobe/catpaw/diagnose"
 	"github.com/cprobe/catpaw/diagnose/aiclient"
 )
 
@@ -14,6 +21,16 @@ func msgWithToolCalls(role string) aiclient.Message {
 		ToolCalls: []aiclient.ToolCall{{ID: "tc1", Function: aiclient.FunctionCall{Name: "f"}}},
 	}
 }
+
+type testChatIO struct{}
+
+func (testChatIO) OnThinkingStart(int) {}
+func (testChatIO) OnThinkingDone(int, time.Duration) {}
+func (testChatIO) OnReasoning(string) {}
+func (testChatIO) OnToolStart(string, string) {}
+func (testChatIO) OnToolDone(string, string, time.Duration, int, bool) {}
+func (testChatIO) OnToolOutput(string) {}
+func (testChatIO) ApproveShell(string) (bool, string) { return false, "" }
 
 func TestTrimHistory_BelowLimit(t *testing.T) {
 	msgs := make([]aiclient.Message, maxHistoryMessages+1)
@@ -137,5 +154,112 @@ func TestBuildChatToolSetWithOptions_WithShell(t *testing.T) {
 	}
 	if len(tools) != 3 {
 		t.Fatalf("expected 3 tools, got %d", len(tools))
+	}
+}
+
+func TestHandleMessage_PreservesReasoningContentAcrossToolCalls(t *testing.T) {
+	requests := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests++
+
+		var raw map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&raw); err != nil {
+			t.Fatalf("decode request: %v", err)
+		}
+
+		switch requests {
+		case 1:
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{
+				"id": "chatcmpl-1",
+				"choices": [{
+					"index": 0,
+					"message": {
+						"role": "assistant",
+						"content": "",
+						"reasoning_content": "我需要先查看监听端口。",
+						"tool_calls": [{
+							"id": "call_1",
+							"type": "function",
+							"function": {
+								"name": "call_tool",
+								"arguments": "{\"name\":\"network_listen_ports\",\"tool_args\":\"{}\"}"
+							}
+						}]
+					},
+					"finish_reason": "tool_calls"
+				}],
+				"usage": {"prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15}
+			}`))
+		case 2:
+			messages, _ := raw["messages"].([]any)
+			if len(messages) < 4 {
+				t.Fatalf("expected at least 4 messages, got %d", len(messages))
+			}
+			assistant, _ := messages[2].(map[string]any)
+			if got, _ := assistant["reasoning_content"].(string); got == "" {
+				w.WriteHeader(http.StatusBadRequest)
+				_, _ = w.Write([]byte(`{"error":{"message":"Missing ` + "`reasoning_content`" + ` field in the assistant message at message index 2"}}`))
+				return
+			}
+
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{
+				"id": "chatcmpl-2",
+				"choices": [{
+					"index": 0,
+					"message": {
+						"role": "assistant",
+						"content": "当前监听端口有 80 和 443。"
+					},
+					"finish_reason": "stop"
+				}],
+				"usage": {"prompt_tokens": 12, "completion_tokens": 6, "total_tokens": 18}
+			}`))
+		default:
+			t.Fatalf("unexpected request #%d", requests)
+		}
+	}))
+	defer srv.Close()
+
+	registry := diagnose.NewToolRegistry()
+	registry.RegisterCategory("network", "network", "network tools", diagnose.ToolScopeLocal)
+	registry.Register("network", diagnose.DiagnoseTool{
+		Name:        "network_listen_ports",
+		Description: "list listen ports",
+		Scope:       diagnose.ToolScopeLocal,
+		Execute: func(ctx context.Context, args map[string]string) (string, error) {
+			return "80\n443", nil
+		},
+	})
+
+	fc := aiclient.NewFailoverClient(config.AIConfig{
+		ModelPriority: []string{"deepseek"},
+		Models: map[string]config.ModelConfig{
+			"deepseek": {
+				BaseURL: srv.URL,
+				APIKey:  "test-key",
+				Model:   "deepseek-reasoner",
+			},
+		},
+		RequestTimeout: config.Duration(5 * time.Second),
+	})
+
+	sess := NewChatSession(SessionConfig{
+		FC:          fc,
+		Registry:    registry,
+		ToolTimeout: 2 * time.Second,
+		IO:          testChatIO{},
+	})
+
+	reply, _, err := sess.HandleMessage(context.Background(), "机器上有哪些端口")
+	if err != nil {
+		t.Fatalf("HandleMessage() error: %v", err)
+	}
+	if reply != "当前监听端口有 80 和 443。" {
+		t.Fatalf("reply = %q, want %q", reply, "当前监听端口有 80 和 443。")
+	}
+	if requests != 2 {
+		t.Fatalf("requests = %d, want 2", requests)
 	}
 }

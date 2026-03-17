@@ -109,6 +109,7 @@ func (s *ChatSession) conversationLoop(ctx context.Context) (string, []aiclient.
 
 		choice := resp.Choices[0]
 		content := choice.Message.Content
+		reasoning := choice.Message.ReasoningContent
 		toolCalls := choice.Message.ToolCalls
 
 		if len(toolCalls) == 0 {
@@ -119,14 +120,17 @@ func (s *ChatSession) conversationLoop(ctx context.Context) (string, []aiclient.
 			return content, s.messages, totalUsage, nil
 		}
 
-		if content != "" {
+		if reasoning != "" {
+			s.io.OnReasoning(reasoning)
+		} else if content != "" {
 			s.io.OnReasoning(content)
 		}
 
 		s.messages = append(s.messages, aiclient.Message{
-			Role:      "assistant",
-			Content:   content,
-			ToolCalls: toolCalls,
+			Role:             "assistant",
+			Content:          content,
+			ReasoningContent: reasoning,
+			ToolCalls:        toolCalls,
 		})
 
 		for _, tc := range toolCalls {
