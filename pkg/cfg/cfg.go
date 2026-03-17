@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"path"
+	"sort"
 	"strings"
 
 	"github.com/koding/multiconfig"
@@ -16,6 +17,11 @@ const (
 	YamlFormat ConfigFormat = "yaml"
 	TomlFormat ConfigFormat = "toml"
 	JsonFormat ConfigFormat = "json"
+)
+
+const (
+	DefaultConfigFile       = "config.toml"
+	LocalOverrideConfigFile = "config.local.toml"
 )
 
 type ConfigWithFormat struct {
@@ -43,10 +49,6 @@ func GuessFormat(fpath string) ConfigFormat {
 }
 
 func LoadConfigByDir(configDir string, configPtr interface{}) error {
-	var (
-		tBuf []byte
-	)
-
 	loaders := []multiconfig.Loader{
 		&multiconfig.TagLoader{},
 		&multiconfig.EnvironmentLoader{},
@@ -56,25 +58,19 @@ func LoadConfigByDir(configDir string, configPtr interface{}) error {
 	if err != nil {
 		return fmt.Errorf("failed to list files under: %s : %v", configDir, err)
 	}
-	s := NewFileScanner()
+	files = orderedConfigFiles(files)
+
 	for _, fpath := range files {
+		fullPath := path.Join(configDir, fpath)
+
 		switch {
 		case strings.HasSuffix(fpath, ".toml"):
-			s.Read(path.Join(configDir, fpath))
-			tBuf = append(tBuf, s.Data()...)
-			tBuf = append(tBuf, []byte("\n")...)
+			loaders = append(loaders, &multiconfig.TOMLLoader{Path: fullPath})
 		case strings.HasSuffix(fpath, ".json"):
-			loaders = append(loaders, &multiconfig.JSONLoader{Path: path.Join(configDir, fpath)})
+			loaders = append(loaders, &multiconfig.JSONLoader{Path: fullPath})
 		case strings.HasSuffix(fpath, ".yaml") || strings.HasSuffix(fpath, ".yml"):
-			loaders = append(loaders, &multiconfig.YAMLLoader{Path: path.Join(configDir, fpath)})
+			loaders = append(loaders, &multiconfig.YAMLLoader{Path: fullPath})
 		}
-		if s.Err() != nil {
-			return s.Err()
-		}
-	}
-
-	if len(tBuf) != 0 {
-		loaders = append(loaders, &multiconfig.TOMLLoader{Reader: bytes.NewReader(tBuf)})
 	}
 
 	m := multiconfig.DefaultLoader{
@@ -82,6 +78,34 @@ func LoadConfigByDir(configDir string, configPtr interface{}) error {
 		Validator: multiconfig.MultiValidator(&multiconfig.RequiredValidator{}),
 	}
 	return m.Load(configPtr)
+}
+
+func orderedConfigFiles(files []string) []string {
+	sort.Strings(files)
+
+	ordered := make([]string, 0, len(files))
+
+	appendIfPresent := func(name string) {
+		for _, file := range files {
+			if file == name {
+				ordered = append(ordered, file)
+				return
+			}
+		}
+	}
+
+	appendIfPresent(DefaultConfigFile)
+
+	for _, file := range files {
+		if file == DefaultConfigFile || file == LocalOverrideConfigFile {
+			continue
+		}
+		ordered = append(ordered, file)
+	}
+
+	appendIfPresent(LocalOverrideConfigFile)
+
+	return ordered
 }
 
 func LoadConfigs(configs []ConfigWithFormat, configPtr interface{}) error {

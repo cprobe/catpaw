@@ -233,7 +233,9 @@ N9E_BASE_URL = "http://127.0.0.1:17000"
 ## ⚙️ 配置说明
 
 - 全局配置：`conf.d/config.toml`
+- 本地覆盖：`conf.d/config.local.toml`（最后加载，已加入 git ignore，适合开发者本地调试）
 - 插件配置：`conf.d/p.<plugin>/*.toml`（每个目录可放多个 `.toml` 文件，合并加载）
+- 顶层加载顺序：`config.toml` -> `conf.d/` 中其他文件 -> `config.local.toml`
 - 支持 `SIGHUP` 热加载插件配置：
 
 ```bash

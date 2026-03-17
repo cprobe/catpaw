@@ -177,7 +177,7 @@ type ConfigType struct {
 var Config *ConfigType
 
 func InitConfig(configDir string, interval int64, plugins, loglevel string) error {
-	configFile := path.Join(configDir, "config.toml")
+	configFile := path.Join(configDir, cfg.DefaultConfigFile)
 	if !file.IsExist(configFile) {
 		return fmt.Errorf("configuration file(%s) not found", configFile)
 	}

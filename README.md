@@ -235,7 +235,9 @@ Verify connectivity:
 ## ⚙️ Configuration
 
 - Global config: `conf.d/config.toml`
+- Local override: `conf.d/config.local.toml` (loaded last, git-ignored, ideal for developer-only changes)
 - Plugin configs: `conf.d/p.<plugin>/*.toml` (multiple files merged on load)
+- Top-level load order: `config.toml` -> other files in `conf.d/` -> `config.local.toml`
 - Hot-reload plugin configs with `SIGHUP`:
 
 ```bash

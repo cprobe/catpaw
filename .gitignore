@@ -4,6 +4,7 @@
 /dist
 /up_down.sh
 /review.d
+/conf.d/config.local.toml
 
 .idea
 .DS_Store

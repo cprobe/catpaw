@@ -75,6 +75,7 @@ docker run -d \
 ├── catpaw                  # 二进制文件
 └── conf.d/
     ├── config.toml         # 全局配置
+    ├── config.local.toml   # 本地覆盖配置（可选，最后加载）
     ├── p.disk/
     │   └── disk.toml       # 磁盘监控配置
     ├── p.procnum/
@@ -84,4 +85,4 @@ docker run -d \
     └── ...
 ```
 
-每个 `p.<plugin>/` 目录下可放多个 `.toml` 文件，内容会被合并加载。
+顶层配置按 `config.toml` → 其他文件 → `config.local.toml` 的顺序合并加载；每个 `p.<plugin>/` 目录下也可放多个 `.toml` 文件，内容会被合并加载。
