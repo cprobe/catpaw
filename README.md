@@ -205,7 +205,6 @@ kill -HUP $(pidof catpaw)
 | Document | Description |
 | --- | --- |
 | [Developer Guide](docs/dev-guide.md) | Architecture overview and codebase walkthrough — **read this first** |
-| [CLI Reference](docs/cli.md) | Complete command-line options |
 | [Deployment Guide](docs/deployment.md) | Binary, systemd, Docker deployment |
 | [Event Data Model](docs/event-model.md) | Event structure, labels, AlertKey rules |
 | [Plugin Development Guide](docs/plugin-development.md) | How to create a new catpaw plugin |
