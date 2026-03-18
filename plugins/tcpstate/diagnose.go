@@ -6,8 +6,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/cprobe/catpaw/diagnose"
-	"github.com/cprobe/catpaw/plugins"
+	"github.com/cprobe/digcore/diagnose"
+	"github.com/cprobe/digcore/plugins"
 	gonet "github.com/shirou/gopsutil/v3/net"
 )
 

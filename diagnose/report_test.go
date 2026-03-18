@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/cprobe/catpaw/config"
+	"github.com/cprobe/digcore/config"
 )
 
 func TestMain(m *testing.M) {

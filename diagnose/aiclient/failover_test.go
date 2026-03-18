@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/cprobe/catpaw/config"
+	"github.com/cprobe/digcore/config"
 )
 
 func newTestServer(handler http.HandlerFunc) *httptest.Server {

@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/cprobe/catpaw/types"
+	"github.com/cprobe/digcore/types"
 )
 
 func TestToolScopeString(t *testing.T) {

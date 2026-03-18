@@ -11,7 +11,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/cprobe/catpaw/diagnose"
+	"github.com/cprobe/digcore/diagnose"
 )
 
 const (

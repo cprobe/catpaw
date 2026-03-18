@@ -4,9 +4,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/cprobe/catpaw/config"
-	"github.com/cprobe/catpaw/pkg/safe"
-	"github.com/cprobe/catpaw/types"
+	"github.com/cprobe/digcore/config"
+	"github.com/cprobe/digcore/pkg/safe"
+	"github.com/cprobe/digcore/types"
 )
 
 func TestInitValidation(t *testing.T) {

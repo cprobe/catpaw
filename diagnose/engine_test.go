@@ -13,9 +13,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/cprobe/catpaw/config"
+	"github.com/cprobe/digcore/config"
 	"github.com/cprobe/catpaw/diagnose/aiclient"
-	clogger "github.com/cprobe/catpaw/logger"
+	clogger "github.com/cprobe/digcore/logger"
 	"go.uber.org/zap"
 )
 

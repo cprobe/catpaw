@@ -7,10 +7,10 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/cprobe/catpaw/config"
-	"github.com/cprobe/catpaw/pkg/safe"
-	"github.com/cprobe/catpaw/plugins"
-	"github.com/cprobe/catpaw/types"
+	"github.com/cprobe/digcore/config"
+	"github.com/cprobe/digcore/pkg/safe"
+	"github.com/cprobe/digcore/plugins"
+	"github.com/cprobe/digcore/types"
 )
 
 const pluginName = "sockstat"

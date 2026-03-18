@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/cprobe/catpaw/pkg/safe"
-	"github.com/cprobe/catpaw/types"
+	"github.com/cprobe/digcore/pkg/safe"
+	"github.com/cprobe/digcore/types"
 )
 
 func skipIfNotLinux(t *testing.T) {

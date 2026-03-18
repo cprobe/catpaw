@@ -3,7 +3,7 @@ package server
 import (
 	"sync"
 
-	"github.com/cprobe/catpaw/types"
+	"github.com/cprobe/digcore/types"
 )
 
 // RingBuffer is a fixed-capacity circular buffer for alert events.

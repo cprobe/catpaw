@@ -6,7 +6,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/cprobe/catpaw/logger"
+	"github.com/cprobe/digcore/logger"
 )
 
 func (c *Conn) handleSessionStart(ctx context.Context, msg *Message) {

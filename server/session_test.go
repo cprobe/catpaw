@@ -5,7 +5,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/cprobe/catpaw/logger"
+	"github.com/cprobe/digcore/logger"
 	"go.uber.org/zap"
 )
 

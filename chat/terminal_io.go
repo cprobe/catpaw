@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 	
-	"github.com/cprobe/catpaw/pkg/term"
+	"github.com/cprobe/digcore/pkg/term"
 	"github.com/ergochat/readline"
 )
 

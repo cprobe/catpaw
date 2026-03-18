@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/cprobe/catpaw/config"
+	"github.com/cprobe/digcore/config"
 )
 
 func TestServerClientChat(t *testing.T) {

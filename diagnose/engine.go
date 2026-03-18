@@ -10,11 +10,11 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/cprobe/catpaw/config"
+	"github.com/cprobe/digcore/config"
 	"github.com/cprobe/catpaw/diagnose/aiclient"
-	"github.com/cprobe/catpaw/logger"
-	"github.com/cprobe/catpaw/notify"
-	"github.com/cprobe/catpaw/types"
+	"github.com/cprobe/digcore/logger"
+	"github.com/cprobe/digcore/notify"
+	"github.com/cprobe/digcore/types"
 )
 
 // DiagnoseEngine is the central coordinator for AI-powered diagnosis.

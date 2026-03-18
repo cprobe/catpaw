@@ -4,8 +4,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/cprobe/catpaw/config"
-	"github.com/cprobe/catpaw/logger"
+	"github.com/cprobe/digcore/config"
+	"github.com/cprobe/digcore/logger"
 )
 
 var (

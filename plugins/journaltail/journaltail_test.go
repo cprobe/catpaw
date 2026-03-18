@@ -3,7 +3,7 @@ package journaltail
 import (
 	"testing"
 
-	"github.com/cprobe/catpaw/pkg/filter"
+	"github.com/cprobe/digcore/pkg/filter"
 )
 
 func TestExtractCursor(t *testing.T) {

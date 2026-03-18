@@ -6,8 +6,8 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/cprobe/catpaw/diagnose"
-	"github.com/cprobe/catpaw/plugins"
+	"github.com/cprobe/digcore/diagnose"
+	"github.com/cprobe/digcore/plugins"
 	gocpu "github.com/shirou/gopsutil/v3/cpu"
 	"github.com/shirou/gopsutil/v3/load"
 	goprocess "github.com/shirou/gopsutil/v3/process"

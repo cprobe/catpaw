@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/cprobe/catpaw/config"
-	"github.com/cprobe/catpaw/logger"
+	"github.com/cprobe/digcore/config"
+	"github.com/cprobe/digcore/logger"
 )
 
 // CleanupRecords removes diagnosis records exceeding the retention period

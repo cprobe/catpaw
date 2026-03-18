@@ -9,7 +9,7 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/cprobe/catpaw/config"
+	"github.com/cprobe/digcore/config"
 )
 
 // NewDiagnoseRecord creates a DiagnoseRecord from a DiagnoseRequest,

@@ -3,7 +3,7 @@ package sysdiag
 import (
 	"testing"
 
-	"github.com/cprobe/catpaw/diagnose"
+	"github.com/cprobe/digcore/diagnose"
 )
 
 func TestAllToolsRegistered(t *testing.T) {

@@ -10,10 +10,10 @@ import (
 	"time"
 
 	"github.com/BurntSushi/toml"
-	"github.com/cprobe/catpaw/config"
-	"github.com/cprobe/catpaw/diagnose"
-	"github.com/cprobe/catpaw/pkg/term"
-	"github.com/cprobe/catpaw/plugins"
+	"github.com/cprobe/digcore/config"
+	"github.com/cprobe/digcore/diagnose"
+	"github.com/cprobe/digcore/pkg/term"
+	"github.com/cprobe/digcore/plugins"
 	"github.com/toolkits/pkg/file"
 )
 

@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/cprobe/catpaw/config"
-	"github.com/cprobe/catpaw/pkg/filter"
+	"github.com/cprobe/digcore/config"
+	"github.com/cprobe/digcore/pkg/filter"
 )
 
 func TestInitRejectsNegativeTimeout(t *testing.T) {

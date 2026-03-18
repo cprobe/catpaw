@@ -3,8 +3,10 @@ interval = "30s"
 
 [global.labels]
 from_agent = "catpaw"
-from_hostname = "${HOSTNAME}"
-from_hostip = "${IP}"
+# from_hostname = "${HOSTNAME}"
+# from_hostip = "${IP}"
+from_hostname = "demo-alertgen"
+from_hostip = "10.20.0.21"
 
 [log]
 level = "info"
@@ -12,17 +14,38 @@ level = "info"
 # output = "stdout"
 # fields = {}
 
+## 连接 catpaw-server（开启后，Agent 会把事件上报到 server，并可复用 server 侧 LLM 网关）
+## address 支持：
+## - host:port，例如 "127.0.0.1:8080"
+## - 完整 URL，例如 "http://127.0.0.1:8080" / "https://catpaw.example.com"
+## - 环境变量引用，例如 "${CATPAW_SERVER_ADDR}"
+[server]
+enabled = true
+address = "http://127.0.0.1:18080"
+agent_token = "CATPAW_AGENT_TOKEN"
+# ca_file = "/etc/catpaw/server-ca.pem"   # 自签 HTTPS 证书场景可指定 CA
+# tls_skip_verify = false                 # 仅测试环境可考虑设为 true
+# alert_buffer_size = 1000                # 本地告警上报缓冲区，默认 1000
+
 ## 控制台输出（新用户快速验证告警效果，无需任何外部服务）
 [notify.console]
 enabled = true
 
 # [notify.flashduty]
 # integration_key = "your-flashduty-integration-key"
+# base_url = "https://api.flashcat.cloud/event/push/alert/standard"
 # timeout = "10s"
+# max_retries = 1
 
 # [notify.pagerduty]
 # routing_key = "your-pagerduty-routing-key"
+# base_url = "https://events.pagerduty.com/v2/enqueue"
 # timeout = "10s"
+# max_retries = 1
+# [notify.pagerduty.severity_map]
+# Critical = "critical"
+# Warning = "warning"
+# Info = "info"
 
 ## 通用 WebAPI（直接将 catpaw 原始 Event JSON 推送到任意 HTTP 端点）
 # [notify.webapi]
@@ -35,12 +58,12 @@ enabled = true
 # X-Custom-Header = "catpaw"
 
 ## AI 智能诊断配置（告警触发后自动分析根因）
-# [ai]
-# enabled = true
+[ai]
+enabled = true
 #
 ## 模型优先级列表（按顺序尝试，第一个可用的就用它；故障时自动切换下一个）
 ## 调整顺序即可切换模型用于对比测试，也可用 catpaw chat --model <name> 固定某个模型
-# model_priority = ["gpt4o", "deepseek"]
+# model_priority = ["deepseek"]
 #
 ## 运行时参数（与模型无关）
 # max_rounds = 15                    # AI Agent 最大交互轮次（工具多时建议 12~20）
@@ -61,21 +84,37 @@ enabled = true
 # diagnose_retention = "168h"        # 7 天
 # diagnose_max_count = 1000
 #
+# language = "zh"                    # AI 输出语言，默认 zh
+#
+## 通过 catpaw-server 复用集中式 LLM 网关
+## 若已启用 [server] 且这里不填 base_url，会自动推导为:
+##   <server.address>/api/v1/agent/llm
+[ai.gateway]
+enabled = true
+agent_token = "{CATPAW_AGENT_TOKEN}" # 为空时会继承 [server].agent_token
+request_timeout = "90s"
+# max_retries = 1
+# fallback_to_direct = true            # 网关失败时是否回退直连 [ai.models.*]
+# # base_url = "http://127.0.0.1:8080/api/v1/agent/llm"
+#
 ## ---- 模型配置（每个模型一个 [ai.models.<name>] 段）----
 #
 # [ai.models.gpt4o]
+# provider = "openai"                # 为空或 openai 均表示 OpenAI 兼容接口
 # base_url = "https://api.openai.com/v1"
 # api_key = "${OPENAI_API_KEY}"      # 支持 ${ENV_VAR} 语法引用环境变量
 # model = "gpt-4o"
 # max_tokens = 4000                  # 单次 AI 返回最大 token 数
+# max_completion_tokens = 4000       # 新接口兼容字段，和 max_tokens 二选一即可
 # context_window = 128000            # 模型上下文窗口大小（token），默认 128000
 # input_price = 2.50                 # USD/百万 input tokens（用于 chat 模式展示成本，0=不显示）
 # output_price = 10.00               # USD/百万 output tokens
 #
 # [ai.models.deepseek]
+# provider = "openai"
 # base_url = "https://api.deepseek.com/v1"
-# api_key = "${DEEPSEEK_API_KEY}"
-# model = "deepseek-reasoner"
+# api_key = "sk-8d5ba712cc06454a82cc32e77be106b1"
+# model = "deepseek-chat"
 # max_tokens = 8000
 # context_window = 64000
 # input_price = 0.55
@@ -85,11 +124,24 @@ enabled = true
 # thinking_budget = 10000
 #
 # [ai.models.minimax]
+# provider = "openai"
 # base_url = "https://api.minimax.chat/v1"
 # api_key = "${MINIMAX_API_KEY}"
 # model = "MiniMax-M2.5"
 # max_tokens = 8000
 # context_window = 128000
+#
+## AWS Bedrock 示例
+# [ai.models.claude-bedrock]
+# provider = "bedrock"
+# model = "anthropic.claude-3-7-sonnet-20250219-v1:0"
+# max_tokens = 4000
+# context_window = 200000
+# [ai.models.claude-bedrock.extra_body]
+# aws_region = "us-west-2"
+# aws_access_key_id = "${AWS_ACCESS_KEY_ID}"
+# aws_secret_access_key = "${AWS_SECRET_ACCESS_KEY}"
+# aws_session_token = "${AWS_SESSION_TOKEN}"
 #
 ## ---- MCP 外部数据源（连接 Prometheus/Nightingale/Jaeger/CMDB 等）----
 #

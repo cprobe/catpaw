@@ -17,10 +17,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/cprobe/catpaw/config"
-	clogger "github.com/cprobe/catpaw/logger"
-	"github.com/cprobe/catpaw/pkg/safe"
-	"github.com/cprobe/catpaw/types"
+	"github.com/cprobe/digcore/config"
+	clogger "github.com/cprobe/digcore/logger"
+	"github.com/cprobe/digcore/pkg/safe"
+	"github.com/cprobe/digcore/types"
 	"go.uber.org/zap"
 )
 

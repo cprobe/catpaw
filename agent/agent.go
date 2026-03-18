@@ -10,13 +10,14 @@ import (
 
 	"github.com/BurntSushi/toml"
 	"github.com/cprobe/catpaw/chat"
-	"github.com/cprobe/catpaw/config"
-	"github.com/cprobe/catpaw/diagnose"
+	"github.com/cprobe/digcore/config"
+	"github.com/cprobe/digcore/diagnose"
 	"github.com/cprobe/catpaw/diagnose/aiclient"
-	"github.com/cprobe/catpaw/logger"
-	"github.com/cprobe/catpaw/notify"
-	"github.com/cprobe/catpaw/pkg/choice"
-	"github.com/cprobe/catpaw/plugins"
+	"github.com/cprobe/digcore/logger"
+	"github.com/cprobe/digcore/notify"
+	catpawnotify "github.com/cprobe/catpaw/notify"
+	"github.com/cprobe/digcore/pkg/choice"
+	"github.com/cprobe/digcore/plugins"
 	"github.com/cprobe/catpaw/server"
 	"github.com/toolkits/pkg/file"
 
@@ -247,7 +248,7 @@ func initNotifiers() {
 		notify.Register(notify.NewWebAPINotifier(cfg))
 	}
 	if config.Config.Server.Enabled {
-		notify.Register(notify.NewServerNotifier())
+		notify.Register(catpawnotify.NewServerNotifier())
 	}
 }
 

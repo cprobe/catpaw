@@ -8,7 +8,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/cprobe/catpaw/config"
+	"github.com/cprobe/digcore/config"
 )
 
 // loadOrCreateAgentID reads the agent_id from state.d/agent_id. If the file

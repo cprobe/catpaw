@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/cprobe/catpaw/diagnose"
+	"github.com/cprobe/digcore/diagnose"
 	"github.com/cprobe/catpaw/diagnose/aiclient"
-	"github.com/cprobe/catpaw/pkg/term"
+	"github.com/cprobe/digcore/pkg/term"
 )
 
 func startSpinner(msg string) *term.Spinner { return term.StartSpinner(msg) }

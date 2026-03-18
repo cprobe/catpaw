@@ -6,8 +6,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/cprobe/catpaw/logger"
-	"github.com/cprobe/catpaw/types"
+	"github.com/cprobe/digcore/logger"
+	"github.com/cprobe/digcore/types"
 )
 
 // ToolScope distinguishes where a diagnostic tool executes.

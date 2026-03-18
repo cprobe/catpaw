@@ -10,9 +10,9 @@ import (
 	"strings"
 	"time"
 	
-	"github.com/cprobe/catpaw/diagnose"
-	"github.com/cprobe/catpaw/pkg/cmdx"
-	"github.com/cprobe/catpaw/plugins"
+	"github.com/cprobe/digcore/diagnose"
+	"github.com/cprobe/digcore/pkg/cmdx"
+	"github.com/cprobe/digcore/plugins"
 )
 
 var _ plugins.Diagnosable = (*SystemdPlugin)(nil)

@@ -8,7 +8,7 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/cprobe/catpaw/diagnose"
+	"github.com/cprobe/digcore/diagnose"
 )
 
 // baselineTools lists tools to run at chat startup for the system snapshot.

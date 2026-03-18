@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/cprobe/catpaw/config"
+	"github.com/cprobe/digcore/config"
 )
 
 // FailoverClient wraps multiple AI clients and routes requests according to

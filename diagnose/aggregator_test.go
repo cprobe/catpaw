@@ -3,7 +3,7 @@ package diagnose
 import (
 	"testing"
 
-	"github.com/cprobe/catpaw/config"
+	"github.com/cprobe/digcore/config"
 )
 
 func TestShouldTrigger(t *testing.T) {

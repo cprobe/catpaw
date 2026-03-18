@@ -9,11 +9,11 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/cprobe/catpaw/config"
-	"github.com/cprobe/catpaw/diagnose"
+	"github.com/cprobe/digcore/config"
+	"github.com/cprobe/digcore/diagnose"
 	"github.com/cprobe/catpaw/diagnose/aiclient"
-	"github.com/cprobe/catpaw/mcp"
-	"github.com/cprobe/catpaw/plugins"
+	"github.com/cprobe/digcore/mcp"
+	"github.com/cprobe/digcore/plugins"
 	"github.com/ergochat/readline"
 )
 

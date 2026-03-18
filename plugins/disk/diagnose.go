@@ -7,8 +7,8 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/cprobe/catpaw/diagnose"
-	"github.com/cprobe/catpaw/plugins"
+	"github.com/cprobe/digcore/diagnose"
+	"github.com/cprobe/digcore/plugins"
 	godisk "github.com/shirou/gopsutil/v3/disk"
 )
 

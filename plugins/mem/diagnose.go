@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/cprobe/catpaw/diagnose"
-	"github.com/cprobe/catpaw/plugins"
+	"github.com/cprobe/digcore/diagnose"
+	"github.com/cprobe/digcore/plugins"
 	gomem "github.com/shirou/gopsutil/v3/mem"
 	goprocess "github.com/shirou/gopsutil/v3/process"
 )

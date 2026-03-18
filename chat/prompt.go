@@ -13,7 +13,7 @@ import (
 	"text/template"
 	"time"
 
-	"github.com/cprobe/catpaw/diagnose"
+	"github.com/cprobe/digcore/diagnose"
 )
 
 var chatPromptTmpl = template.Must(template.New("chat").Parse(chatPromptRaw))

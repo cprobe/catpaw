@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/cprobe/catpaw/diagnose"
+	"github.com/cprobe/digcore/diagnose"
 )
 
 const dnsTimeout = 10 * time.Second

@@ -8,7 +8,7 @@ import (
 	"encoding/json"
 	"sync"
 
-	"github.com/cprobe/catpaw/logger"
+	"github.com/cprobe/digcore/logger"
 )
 
 // ConcurrencyLimiter controls how many concurrent remote sessions can run.

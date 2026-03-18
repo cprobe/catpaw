@@ -2,7 +2,7 @@ package notify
 
 import (
 	"github.com/cprobe/catpaw/server"
-	"github.com/cprobe/catpaw/types"
+	"github.com/cprobe/digcore/types"
 )
 
 // ServerNotifier forwards alert events to catpaw-server via the WebSocket

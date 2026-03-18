@@ -9,13 +9,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/cprobe/catpaw/config"
-	"github.com/cprobe/catpaw/pkg/cmdx"
-	"github.com/cprobe/catpaw/pkg/filter"
-	"github.com/cprobe/catpaw/pkg/safe"
-	"github.com/cprobe/catpaw/pkg/shell"
-	"github.com/cprobe/catpaw/plugins"
-	"github.com/cprobe/catpaw/types"
+	"github.com/cprobe/digcore/config"
+	"github.com/cprobe/digcore/pkg/cmdx"
+	"github.com/cprobe/digcore/pkg/filter"
+	"github.com/cprobe/digcore/pkg/safe"
+	"github.com/cprobe/digcore/pkg/shell"
+	"github.com/cprobe/digcore/plugins"
+	"github.com/cprobe/digcore/types"
 )
 
 const pluginName = "scriptfilter"
