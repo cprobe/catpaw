@@ -37,9 +37,9 @@ func (w *cappedWriter) Write(p []byte) (int, error) {
 
 func (w *cappedWriter) String() string { return w.buf.String() }
 
-// execShell executes a shell command via /bin/sh -c and returns the output.
+// ExecShell executes a shell command via /bin/sh -c and returns the output.
 // Approval must be handled by the caller before invoking this function.
-func execShell(ctx context.Context, command string, timeout time.Duration) (string, error) {
+func ExecShell(ctx context.Context, command string, timeout time.Duration) (string, error) {
 	if err := ctx.Err(); err != nil {
 		return "", fmt.Errorf("context cancelled, command not executed")
 	}

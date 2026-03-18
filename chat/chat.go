@@ -71,24 +71,23 @@ func Run(verbose bool, modelPin string) error {
 	defer rl.Close()
 
 	autoApprove := false
-	io := &terminalChatIO{
+	shellExec := &terminalShellExecutor{
 		rl:          rl,
-		verbose:     verbose,
 		autoApprove: &autoApprove,
 	}
 
 	snapshot := CollectSnapshot(registry)
 	mcpIdentity := mcpMgr.IdentitySummary(cfg.MCP.DefaultIdentity)
+	systemPrompt := BuildChatSystemPrompt(registry, snapshot, mcpIdentity, cfg.Language, true)
 
-	sess := NewChatSession(SessionConfig{
+	sess := diagnose.NewChatStream(diagnose.ChatStreamConfig{
 		FC:                 fc,
 		Registry:           registry,
 		ToolTimeout:        time.Duration(cfg.ToolTimeout),
-		IO:                 io,
+		SystemPrompt:       systemPrompt,
 		AllowShell:         true,
-		Language:           cfg.Language,
-		Snapshot:           snapshot,
-		MCPIdentity:        mcpIdentity,
+		ShellExecutor:      shellExec,
+		ProgressCallback:   newTerminalProgressCallback(verbose),
 		ContextWindowLimit: cfg.ContextWindowLimit(),
 		GatewayMetadata:    aiclient.GatewayMetadata{RequestSource: "local_chat"},
 	})

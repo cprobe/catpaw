@@ -78,7 +78,8 @@ type chatPromptData struct {
 	AllowShell     bool
 }
 
-func buildChatSystemPrompt(registry *diagnose.ToolRegistry, snapshot, mcpIdentity, language string, allowShell bool) string {
+// BuildChatSystemPrompt constructs the system prompt for chat sessions.
+func BuildChatSystemPrompt(registry *diagnose.ToolRegistry, snapshot, mcpIdentity, language string, allowShell bool) string {
 	if language == "" {
 		language = "中文"
 	}

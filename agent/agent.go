@@ -74,7 +74,7 @@ func (a *diagnoseRunnerAdapter) RunStreaming(ctx context.Context, mode, plugin, 
 	return a.engine.RunDiagnoseStreaming(ctx, req, diagnose.StreamCallback(cb))
 }
 
-// chatRunnerAdapter bridges chat.ChatSession to server.ChatRunner.
+// chatRunnerAdapter bridges diagnose.ChatStream to server.ChatRunner.
 type chatRunnerAdapter struct{}
 
 func (a *chatRunnerAdapter) NewSession(ctx context.Context, opts server.ChatSessionOpts, cb server.StreamCallback) (server.ChatHandle, error) {
@@ -96,72 +96,74 @@ func (a *chatRunnerAdapter) NewSession(ctx context.Context, opts server.ChatSess
 	logger.Logger.Infow("chat_snapshot_completed",
 		"duration_ms", time.Since(snapshotStart).Milliseconds())
 
-	io := &remoteChatIO{cb: cb, allowShell: opts.AllowShell}
+	systemPrompt := chat.BuildChatSystemPrompt(registry, snapshot, "", cfg.Language, opts.AllowShell)
 
-	sess := chat.NewChatSession(chat.SessionConfig{
+	var shellExec diagnose.ShellExecutor
+	if opts.AllowShell {
+		shellExec = &remoteShellExecutor{cb: cb}
+	}
+
+	progressCb := newRemoteProgressCallback(cb)
+
+	sess := diagnose.NewChatStream(diagnose.ChatStreamConfig{
 		FC:                 fc,
 		Registry:           registry,
 		ToolTimeout:        time.Duration(cfg.ToolTimeout),
-		IO:                 io,
+		SystemPrompt:       systemPrompt,
 		AllowShell:         opts.AllowShell,
-		Language:           cfg.Language,
-		Snapshot:           snapshot,
+		ShellExecutor:      shellExec,
+		ProgressCallback:   progressCb,
 		ContextWindowLimit: cfg.ContextWindowLimit(),
 		GatewayMetadata:    aiclient.GatewayMetadata{RequestSource: "remote_chat"},
 	})
 
-	return &chatSessionHandle{sess: sess}, nil
+	return &chatStreamHandle{sess: sess}, nil
 }
 
-// chatSessionHandle adapts chat.ChatSession to server.ChatHandle.
-type chatSessionHandle struct {
-	sess *chat.ChatSession
+// chatStreamHandle adapts diagnose.ChatStream to server.ChatHandle.
+type chatStreamHandle struct {
+	sess *diagnose.ChatStream
 }
 
-func (h *chatSessionHandle) HandleMessage(ctx context.Context, input string) (string, error) {
+func (h *chatStreamHandle) HandleMessage(ctx context.Context, input string) (string, error) {
 	reply, _, err := h.sess.HandleMessage(ctx, input)
 	return reply, err
 }
 
-// remoteChatIO implements chat.ChatIO for remote sessions over WebSocket.
-type remoteChatIO struct {
-	cb         server.StreamCallback
-	allowShell bool
+// remoteShellExecutor implements diagnose.ShellExecutor for remote sessions.
+type remoteShellExecutor struct {
+	cb server.StreamCallback
 }
 
-func (r *remoteChatIO) OnThinkingStart(round int) {
-	r.cb(fmt.Sprintf("[Round %d] thinking...", round), "thinking", false, nil)
+func (r *remoteShellExecutor) ExecuteShell(ctx context.Context, command string, timeout time.Duration) (string, bool, error) {
+	r.cb(fmt.Sprintf("[Shell] %s", command), "tool_call", false, nil)
+	output, err := chat.ExecShell(ctx, command, timeout)
+	return output, true, err
 }
 
-func (r *remoteChatIO) OnThinkingDone(round int, elapsed time.Duration) {
-	r.cb(fmt.Sprintf("[Round %d done] %.1fs", round, elapsed.Seconds()), "thinking", false, nil)
-}
-
-func (r *remoteChatIO) OnReasoning(text string) {
-	r.cb(text, "answer", false, nil)
-}
-
-func (r *remoteChatIO) OnToolStart(name, argsDisplay string) {
-	r.cb(fmt.Sprintf("[Tool] %s %s", name, argsDisplay), "tool_call", false, nil)
-}
-
-func (r *remoteChatIO) OnToolDone(name, argsDisplay string, elapsed time.Duration, resultLen int, isErr bool) {
-	status := "ok"
-	if isErr {
-		status = "error"
+// newRemoteProgressCallback creates a ProgressCallback that streams events via WebSocket.
+func newRemoteProgressCallback(cb server.StreamCallback) diagnose.ProgressCallback {
+	return func(event diagnose.ProgressEvent) {
+		switch event.Type {
+		case diagnose.ProgressAIStart:
+			cb(fmt.Sprintf("[Round %d] thinking...", event.Round), "thinking", false, nil)
+		case diagnose.ProgressAIDone:
+			if event.Duration > 0 {
+				cb(fmt.Sprintf("[Round %d done] %.1fs", event.Round, event.Duration.Seconds()), "thinking", false, nil)
+			}
+			if event.Reasoning != "" {
+				cb(event.Reasoning, "answer", false, nil)
+			}
+		case diagnose.ProgressToolStart:
+			cb(fmt.Sprintf("[Tool] %s %s", event.ToolName, event.ToolArgs), "tool_call", false, nil)
+		case diagnose.ProgressToolDone:
+			status := "ok"
+			if event.IsError {
+				status = "error"
+			}
+			cb(fmt.Sprintf("[Tool done] %s (%s, %dB, %s)", event.ToolName, status, event.ResultLen, event.Duration), "tool_result", false, nil)
+		}
 	}
-	r.cb(fmt.Sprintf("[Tool done] %s (%s, %dB, %s)", name, status, resultLen, elapsed), "tool_result", false, nil)
-}
-
-func (r *remoteChatIO) OnToolOutput(_ string) {
-	// Tool output is not streamed to remote clients to avoid excessive verbosity.
-}
-
-func (r *remoteChatIO) ApproveShell(command string) (bool, string) {
-	if r.allowShell {
-		return true, ""
-	}
-	return false, ""
 }
 
 type PluginConfig struct {
