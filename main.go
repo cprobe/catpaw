@@ -40,7 +40,7 @@ func main() {
 	flag.Parse()
 
 	if *showVersion {
-		fmt.Println(config.Version)
+		fmt.Println(version)
 		os.Exit(0)
 	}
 
@@ -114,7 +114,7 @@ func handleRunSubcommand(args []string) {
 		"fd_limits", runner.FdLimits(),
 	)
 
-	ag := agent.New()
+	ag := agent.New(version)
 
 	if runtime.GOOS == "windows" && !winsvc.IsAnInteractiveSession() {
 		if err := winsvc.RunAsService(winx.GetServiceName(), ag.Start, ag.Stop, false); err != nil {
@@ -277,7 +277,7 @@ Commands:
   mcptest     Test all configured MCP server connections
 
 Run 'catpaw help <command>' for details on a specific command.
-`, config.Version)
+`, version)
 }
 
 func printSubcommandHelp(cmd string) {

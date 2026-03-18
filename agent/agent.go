@@ -178,15 +178,17 @@ type Agent struct {
 	pluginRunners map[string]*PluginRunner
 	cancel        context.CancelFunc
 	startTime     time.Time
+	Version       string
 	sync.RWMutex
 }
 
-func New() *Agent {
+func New(version string) *Agent {
 	return &Agent{
 		pluginFilters: parseFilter(config.Config.Plugins),
 		pluginConfigs: make(map[string]*PluginConfig),
 		pluginRunners: make(map[string]*PluginRunner),
 		startTime:     time.Now(),
+		Version:       version,
 	}
 }
 
@@ -232,7 +234,7 @@ func (a *Agent) startServerConn() {
 		pluginNames = append(pluginNames, name)
 	}
 
-	go server.RunForever(ctx, a.startTime, pluginNames)
+	go server.RunForever(ctx, a.startTime, pluginNames, a.Version)
 }
 
 func initNotifiers() {

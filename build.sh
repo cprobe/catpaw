@@ -4,10 +4,10 @@ set -e
 export CGO_ENABLED=0
 
 APP_NAME="catpaw"
-VERSION=$(grep 'var Version' config/version.go | awk -F'"' '{print $2}')
+VERSION=$(grep 'var version' version.go | awk -F'"' '{print $2}')
 TIMESTAMP=$(date +%Y%m%d%H%M%S)
 GIT_COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
-LDFLAGS="-s -w -X github.com/cprobe/catpaw/config.Version=${VERSION}-${GIT_COMMIT}"
+LDFLAGS="-s -w -X main.version=${VERSION}-${GIT_COMMIT}"
 
 _package() {
     GOOS_VAL="${1}"
