@@ -5,7 +5,7 @@ import (
 	"time"
 
 	"github.com/cprobe/digcore/diagnose"
-	"github.com/cprobe/catpaw/diagnose/aiclient"
+	"github.com/cprobe/digcore/diagnose/aiclient"
 	"github.com/cprobe/digcore/pkg/term"
 )
 

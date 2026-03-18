@@ -3,7 +3,7 @@ package chat
 import (
 	"testing"
 
-	"github.com/cprobe/catpaw/diagnose/aiclient"
+	"github.com/cprobe/digcore/diagnose/aiclient"
 )
 
 func msg(role string) aiclient.Message { return aiclient.Message{Role: role} }

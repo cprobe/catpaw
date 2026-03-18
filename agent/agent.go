@@ -12,13 +12,12 @@ import (
 	"github.com/cprobe/catpaw/chat"
 	"github.com/cprobe/digcore/config"
 	"github.com/cprobe/digcore/diagnose"
-	"github.com/cprobe/catpaw/diagnose/aiclient"
+	"github.com/cprobe/digcore/diagnose/aiclient"
 	"github.com/cprobe/digcore/logger"
 	"github.com/cprobe/digcore/notify"
-	catpawnotify "github.com/cprobe/catpaw/notify"
 	"github.com/cprobe/digcore/pkg/choice"
 	"github.com/cprobe/digcore/plugins"
-	"github.com/cprobe/catpaw/server"
+	"github.com/cprobe/digcore/server"
 	"github.com/toolkits/pkg/file"
 
 	// auto registry
@@ -248,7 +247,7 @@ func initNotifiers() {
 		notify.Register(notify.NewWebAPINotifier(cfg))
 	}
 	if config.Config.Server.Enabled {
-		notify.Register(catpawnotify.NewServerNotifier())
+		notify.Register(server.NewServerNotifier())
 	}
 }
 

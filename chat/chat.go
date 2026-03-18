@@ -11,7 +11,7 @@ import (
 
 	"github.com/cprobe/digcore/config"
 	"github.com/cprobe/digcore/diagnose"
-	"github.com/cprobe/catpaw/diagnose/aiclient"
+	"github.com/cprobe/digcore/diagnose/aiclient"
 	"github.com/cprobe/digcore/mcp"
 	"github.com/cprobe/digcore/plugins"
 	"github.com/ergochat/readline"
