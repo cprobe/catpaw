@@ -3,6 +3,7 @@
 /vendor
 /dist
 /up_down.sh
+/conf.d/config.local.toml
 
 .idea
 .DS_Store

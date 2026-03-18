@@ -257,6 +257,11 @@ func initNotifiers() {
 
 func (a *Agent) initDiagnoseEngine() {
 	if !config.Config.AI.Enabled {
+		logger.Logger.Infow("AI diagnose disabled")
+		return
+	}
+	if err := config.Config.AI.Validate(); err != nil {
+		logger.Logger.Errorw("AI diagnose initialization skipped", "error", err)
 		return
 	}
 	registry := diagnose.NewToolRegistry()
