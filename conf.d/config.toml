@@ -88,7 +88,7 @@ enabled = true
 # [ai.models.deepseek]
 # provider = "openai"
 # base_url = "https://api.deepseek.com/v1"
-# api_key = "sk-8d5ba712cc06454a82cc32e77be106b1"
+# api_key = "${DEEPSEEK_API_KEY}"
 # model = "deepseek-chat"
 # max_tokens = 8000
 # context_window = 64000
@@ -117,4 +117,3 @@ enabled = true
 # aws_access_key_id = "${AWS_ACCESS_KEY_ID}"
 # aws_secret_access_key = "${AWS_SECRET_ACCESS_KEY}"
 # aws_session_token = "${AWS_SESSION_TOKEN}"
-#
