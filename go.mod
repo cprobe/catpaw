@@ -43,4 +43,4 @@ require (
 )
 
 // For local development:
-replace github.com/cprobe/digcore => ../digcore
+// replace github.com/cprobe/digcore => ../digcore
