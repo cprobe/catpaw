@@ -15,7 +15,7 @@ import (
 	"github.com/cprobe/digcore/diagnose"
 	"github.com/cprobe/digcore/logger"
 	"github.com/cprobe/digcore/mcp"
-	"github.com/cprobe/catpaw/plugins"
+	"github.com/cprobe/digcore/plugins"
 	"github.com/cprobe/catpaw/winx"
 	"github.com/toolkits/pkg/runner"
 )

@@ -3,29 +3,14 @@ interval = "30s"
 
 [global.labels]
 from_agent = "catpaw"
-# from_hostname = "${HOSTNAME}"
-# from_hostip = "${IP}"
-from_hostname = "demo-alertgen"
-from_hostip = "10.20.0.21"
+from_hostname = "${HOSTNAME}"
+from_hostip = "${IP}"
 
 [log]
 level = "info"
 # format = "json"
 # output = "stdout"
 # fields = {}
-
-## 连接 catpaw-server（开启后，Agent 会把事件上报到 server，并可复用 server 侧 LLM 网关）
-## address 支持：
-## - host:port，例如 "127.0.0.1:8080"
-## - 完整 URL，例如 "http://127.0.0.1:8080" / "https://catpaw.example.com"
-## - 环境变量引用，例如 "${CATPAW_SERVER_ADDR}"
-[server]
-enabled = true
-address = "http://127.0.0.1:18080"
-agent_token = "CATPAW_AGENT_TOKEN"
-# ca_file = "/etc/catpaw/server-ca.pem"   # 自签 HTTPS 证书场景可指定 CA
-# tls_skip_verify = false                 # 仅测试环境可考虑设为 true
-# alert_buffer_size = 1000                # 本地告警上报缓冲区，默认 1000
 
 ## 控制台输出（新用户快速验证告警效果，无需任何外部服务）
 [notify.console]
@@ -58,8 +43,8 @@ enabled = true
 # X-Custom-Header = "catpaw"
 
 ## AI 智能诊断配置（告警触发后自动分析根因）
-[ai]
-enabled = true
+# [ai]
+# enabled = true
 #
 ## 模型优先级列表（按顺序尝试，第一个可用的就用它；故障时自动切换下一个）
 ## 调整顺序即可切换模型用于对比测试，也可用 catpaw chat --model <name> 固定某个模型
@@ -86,17 +71,7 @@ enabled = true
 #
 # language = "zh"                    # AI 输出语言，默认 zh
 #
-## 通过 catpaw-server 复用集中式 LLM 网关
-## 若已启用 [server] 且这里不填 base_url，会自动推导为:
-##   <server.address>/api/v1/agent/llm
-[ai.gateway]
-enabled = true
-agent_token = "{CATPAW_AGENT_TOKEN}" # 为空时会继承 [server].agent_token
-request_timeout = "90s"
-# max_retries = 1
-# fallback_to_direct = true            # 网关失败时是否回退直连 [ai.models.*]
-# # base_url = "http://127.0.0.1:8080/api/v1/agent/llm"
-#
+
 ## ---- 模型配置（每个模型一个 [ai.models.<name>] 段）----
 #
 # [ai.models.gpt4o]
