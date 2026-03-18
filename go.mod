@@ -5,7 +5,7 @@ go 1.25.5
 require (
 	github.com/BurntSushi/toml v1.3.0
 	github.com/chai2010/winsvc v0.0.0-20200705094454-db7ec320025c
-	github.com/cprobe/digcore v0.1.0
+	github.com/cprobe/digcore v0.1.1
 	github.com/ergochat/readline v0.1.3
 	github.com/gobwas/glob v0.2.3
 	github.com/google/uuid v1.6.0
