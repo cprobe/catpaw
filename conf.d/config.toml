@@ -118,29 +118,3 @@ enabled = true
 # aws_secret_access_key = "${AWS_SECRET_ACCESS_KEY}"
 # aws_session_token = "${AWS_SESSION_TOKEN}"
 #
-## ---- MCP 外部数据源（连接 Prometheus/Nightingale/Jaeger/CMDB 等）----
-#
-# [ai.mcp]
-# enabled = true
-# default_identity = "${HOSTNAME}"   # 全局默认标识, 支持 ${HOSTNAME} ${SHORT_HOSTNAME} ${IP}
-#
-# [[ai.mcp.servers]]
-# name = "prometheus"
-# command = "/usr/local/bin/mcp-prometheus"
-# args = ["serve"]
-# 本机过滤条件, AI查询时用它筛选本机数据，使用 categraf 采集的数据机器标识为 ident
-# 如果使用 Node-Exporter 采集数据，identity 应该配置为 instance="${IP}:9100"
-# identity = 'ident="${HOSTNAME}"'
-# tools_allow = []                   # 白名单(空=全放行)
-# [ai.mcp.servers.env]
-# PROMETHEUS_URL = "http://127.0.0.1:9090"
-#
-# [[ai.mcp.servers]]
-# name = "nightingale"
-# command = "npx"
-# args = ["-y", "@n9e/n9e-mcp-server", "stdio"]
-# identity = 'ident="${HOSTNAME}"'   # 本 server 专用标识(覆盖 default)
-# tools_allow = [] # 白名单(空=全放行)
-# [ai.mcp.servers.env]
-# N9E_TOKEN = "480c04ed-ebe7-4266-xxxx-f8daf7819a6d"
-# N9E_BASE_URL = "http://127.0.0.1:17000"

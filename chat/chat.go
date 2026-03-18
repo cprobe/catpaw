@@ -12,7 +12,6 @@ import (
 	"github.com/cprobe/digcore/config"
 	"github.com/cprobe/digcore/diagnose"
 	"github.com/cprobe/digcore/diagnose/aiclient"
-	"github.com/cprobe/digcore/mcp"
 	"github.com/cprobe/digcore/plugins"
 	"github.com/ergochat/readline"
 )
@@ -36,19 +35,6 @@ func Run(verbose bool, modelPin string) error {
 	}
 	for _, r := range plugins.DiagnoseRegistrars {
 		r(registry)
-	}
-
-	mcpMgr := mcp.NewManager()
-	if cfg.MCP.Enabled && len(cfg.MCP.Servers) > 0 {
-		mcpCtx, mcpCancel := context.WithCancel(context.Background())
-		mcpMgr.StartAll(mcpCtx, cfg.MCP, registry)
-		defer func() {
-			mcpCancel()
-			mcpMgr.Close()
-		}()
-		if n := mcpMgr.ServerCount(); n > 0 {
-			fmt.Printf("MCP: %d server(s) connected\n", n)
-		}
 	}
 
 	fc := aiclient.NewFailoverClientForScene(cfg, "chat")
@@ -77,8 +63,7 @@ func Run(verbose bool, modelPin string) error {
 	}
 
 	snapshot := CollectSnapshot(registry)
-	mcpIdentity := mcpMgr.IdentitySummary(cfg.MCP.DefaultIdentity)
-	systemPrompt := BuildChatSystemPrompt(registry, snapshot, mcpIdentity, cfg.Language, true)
+	systemPrompt := BuildChatSystemPrompt(registry, snapshot, cfg.Language, true)
 
 	sess := diagnose.NewChatStream(diagnose.ChatStreamConfig{
 		FC:                 fc,

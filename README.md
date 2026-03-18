@@ -15,7 +15,6 @@ Events can be forwarded to any alert platform (Flashduty, PagerDuty, or any HTTP
 - 💬 **Interactive AI chat** — troubleshoot issues conversationally with AI + tools
 - 🩺 **Proactive health inspection** — on-demand AI-driven health checks
 - 🛠️ **70+ diagnostic tools** — system, network, storage, security, process, kernel
-- 🔗 **MCP integration** — connect external data sources (Prometheus, Jaeger, CMDB, etc.) via [Model Context Protocol](https://modelcontextprotocol.io/)
 - 📡 **Flexible notification** — console, generic WebAPI, Flashduty, PagerDuty, or any combination
 - 🔄 **Self-monitoring friendly** — ideal for monitoring your monitoring systems
 
@@ -33,12 +32,12 @@ Events can be forwarded to any alert platform (Flashduty, PagerDuty, or any HTTP
 │         │ events    ┌──────────────┐         ┌───────────────┐ │
 │         └────────── │   Notifiers  │         │  70+ Diagnose │ │
 │                     │  (multiple)  │         │     Tools     │ │
-│                     └──────────────┘         └───────┬───────┘ │
-│                                                      │         │
-│  ┌─────────────┐                            ┌────────┴───────┐ │
-│  │  AI Chat    │ ───── interactive ──────── │  MCP External  │ │
-│  │  (CLI)      │       troubleshoot         │  Data Sources  │ │
-│  └─────────────┘                            └────────────────┘ │
+│                     └──────────────┘         └───────────────┘ │
+│                                                                 │
+│  ┌─────────────┐                                                │
+│  │  AI Chat    │ ───── interactive troubleshoot                 │
+│  │  (CLI)      │                                                │
+│  └─────────────┘                                                │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -94,8 +93,6 @@ When AI diagnosis is triggered (by alert, inspection, or chat), the AI agent has
 
 🔌 **Remote plugins** (Redis, etc.) contribute their own specialized diagnostic tools for deep introspection.
 
-🔗 **MCP external tools**: Connect Prometheus, Jaeger, CMDB, or any MCP-compatible data source — the AI automatically discovers and uses their tools.
-
 ## 🖥️ CLI Commands
 
 ```bash
@@ -104,7 +101,6 @@ catpaw chat [-v]                        # Interactive AI chat for troubleshootin
 catpaw inspect <plugin> [target]        # Proactive AI health inspection
 catpaw diagnose list|show <id>          # View past diagnosis records
 catpaw selftest [filter] [-q]           # Smoke-test all diagnostic tools
-catpaw mcptest                          # Test MCP server connections
 ```
 
 ## 🚀 Quick Start
@@ -193,39 +189,6 @@ Now when alerts fire, AI automatically analyzes root cause using built-in diagno
 ```
 
 Ask questions like "Why is CPU high?" or "Check disk I/O latency" — the AI uses diagnostic tools and shell commands (with confirmation) to investigate.
-
-### 🔗 MCP External Data Sources (optional)
-
-Connect Prometheus, Jaeger, or other MCP servers for AI to query historical metrics, traces, etc.:
-
-```toml
-[ai.mcp]
-enabled = true
-
-[[ai.mcp.servers]]
-name = "prometheus"
-command = "/usr/local/bin/mcp-prometheus"
-args = ["serve"]
-identity = 'instance="${IP}:9100"'
-[ai.mcp.servers.env]
-PROMETHEUS_URL = "http://127.0.0.1:9090"
-
-[[ai.mcp.servers]]
-name = "nightingale"
-command = "npx"
-args = ["-y", "@n9e/n9e-mcp-server", "stdio"]
-identity = 'ident="${HOSTNAME}"'
-tools_allow = []
-[ai.mcp.servers.env]
-N9E_TOKEN = "480c04ed-ebe7-4266-xxxx-f8daf7819a6d"
-N9E_BASE_URL = "http://127.0.0.1:17000"
-```
-
-Verify connectivity:
-
-```bash
-./catpaw mcptest
-```
 
 ## ⚙️ Configuration
 

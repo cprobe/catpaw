@@ -96,7 +96,7 @@ func (a *chatRunnerAdapter) NewSession(ctx context.Context, opts server.ChatSess
 	logger.Logger.Infow("chat_snapshot_completed",
 		"duration_ms", time.Since(snapshotStart).Milliseconds())
 
-	systemPrompt := chat.BuildChatSystemPrompt(registry, snapshot, "", cfg.Language, opts.AllowShell)
+	systemPrompt := chat.BuildChatSystemPrompt(registry, snapshot, cfg.Language, opts.AllowShell)
 
 	var shellExec diagnose.ShellExecutor
 	if opts.AllowShell {

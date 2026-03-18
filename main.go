@@ -14,7 +14,6 @@ import (
 	"github.com/cprobe/digcore/config"
 	"github.com/cprobe/digcore/diagnose"
 	"github.com/cprobe/digcore/logger"
-	"github.com/cprobe/digcore/mcp"
 	"github.com/cprobe/digcore/plugins"
 	"github.com/cprobe/catpaw/winx"
 	"github.com/toolkits/pkg/runner"
@@ -80,9 +79,6 @@ func handleSubcommand(args []string) bool {
 		return true
 	case "selftest":
 		handleSelftestSubcommand(args)
-		return true
-	case "mcptest":
-		handleMCPTestSubcommand()
 		return true
 	default:
 		return false
@@ -233,22 +229,6 @@ func handleSelftestSubcommand(args []string) {
 	}
 }
 
-func handleMCPTestSubcommand() {
-	if err := config.InitConfig(*configDir, 0, "", *loglevel); err != nil {
-		fmt.Fprintf(os.Stderr, "Error loading config: %v\n", err)
-		os.Exit(1)
-	}
-
-	results := mcp.RunTest(config.Config.AI.MCP)
-	mcp.PrintTestResults(results)
-
-	for _, r := range results {
-		if r.Status != "PASS" {
-			os.Exit(1)
-		}
-	}
-}
-
 // --- Usage ---
 
 func printUsage() {
@@ -260,7 +240,6 @@ Usage:
   catpaw inspect <plugin> [target]        Run health inspection on a target
   catpaw diagnose <command>               Manage diagnosis records
   catpaw selftest [filter] [-q]           Smoke-test all diagnostic tools
-  catpaw mcptest                          Test MCP server connections
   catpaw help [command]                   Show help for a command
 
 Global Flags:
@@ -274,7 +253,6 @@ Commands:
   inspect     Proactive health inspection (AI-powered)
   diagnose    View past diagnosis / inspection records
   selftest    Smoke-test all diagnostic tools on this machine
-  mcptest     Test all configured MCP server connections
 
 Run 'catpaw help <command>' for details on a specific command.
 `, version)
@@ -292,8 +270,6 @@ func printSubcommandHelp(cmd string) {
 		printDiagnoseUsage()
 	case "selftest":
 		printSelftestUsage()
-	case "mcptest":
-		printMCPTestUsage()
 	default:
 		fmt.Fprintf(os.Stderr, "Unknown command: %q\n\n", cmd)
 		printUsage()
@@ -395,27 +371,4 @@ Examples:
   catpaw selftest                  Test all tools
   catpaw selftest sysdiag          Test only sysdiag tools
   catpaw selftest -q               Quiet mode`)
-}
-
-func printMCPTestUsage() {
-	fmt.Println(`Usage: catpaw mcptest
-
-Test all configured MCP server connections. For each server defined in
-[[ai.mcp.servers]], it will:
-
-  1. Start the MCP server process
-  2. Perform the protocol handshake (initialize)
-  3. Discover available tools (tools/list)
-  4. Apply the tools_allow whitelist filter
-  5. Show the resolved identity string for this host
-
-No AI API is needed. The test is read-only and non-destructive.
-
-Exit code:
-  0           All servers connected successfully
-  1           One or more servers failed
-
-Examples:
-  catpaw mcptest                          Test with default config
-  catpaw --configs /etc/catpaw/conf.d mcptest    Use custom config dir`)
 }

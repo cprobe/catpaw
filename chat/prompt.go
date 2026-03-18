@@ -28,16 +28,6 @@ const chatPromptRaw = `你是 catpaw 运维助手，运行在主机 {{.Hostname}
 
 {{.SystemSnapshot}}
 {{- end}}
-{{- if .MCPIdentity}}
-
-## 外部数据源（MCP）
-
-已连接的 MCP 服务器及本机在各数据源中的过滤条件：
-{{.MCPIdentity}}
-**查询规则**：
-1. 过滤条件用于定位本机数据，查询时必须使用它来筛选
-2. 不确定数据名称或字段时，优先使用该数据源的发现/列举类工具探测，不要猜测
-{{- end}}
 
 ## 可用诊断工具
 
@@ -73,13 +63,12 @@ type chatPromptData struct {
 	Kernel         string
 	ToolCatalog    string
 	SystemSnapshot string
-	MCPIdentity    string
 	Language       string
 	AllowShell     bool
 }
 
 // BuildChatSystemPrompt constructs the system prompt for chat sessions.
-func BuildChatSystemPrompt(registry *diagnose.ToolRegistry, snapshot, mcpIdentity, language string, allowShell bool) string {
+func BuildChatSystemPrompt(registry *diagnose.ToolRegistry, snapshot, language string, allowShell bool) string {
 	if language == "" {
 		language = "中文"
 	}
@@ -95,7 +84,6 @@ func BuildChatSystemPrompt(registry *diagnose.ToolRegistry, snapshot, mcpIdentit
 		Kernel:         kernel,
 		ToolCatalog:    registry.ListToolCatalogSmart(),
 		SystemSnapshot: snapshot,
-		MCPIdentity:    mcpIdentity,
 		Language:       language,
 		AllowShell:     allowShell,
 	}

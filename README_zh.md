@@ -15,7 +15,6 @@ catpaw 是一个轻量的监控 Agent，具备 **AI 智能诊断**能力。
 - 💬 **AI 交互排障** — 命令行对话式排障，AI + 工具联动
 - 🩺 **主动健康巡检** — 按需对目标执行 AI 驱动的深度检查
 - 🛠️ **70+ 诊断工具** — 系统、网络、存储、安全、进程、内核全覆盖
-- 🔗 **MCP 集成** — 通过 [Model Context Protocol](https://modelcontextprotocol.io/) 接入 Prometheus、Jaeger、CMDB 等外部数据源
 - 📡 **灵活通知** — 控制台、通用 WebAPI、Flashduty、PagerDuty，可同时开启多个
 - 🔄 **适合自监控** — 监控系统的监控系统，避免循环依赖
 
@@ -33,12 +32,12 @@ catpaw 是一个轻量的监控 Agent，具备 **AI 智能诊断**能力。
 │         │ 事件      ┌──────────────┐         ┌───────────────┐ │
 │         └────────── │   通知渠道   │         │  70+ 诊断    │ │
 │                     │  （多选）    │         │     工具     │ │
-│                     └──────────────┘         └───────┬───────┘ │
-│                                                      │         │
-│  ┌─────────────┐                            ┌────────┴───────┐ │
-│  │  AI Chat    │ ───── 交互式排障 ───────── │  MCP 外部     │ │
-│  │  (命令行)   │                            │  数据源       │ │
-│  └─────────────┘                            └────────────────┘ │
+│                     └──────────────┘         └───────────────┘ │
+│                                                                 │
+│  ┌─────────────┐                                                │
+│  │  AI Chat    │ ───── 交互式排障                               │
+│  │  (命令行)   │                                                │
+│  └─────────────┘                                                │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -94,8 +93,6 @@ AI 诊断被触发时（告警、巡检或 Chat），AI Agent 可调用以下工
 
 🔌 **远程插件**（如 Redis）会注册专用诊断工具，用于对目标实例进行深入检查。
 
-🔗 **MCP 外部工具**：接入 Prometheus、Jaeger、CMDB 或任何 MCP 兼容数据源后，AI 自动发现并使用其提供的工具。
-
 ## 🖥️ 命令行
 
 ```bash
@@ -104,7 +101,6 @@ catpaw chat [-v]                        # AI 交互式排障
 catpaw inspect <plugin> [target]        # AI 主动健康巡检
 catpaw diagnose list|show <id>          # 查看历史诊断记录
 catpaw selftest [filter] [-q]           # 诊断工具自检
-catpaw mcptest                          # MCP 连接测试
 ```
 
 ## 🚀 快速开始
@@ -191,39 +187,6 @@ model = "gpt-4o"
 ```
 
 直接提问，如"CPU 为什么高？"、"检查磁盘 I/O"等，AI 会使用诊断工具和 Shell 命令（需用户确认）进行排查。
-
-### 🔗 MCP 外部数据源（可选）
-
-接入 Prometheus、Jaeger 等 MCP Server，让 AI 能查询历史指标、链路追踪等：
-
-```toml
-[ai.mcp]
-enabled = true
-
-[[ai.mcp.servers]]
-name = "prometheus"
-command = "/usr/local/bin/mcp-prometheus"
-args = ["serve"]
-identity = 'instance="${IP}:9100"'
-[ai.mcp.servers.env]
-PROMETHEUS_URL = "http://127.0.0.1:9090"
-
-[[ai.mcp.servers]]
-name = "nightingale"
-command = "npx"
-args = ["-y", "@n9e/n9e-mcp-server", "stdio"]
-identity = 'ident="${HOSTNAME}"'
-tools_allow = []
-[ai.mcp.servers.env]
-N9E_TOKEN = "480c04ed-ebe7-4266-xxxx-f8daf7819a6d"
-N9E_BASE_URL = "http://127.0.0.1:17000"
-```
-
-验证连通性：
-
-```bash
-./catpaw mcptest
-```
 
 ## ⚙️ 配置说明
 
