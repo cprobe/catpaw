@@ -41,9 +41,15 @@ func (r *PluginRunner) stop() {
 	for i := 0; i < len(r.Instances); i++ {
 		plugins.MayDrop(r.Instances[i])
 	}
+	plugins.MayPluginDrop(r.pluginObject)
 }
 
 func (r *PluginRunner) start() {
+	if err := plugins.MayPluginInit(r.pluginObject); err != nil {
+		logger.Logger.Errorw("plugin init fail", "plugin", r.pluginName, "error", err)
+		return
+	}
+
 	r.Instances = plugins.MayGetInstances(r.pluginObject)
 	r.quitChan = make([]chan struct{}, len(r.Instances))
 	for i := 0; i < len(r.Instances); i++ {
