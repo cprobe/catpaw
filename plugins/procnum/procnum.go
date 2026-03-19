@@ -2,7 +2,6 @@ package procnum
 
 import (
 	"fmt"
-	"runtime"
 	"strings"
 
 	"github.com/cprobe/digcore/config"
@@ -19,9 +18,8 @@ const pluginName = "procnum"
 type searchMode int
 
 const (
-	searchModeProcess    searchMode = iota // exec_name / cmdline / user — AND combination
-	searchModePidFile                      // standalone: read PID from file
-	searchModeWinService                   // standalone: Windows service query
+	searchModeProcess searchMode = iota // exec_name / cmdline / user — AND combination
+	searchModePidFile                   // standalone: read PID from file
 )
 
 type ProcessCountCheck struct {
@@ -38,8 +36,7 @@ type Instance struct {
 	SearchCmdline  string `toml:"search_cmdline"`
 	SearchUser     string `toml:"search_user"`
 
-	SearchPidFile    string `toml:"search_pid_file"`
-	SearchWinService string `toml:"search_win_service"`
+	SearchPidFile string `toml:"search_pid_file"`
 
 	mode        searchMode
 	searchLabel string
@@ -71,38 +68,18 @@ func (ins *Instance) Init() error {
 	ins.SearchCmdline = strings.TrimSpace(ins.SearchCmdline)
 	ins.SearchUser = strings.TrimSpace(ins.SearchUser)
 	ins.SearchPidFile = strings.TrimSpace(ins.SearchPidFile)
-	ins.SearchWinService = strings.TrimSpace(ins.SearchWinService)
 
 	hasProcessFilter := ins.SearchExecName != "" || ins.SearchCmdline != "" || ins.SearchUser != ""
 	hasPidFile := ins.SearchPidFile != ""
-	hasWinService := ins.SearchWinService != ""
 
-	modeCount := 0
-	if hasProcessFilter {
-		modeCount++
+	if hasProcessFilter && hasPidFile {
+		return fmt.Errorf("search_pid_file is mutually exclusive with process filters (search_exec_name/search_cmdline/search_user)")
 	}
+
 	if hasPidFile {
-		modeCount++
-	}
-	if hasWinService {
-		modeCount++
-	}
-
-	if modeCount > 1 {
-		return fmt.Errorf("search_pid_file and search_win_service are mutually exclusive with process filters (search_exec_name/search_cmdline/search_user)")
-	}
-
-	switch {
-	case hasPidFile:
 		ins.mode = searchModePidFile
-	case hasWinService:
-		ins.mode = searchModeWinService
-	default:
+	} else {
 		ins.mode = searchModeProcess
-	}
-
-	if ins.SearchWinService != "" && runtime.GOOS != "windows" {
-		return fmt.Errorf("search_win_service is only supported on Windows, current OS: %s", runtime.GOOS)
 	}
 
 	ins.searchLabel = ins.buildSearchLabel()
@@ -139,9 +116,6 @@ func (ins *Instance) buildSearchLabel() string {
 	if ins.SearchPidFile != "" {
 		return ins.SearchPidFile
 	}
-	if ins.SearchWinService != "" {
-		return ins.SearchWinService
-	}
 
 	var parts []string
 	if ins.SearchExecName != "" {
@@ -168,9 +142,6 @@ func (ins *Instance) Gather(q *safe.Queue[*types.Event]) {
 	switch ins.mode {
 	case searchModePidFile:
 		pids, e := ins.findByPidFile()
-		count, err = len(pids), e
-	case searchModeWinService:
-		pids, e := ins.winServicePIDs()
 		count, err = len(pids), e
 	case searchModeProcess:
 		if ins.searchLabel == "all" {
@@ -309,17 +280,6 @@ func (ins *Instance) findByPidFile() ([]procutil.PID, error) {
 	return alive, nil
 }
 
-func (ins *Instance) winServicePIDs() ([]procutil.PID, error) {
-	pid, err := queryPidWithWinServiceName(ins.SearchWinService)
-	if err != nil {
-		return nil, err
-	}
-	if pid == 0 {
-		return nil, nil
-	}
-	return []procutil.PID{procutil.PID(pid)}, nil
-}
-
 func (ins *Instance) newEvent() *types.Event {
 	attrs := map[string]string{}
 	if ins.SearchExecName != "" {
@@ -333,9 +293,6 @@ func (ins *Instance) newEvent() *types.Event {
 	}
 	if ins.SearchPidFile != "" {
 		attrs["search_pid_file"] = ins.SearchPidFile
-	}
-	if ins.SearchWinService != "" {
-		attrs["search_win_service"] = ins.SearchWinService
 	}
 
 	return types.BuildEvent(map[string]string{

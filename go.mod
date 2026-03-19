@@ -4,14 +4,12 @@ go 1.25.5
 
 require (
 	github.com/BurntSushi/toml v1.3.0
-	github.com/chai2010/winsvc v0.0.0-20200705094454-db7ec320025c
 	github.com/cprobe/digcore v0.1.5
 	github.com/ergochat/readline v0.1.3
 	github.com/prometheus-community/pro-bing v0.2.0
 	github.com/shirou/gopsutil/v3 v3.24.5
 	github.com/toolkits/pkg v1.3.11
 	go.uber.org/zap v1.27.1
-	golang.org/x/sys v0.31.0
 	golang.org/x/text v0.34.0
 )
 
@@ -37,6 +35,7 @@ require (
 	go.uber.org/multierr v1.10.0 // indirect
 	golang.org/x/net v0.38.0 // indirect
 	golang.org/x/sync v0.19.0 // indirect
+	golang.org/x/sys v0.31.0 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 	nhooyr.io/websocket v1.8.17 // indirect

@@ -1,17 +1,14 @@
-//go:build !windows
-
-package main
+package agent
 
 import (
 	"os"
 	"os/signal"
 	"syscall"
 
-	"github.com/cprobe/catpaw/agent"
 	"github.com/cprobe/digcore/logger"
 )
 
-func waitForSignal(ag *agent.Agent) {
+func waitForSignal(ag *Agent) {
 	sc := make(chan os.Signal, 1)
 	signal.Notify(sc, syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT, syscall.SIGPIPE)
 

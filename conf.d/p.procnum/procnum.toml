@@ -3,8 +3,7 @@
 ## 1) 用 search_exec_name 指定进程名
 ## 2) process_count.critical_lt = 1 表示"找不到进程就 Critical"
 ## 常见误区：
-## - search_pid_file / search_win_service 与其他 search_* 条件互斥
-## - search_win_service 仅 Windows 可用
+## - search_pid_file 与其他 search_* 条件互斥
 ## - 阈值必须为非负数，且 warn/critical 需满足大小关系约束
 
 ## 进程查找条件（以下三项是 AND 关系）
@@ -17,13 +16,11 @@
 ##
 ## 下面两种是"独立模式"，与上面三项互斥：
 ## - search_pid_file：从 pid 文件读取 PID，并验证进程是否存活
-## - search_win_service：按 Windows 服务名查 PID（仅 Windows）
 
 search_exec_name = "sshd"
 # search_cmdline = ""
 # search_user = ""
 # search_pid_file = ""
-# search_win_service = ""
 
 interval = "30s"
 

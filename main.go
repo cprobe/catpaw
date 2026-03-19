@@ -5,33 +5,24 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 
-	"github.com/chai2010/winsvc"
 	"github.com/cprobe/catpaw/agent"
 	"github.com/cprobe/catpaw/chat"
 	"github.com/cprobe/digcore/config"
 	"github.com/cprobe/digcore/diagnose"
 	"github.com/cprobe/digcore/logger"
 	"github.com/cprobe/digcore/plugins"
-	"github.com/cprobe/catpaw/winx"
 	"github.com/toolkits/pkg/runner"
 )
 
 var (
-	appPath     string
 	configDir   = flag.String("configs", "conf.d", "Configuration directory")
 	showVersion = flag.Bool("version", false, "Show version")
 	loglevel    = flag.String("loglevel", "", "Log level (debug/info/warn/error)")
 )
 
 func init() {
-	var err error
-	if appPath, err = winsvc.GetAppPath(); err != nil {
-		panic(err)
-	}
-
 	flag.Usage = printUsage
 }
 
@@ -92,8 +83,6 @@ func handleRunSubcommand(args []string) {
 	fs.Usage = printRunUsage
 	fs.Parse(args[1:])
 
-	winx.Args(appPath)
-
 	if err := config.InitConfig(*configDir, *interval, *pluginFilter, *loglevel); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
@@ -110,22 +99,7 @@ func handleRunSubcommand(args []string) {
 		"fd_limits", runner.FdLimits(),
 	)
 
-	ag := agent.New(version)
-
-	if runtime.GOOS == "windows" && !winsvc.IsAnInteractiveSession() {
-		if err := winsvc.RunAsService(winx.GetServiceName(), ag.Start, ag.Stop, false); err != nil {
-			fmt.Println("failed to run windows service:", err)
-			os.Exit(1)
-		}
-		return
-	} else {
-		ag.Start()
-	}
-
-	waitForSignal(ag)
-
-	ag.Stop()
-	logger.Logger.Info("agent exited")
+	agent.Run(version)
 }
 
 func handleDiagnoseSubcommand(args []string) {

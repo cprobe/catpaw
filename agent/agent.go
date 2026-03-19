@@ -192,6 +192,17 @@ func New(version string) *Agent {
 	}
 }
 
+// Run starts the agent and blocks until a termination signal is received.
+// This is the public entry point for external binaries (e.g. kubepaw) that
+// embed catpaw's full agent lifecycle.
+func Run(version string) {
+	ag := New(version)
+	ag.Start()
+	waitForSignal(ag)
+	ag.Stop()
+	logger.Logger.Info("agent exited")
+}
+
 func (a *Agent) Start() {
 	logger.Logger.Info("agent starting")
 

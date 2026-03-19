@@ -1,7 +1,6 @@
 package procnum
 
 import (
-	"runtime"
 	"testing"
 )
 
@@ -101,14 +100,6 @@ func TestInitRejectsMixedModes(t *testing.T) {
 			name: "exec + pid_file",
 			ins:  Instance{SearchExecName: "nginx", SearchPidFile: "/var/run/nginx.pid"},
 		},
-		{
-			name: "cmdline + win_service",
-			ins:  Instance{SearchCmdline: "myapp", SearchWinService: "W32Time"},
-		},
-		{
-			name: "pid_file + win_service",
-			ins:  Instance{SearchPidFile: "/var/run/test.pid", SearchWinService: "W32Time"},
-		},
 	}
 
 	for _, tc := range cases {
@@ -155,20 +146,6 @@ func TestInitRejectsInvalidThresholds(t *testing.T) {
 				t.Fatalf("should reject invalid thresholds: %+v", tc.pc)
 			}
 		})
-	}
-}
-
-func TestInitWinServicePlatformGuard(t *testing.T) {
-	ins := &Instance{
-		SearchWinService: "W32Time",
-		ProcessCount:     ProcessCountCheck{CriticalLt: intPtr(1)},
-	}
-	err := ins.Init()
-	if runtime.GOOS == "windows" && err != nil {
-		t.Fatalf("should accept on Windows: %v", err)
-	}
-	if runtime.GOOS != "windows" && err == nil {
-		t.Fatal("should reject on non-Windows")
 	}
 }
 
@@ -224,11 +201,6 @@ func TestBuildSearchLabel(t *testing.T) {
 			name:     "pid_file",
 			ins:      Instance{SearchPidFile: "/var/run/nginx.pid"},
 			expected: "/var/run/nginx.pid",
-		},
-		{
-			name:     "win_service",
-			ins:      Instance{SearchWinService: "W32Time"},
-			expected: "W32Time",
 		},
 	}
 
