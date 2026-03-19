@@ -2,7 +2,6 @@
 interval = "30s"
 
 [global.labels]
-from_agent = "catpaw"
 from_hostname = "${HOSTNAME}"
 from_hostip = "${IP}"
 

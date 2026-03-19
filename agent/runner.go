@@ -14,6 +14,10 @@ import (
 	"github.com/cprobe/digcore/types"
 )
 
+func init() {
+	engine.FromAgent = "catpaw"
+}
+
 type PluginRunner struct {
 	pluginName   string
 	pluginObject plugins.Plugin
