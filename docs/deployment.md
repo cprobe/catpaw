@@ -8,11 +8,11 @@
 
 ### 2. 配置
 
-编辑 `conf.d/config.toml`，填入 FlashDuty 的 integration_key：
+编辑 `conf.d/config.toml`，配置通知后端。以 FlashDuty 为例：
 
 ```toml
-[flashduty]
-url = "https://api.flashcat.cloud/event/push/alert/standard?integration_key=YOUR_KEY"
+[notify.flashduty]
+integration_key = "YOUR_KEY"
 ```
 
 按需启用或调整 `conf.d/p.*` 下的插件配置。
@@ -20,10 +20,10 @@ url = "https://api.flashcat.cloud/event/push/alert/standard?integration_key=YOUR
 ### 3. 测试运行
 
 ```bash
-./catpaw -test
+./catpaw run --plugins cpu:mem
 ```
 
-确认输出无误后，正式启动。
+仅运行 cpu 和 mem 插件，事件输出到 console，确认输出无误后正式启动。
 
 ### 4. systemd 服务（推荐）
 
