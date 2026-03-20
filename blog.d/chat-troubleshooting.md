@@ -711,8 +711,6 @@ AI: [调用 log_tail: file=/var/log/app/app.log, lines=50]
 | 🌡️ 硬件 | 3 | `thermal_zone`, `numa_stat`, `block_devices` |
 | 📡 证书/HTTP | 4 | `cert_inspect_remote`, `cert_inspect_file`, `http_probe`, `dns_lookup` |
 
-如果配置了 **MCP（Model Context Protocol）**，AI 还能查询 Prometheus 历史指标、Jaeger 链路追踪等外部数据源——这意味着它不仅能看到"现在"，还能看到"过去"。
-
 而且，当工具不够用时，AI 还有 `exec_shell` 这个兜底手段——直接执行 shell 命令。当然，每次执行前都会征得你的同意。
 
 ## 它不能做什么

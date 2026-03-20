@@ -271,13 +271,15 @@ func (c *Conn) runChat(ctx context.Context, sess *remoteSession, payload *sessio
 		params = make(map[string]any)
 	}
 
-	allowShell, _ := params["allow_shell"].(bool)
+	// Remote sessions never allow shell execution for security.
+	// Diagnostics rely on structured tools only (70+ read-only tools).
+	// Shell is only available in local `catpaw chat` with human confirmation.
 
 	cb := func(delta, stage string, done bool, metadata map[string]any) {
 		c.sendSessionOutput(sess.sessionID, delta, stage, false, "", metadata)
 	}
 
-	handle, err := chatRunner.NewSession(ctx, ChatSessionOpts{AllowShell: allowShell}, cb)
+	handle, err := chatRunner.NewSession(ctx, ChatSessionOpts{AllowShell: false}, cb)
 	if err != nil {
 		if ctx.Err() != nil {
 			return "cancelled"
