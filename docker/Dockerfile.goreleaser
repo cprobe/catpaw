@@ -1,7 +1,0 @@
-FROM ubuntu:24.04
-
-WORKDIR /app
-ADD catpaw /app
-COPY conf.d /app/conf.d
-
-CMD ["/app/catpaw"]
