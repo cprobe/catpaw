@@ -250,6 +250,13 @@ func (e *DiagnoseEngine) diagnose(ctx context.Context, req *DiagnoseRequest, ses
 
 	messages := make([]aiclient.Message, 0, e.maxRounds*4)
 	messages = append(messages, aiclient.Message{Role: "system", Content: prompt})
+	// Many OpenAI-compatible gateways (e.g. some vLLM/Qwen stacks) reject requests
+	// that contain only a system message ("No user query found"). Chat REPL always
+	// adds a user turn; diagnosis must do the same for the first API round.
+	messages = append(messages, aiclient.Message{
+		Role:    "user",
+		Content: diagnoseUserKickoffMessage(req.Mode, e.cfg.Language),
+	})
 	ctx = aiclient.WithGatewayMetadata(ctx, aiclient.GatewayMetadata{
 		DiagnoseID:    session.Record.ID,
 		Plugin:        req.Plugin,
@@ -257,7 +264,7 @@ func (e *DiagnoseEngine) diagnose(ctx context.Context, req *DiagnoseRequest, ses
 		RequestSource: "diagnose",
 	})
 
-	estimatedTokens := aiclient.EstimateMessageTokens(messages[0])
+	estimatedTokens := aiclient.EstimateMessagesTokens(messages[:2])
 	session.Record.AI.Model = e.cfg.PrimaryModelName()
 	contextWarned := false
 
@@ -513,4 +520,21 @@ func emitProgress(cb ProgressCallback, event ProgressEvent) {
 	if cb != nil {
 		cb(event)
 	}
+}
+
+// diagnoseUserKickoffMessage is the first user turn for alert/inspect diagnosis.
+// The system prompt already holds full context; this line satisfies backends that
+// require at least one role=user message in /v1/chat/completions.
+func diagnoseUserKickoffMessage(mode string, lang string) string {
+	isZH := lang == "" || lang == "zh"
+	if mode == ModeInspect {
+		if isZH {
+			return "请根据上述巡检任务说明开始检查（可调用工具）。"
+		}
+		return "Begin the inspection as described in the system message above (you may use tools)."
+	}
+	if isZH {
+		return "请根据上述告警信息开始根因诊断（可调用工具）。"
+	}
+	return "Begin root-cause diagnosis for the alert described in the system message above (you may use tools)."
 }

@@ -1,6 +1,6 @@
 module github.com/cprobe/catpaw
 
-go 1.25.5
+go 1.25.0
 
 require (
 	github.com/BurntSushi/toml v1.3.0
