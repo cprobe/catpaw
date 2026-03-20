@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/cprobe/digcore/diagnose"
-	"github.com/cprobe/digcore/pkg/cmdx"
+	"github.com/cprobe/catpaw/digcore/diagnose"
+	"github.com/cprobe/catpaw/digcore/pkg/cmdx"
 )
 
 const tracerouteTimeout = 30 * time.Second

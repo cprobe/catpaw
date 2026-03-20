@@ -11,9 +11,9 @@ import (
 
 	"os/exec"
 
-	"github.com/cprobe/digcore/diagnose"
-	"github.com/cprobe/digcore/pkg/cmdx"
-	"github.com/cprobe/digcore/plugins"
+	"github.com/cprobe/catpaw/digcore/diagnose"
+	"github.com/cprobe/catpaw/digcore/pkg/cmdx"
+	"github.com/cprobe/catpaw/digcore/plugins"
 )
 
 var _ plugins.Diagnosable = (*NTPPlugin)(nil)

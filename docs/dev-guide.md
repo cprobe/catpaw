@@ -33,7 +33,7 @@ catpaw/
 ├── docs/                # 用户文档
 └── build.sh             # 构建脚本
 
-以下包在 digcore 模块中（github.com/cprobe/digcore）：
+以下包在 digcore 模块中（github.com/cprobe/catpaw/digcore）：
 ├── engine/              # 事件处理引擎：去重、告警判定、恢复、触发诊断
 ├── diagnose/            # AI 诊断子系统：引擎、聚合器、注册表、提示词、记录
 ├── notify/              # 通知后端：Console、WebAPI、Flashduty、PagerDuty

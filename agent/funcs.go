@@ -6,7 +6,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/cprobe/digcore/config"
+	"github.com/cprobe/catpaw/digcore/config"
 	"github.com/toolkits/pkg/file"
 )
 

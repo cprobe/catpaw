@@ -8,12 +8,12 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/cprobe/digcore/config"
-	"github.com/cprobe/digcore/logger"
-	"github.com/cprobe/digcore/pkg/procutil"
-	"github.com/cprobe/digcore/pkg/safe"
-	"github.com/cprobe/digcore/plugins"
-	"github.com/cprobe/digcore/types"
+	"github.com/cprobe/catpaw/digcore/config"
+	"github.com/cprobe/catpaw/digcore/logger"
+	"github.com/cprobe/catpaw/digcore/pkg/procutil"
+	"github.com/cprobe/catpaw/digcore/pkg/safe"
+	"github.com/cprobe/catpaw/digcore/plugins"
+	"github.com/cprobe/catpaw/digcore/types"
 	"github.com/shirou/gopsutil/v3/process"
 	"github.com/toolkits/pkg/concurrent/semaphore"
 )

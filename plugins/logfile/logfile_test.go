@@ -10,10 +10,10 @@ import (
 	"testing"
 	"unicode/utf8"
 
-	"github.com/cprobe/digcore/config"
-	clogger "github.com/cprobe/digcore/logger"
-	"github.com/cprobe/digcore/pkg/safe"
-	"github.com/cprobe/digcore/types"
+	"github.com/cprobe/catpaw/digcore/config"
+	clogger "github.com/cprobe/catpaw/digcore/logger"
+	"github.com/cprobe/catpaw/digcore/pkg/safe"
+	"github.com/cprobe/catpaw/digcore/types"
 	"go.uber.org/zap"
 )
 

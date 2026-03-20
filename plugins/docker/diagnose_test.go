@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/cprobe/digcore/diagnose"
+	"github.com/cprobe/catpaw/digcore/diagnose"
 )
 
 func TestRegisterDiagnoseTools(t *testing.T) {

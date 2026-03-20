@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/cprobe/digcore/pkg/safe"
-	"github.com/cprobe/digcore/types"
+	"github.com/cprobe/catpaw/digcore/pkg/safe"
+	"github.com/cprobe/catpaw/digcore/types"
 )
 
 // --- helpers ---

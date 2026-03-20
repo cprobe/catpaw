@@ -3,8 +3,8 @@ package chat
 import (
 	"fmt"
 
-	"github.com/cprobe/digcore/diagnose/aiclient"
-	"github.com/cprobe/digcore/pkg/term"
+	"github.com/cprobe/catpaw/digcore/diagnose/aiclient"
+	"github.com/cprobe/catpaw/digcore/pkg/term"
 )
 
 func printTokenUsage(usage aiclient.Usage, inputPrice, outputPrice float64) {

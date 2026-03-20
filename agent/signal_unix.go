@@ -5,7 +5,7 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/cprobe/digcore/logger"
+	"github.com/cprobe/catpaw/digcore/logger"
 )
 
 func waitForSignal(ag *Agent) {

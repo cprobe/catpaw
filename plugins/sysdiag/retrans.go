@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/cprobe/digcore/diagnose"
+	"github.com/cprobe/catpaw/digcore/diagnose"
 )
 
 const (

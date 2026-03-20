@@ -1,8 +1,8 @@
 package sysdiag
 
 import (
-	"github.com/cprobe/digcore/diagnose"
-	"github.com/cprobe/digcore/plugins"
+	"github.com/cprobe/catpaw/digcore/diagnose"
+	"github.com/cprobe/catpaw/digcore/plugins"
 )
 
 func init() {

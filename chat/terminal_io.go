@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/cprobe/digcore/diagnose"
-	"github.com/cprobe/digcore/pkg/term"
+	"github.com/cprobe/catpaw/digcore/diagnose"
+	"github.com/cprobe/catpaw/digcore/pkg/term"
 	"github.com/ergochat/readline"
 )
 

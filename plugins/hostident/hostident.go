@@ -5,10 +5,10 @@ import (
 	"os"
 	"strings"
 
-	"github.com/cprobe/digcore/config"
-	"github.com/cprobe/digcore/pkg/safe"
-	"github.com/cprobe/digcore/plugins"
-	"github.com/cprobe/digcore/types"
+	"github.com/cprobe/catpaw/digcore/config"
+	"github.com/cprobe/catpaw/digcore/pkg/safe"
+	"github.com/cprobe/catpaw/digcore/plugins"
+	"github.com/cprobe/catpaw/digcore/types"
 )
 
 const pluginName = "hostident"

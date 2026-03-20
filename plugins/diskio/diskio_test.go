@@ -4,9 +4,9 @@ import (
 	"os"
 	"testing"
 
-	"github.com/cprobe/digcore/logger"
-	"github.com/cprobe/digcore/pkg/safe"
-	"github.com/cprobe/digcore/types"
+	"github.com/cprobe/catpaw/digcore/logger"
+	"github.com/cprobe/catpaw/digcore/pkg/safe"
+	"github.com/cprobe/catpaw/digcore/types"
 	"github.com/shirou/gopsutil/v3/disk"
 	"go.uber.org/zap"
 )

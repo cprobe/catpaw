@@ -5,13 +5,13 @@ import (
 	"sync"
 	"time"
 
-	"github.com/cprobe/digcore/config"
-	"github.com/cprobe/digcore/engine"
-	"github.com/cprobe/digcore/logger"
-	"github.com/cprobe/digcore/pkg/runtimex"
-	"github.com/cprobe/digcore/pkg/safe"
-	"github.com/cprobe/digcore/plugins"
-	"github.com/cprobe/digcore/types"
+	"github.com/cprobe/catpaw/digcore/config"
+	"github.com/cprobe/catpaw/digcore/engine"
+	"github.com/cprobe/catpaw/digcore/logger"
+	"github.com/cprobe/catpaw/digcore/pkg/runtimex"
+	"github.com/cprobe/catpaw/digcore/pkg/safe"
+	"github.com/cprobe/catpaw/digcore/plugins"
+	"github.com/cprobe/catpaw/digcore/types"
 )
 
 func init() {

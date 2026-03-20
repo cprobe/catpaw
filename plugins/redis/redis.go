@@ -9,13 +9,13 @@ import (
 	"sync"
 	"time"
 
-	"github.com/cprobe/digcore/config"
-	"github.com/cprobe/digcore/logger"
-	"github.com/cprobe/digcore/pkg/conv"
-	"github.com/cprobe/digcore/pkg/safe"
-	tlscfg "github.com/cprobe/digcore/pkg/tls"
-	"github.com/cprobe/digcore/plugins"
-	"github.com/cprobe/digcore/types"
+	"github.com/cprobe/catpaw/digcore/config"
+	"github.com/cprobe/catpaw/digcore/logger"
+	"github.com/cprobe/catpaw/digcore/pkg/conv"
+	"github.com/cprobe/catpaw/digcore/pkg/safe"
+	tlscfg "github.com/cprobe/catpaw/digcore/pkg/tls"
+	"github.com/cprobe/catpaw/digcore/plugins"
+	"github.com/cprobe/catpaw/digcore/types"
 	"github.com/toolkits/pkg/concurrent/semaphore"
 )
 

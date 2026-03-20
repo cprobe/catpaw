@@ -10,14 +10,14 @@ import (
 
 	"github.com/BurntSushi/toml"
 	"github.com/cprobe/catpaw/chat"
-	"github.com/cprobe/digcore/config"
-	"github.com/cprobe/digcore/diagnose"
-	"github.com/cprobe/digcore/diagnose/aiclient"
-	"github.com/cprobe/digcore/logger"
-	"github.com/cprobe/digcore/notify"
-	"github.com/cprobe/digcore/pkg/choice"
-	"github.com/cprobe/digcore/plugins"
-	"github.com/cprobe/digcore/server"
+	"github.com/cprobe/catpaw/digcore/config"
+	"github.com/cprobe/catpaw/digcore/diagnose"
+	"github.com/cprobe/catpaw/digcore/diagnose/aiclient"
+	"github.com/cprobe/catpaw/digcore/logger"
+	"github.com/cprobe/catpaw/digcore/notify"
+	"github.com/cprobe/catpaw/digcore/pkg/choice"
+	"github.com/cprobe/catpaw/digcore/plugins"
+	"github.com/cprobe/catpaw/digcore/server"
 	"github.com/toolkits/pkg/file"
 
 	// auto registry

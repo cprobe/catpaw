@@ -4,9 +4,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/cprobe/digcore/config"
-	"github.com/cprobe/digcore/pkg/safe"
-	"github.com/cprobe/digcore/types"
+	"github.com/cprobe/catpaw/digcore/config"
+	"github.com/cprobe/catpaw/digcore/pkg/safe"
+	"github.com/cprobe/catpaw/digcore/types"
 )
 
 func popEvent(q *safe.Queue[*types.Event]) *types.Event {

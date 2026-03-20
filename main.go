@@ -9,10 +9,10 @@ import (
 
 	"github.com/cprobe/catpaw/agent"
 	"github.com/cprobe/catpaw/chat"
-	"github.com/cprobe/digcore/config"
-	"github.com/cprobe/digcore/diagnose"
-	"github.com/cprobe/digcore/logger"
-	"github.com/cprobe/digcore/plugins"
+	"github.com/cprobe/catpaw/digcore/config"
+	"github.com/cprobe/catpaw/digcore/diagnose"
+	"github.com/cprobe/catpaw/digcore/logger"
+	"github.com/cprobe/catpaw/digcore/plugins"
 	"github.com/toolkits/pkg/runner"
 )
 

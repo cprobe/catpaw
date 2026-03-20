@@ -7,8 +7,8 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/cprobe/digcore/diagnose"
-	"github.com/cprobe/digcore/plugins"
+	"github.com/cprobe/catpaw/digcore/diagnose"
+	"github.com/cprobe/catpaw/digcore/plugins"
 )
 
 var _ plugins.Diagnosable = (*SysctlPlugin)(nil)
