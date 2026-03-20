@@ -73,7 +73,7 @@ func (e *DiagnoseEngine) Submit(req *DiagnoseRequest) {
 	key := req.Plugin + "::" + req.Target
 
 	if e.state.IsCooldownActive(req.Plugin, req.Target) {
-		logger.Logger.Debugw("diagnose skipped: cooldown active", "key", key)
+		logger.Logger.Infow("diagnose skipped: cooldown active", "key", key)
 		return
 	}
 
