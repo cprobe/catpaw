@@ -12,6 +12,10 @@ type Notifier interface {
 	Forward(event *types.Event) bool
 }
 
+type CommentNotifier interface {
+	Comment(alertKey, comment string) bool
+}
+
 var notifiers []Notifier
 
 func Register(n Notifier) {
@@ -38,6 +42,51 @@ func Forward(event *types.Event) bool {
 			defer wg.Done()
 			results[idx] = notifier.Forward(event)
 		}(i, n)
+	}
+	wg.Wait()
+
+	for _, ok := range results {
+		if ok {
+			return true
+		}
+	}
+	return false
+}
+
+func ForwardComment(alertKey, comment string) bool {
+	if len(notifiers) == 0 {
+		logger.Logger.Warnw("forward comment: no notifiers configured, comment dropped",
+			"alert_key", alertKey)
+		return false
+	}
+
+	commentNotifiers := make([]CommentNotifier, 0, len(notifiers))
+	for _, notifier := range notifiers {
+		cn, ok := notifier.(CommentNotifier)
+		if !ok {
+			continue
+		}
+		commentNotifiers = append(commentNotifiers, cn)
+	}
+
+	if len(commentNotifiers) == 0 {
+		logger.Logger.Warnw("forward comment: no notifier supports comment delivery",
+			"alert_key", alertKey)
+		return false
+	}
+
+	if len(commentNotifiers) == 1 {
+		return commentNotifiers[0].Comment(alertKey, comment)
+	}
+
+	var wg sync.WaitGroup
+	results := make([]bool, len(commentNotifiers))
+	for i, notifier := range commentNotifiers {
+		wg.Add(1)
+		go func(idx int, commenter CommentNotifier) {
+			defer wg.Done()
+			results[idx] = commenter.Comment(alertKey, comment)
+		}(i, notifier)
 	}
 	wg.Wait()
 

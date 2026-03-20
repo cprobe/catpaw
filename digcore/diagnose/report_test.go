@@ -107,6 +107,32 @@ func TestFormatReport_ShortBody(t *testing.T) {
 	}
 }
 
+func TestFormatReportComment_Truncation(t *testing.T) {
+	record := newTestRecord()
+	longBody := strings.Repeat("诊断结论", 300)
+	result := FormatReportComment(record, longBody, "zh")
+	if got := len([]rune(result)); got > maxCommentChars {
+		t.Fatalf("comment should be at most %d chars, got %d", maxCommentChars, got)
+	}
+	if !strings.Contains(result, "catpaw diagnose show "+record.ID) {
+		t.Fatalf("comment should contain local lookup hint, got: %s", result)
+	}
+	if !strings.Contains(result, "[已截断]") {
+		t.Fatalf("comment should contain truncation notice, got: %s", result)
+	}
+}
+
+func TestFormatReportComment_EmptyBody(t *testing.T) {
+	record := newTestRecord()
+	result := FormatReportComment(record, "   ", "en")
+	if !strings.Contains(result, "AI diagnosis completed") {
+		t.Fatalf("empty comment should contain fallback text, got: %s", result)
+	}
+	if !strings.Contains(result, "Details: catpaw diagnose show "+record.ID) {
+		t.Fatalf("empty comment should contain CLI hint, got: %s", result)
+	}
+}
+
 func TestTruncateUTF8(t *testing.T) {
 	tests := []struct {
 		input    string
@@ -136,5 +162,14 @@ func TestTruncateUTF8_NoBrokenRunes(t *testing.T) {
 	}
 	if result != "你好" {
 		t.Errorf("expected '你好' (6 bytes), got %q", result)
+	}
+}
+
+func TestTruncateRunes(t *testing.T) {
+	if got := TruncateRunes("你好世界", 3); got != "你好世" {
+		t.Fatalf("TruncateRunes() = %q, want %q", got, "你好世")
+	}
+	if got := TruncateRunes("abc", 0); got != "" {
+		t.Fatalf("TruncateRunes() = %q, want empty string", got)
 	}
 }

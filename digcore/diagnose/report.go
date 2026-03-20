@@ -8,6 +8,7 @@ import (
 )
 
 const maxDescriptionBytes = 2048
+const maxCommentChars = 1024
 
 // FormatReportDescription builds a concise diagnosis report suitable for
 // notification description fields (max 2048 bytes). It prioritizes:
@@ -42,6 +43,33 @@ func FormatReportDescription(record *DiagnoseRecord, report string, language str
 	return header + body + footer
 }
 
+func FormatReportComment(record *DiagnoseRecord, report string, language string) string {
+	body := strings.TrimSpace(report)
+	if body == "" {
+		body = formatEmptyComment(language)
+	}
+
+	footer := formatCommentFooter(record, language)
+	truncSuffix := formatCommentTruncSuffix(language)
+
+	footerRunes := utf8.RuneCountInString(footer)
+	if footerRunes >= maxCommentChars {
+		return TruncateRunes(footer, maxCommentChars)
+	}
+
+	budget := maxCommentChars - footerRunes
+	if utf8.RuneCountInString(body) > budget {
+		suffixRunes := utf8.RuneCountInString(truncSuffix)
+		if budget > suffixRunes {
+			body = TruncateRunes(body, budget-suffixRunes) + truncSuffix
+		} else {
+			body = TruncateRunes(body, budget)
+		}
+	}
+
+	return body + footer
+}
+
 func formatHeader(record *DiagnoseRecord, language string) string {
 	var b strings.Builder
 	if language == "zh" {
@@ -72,6 +100,27 @@ func formatFooter(record *DiagnoseRecord, language string) string {
 		record.ID, record.FilePath())
 }
 
+func formatCommentFooter(record *DiagnoseRecord, language string) string {
+	if language == "zh" {
+		return fmt.Sprintf("\n\n详情: catpaw diagnose show %s", record.ID)
+	}
+	return fmt.Sprintf("\n\nDetails: catpaw diagnose show %s", record.ID)
+}
+
+func formatCommentTruncSuffix(language string) string {
+	if language == "zh" {
+		return "\n...[已截断]"
+	}
+	return "\n...[truncated]"
+}
+
+func formatEmptyComment(language string) string {
+	if language == "zh" {
+		return "AI 诊断已完成，但未生成可显示的报告。"
+	}
+	return "AI diagnosis completed, but no displayable report was generated."
+}
+
 func truncSuffixText(language string) string {
 	if language == "zh" {
 		return "\n...[诊断报告已截断，完整内容请查看本地记录]"
@@ -92,4 +141,15 @@ func TruncateUTF8(s string, maxBytes int) string {
 		maxBytes--
 	}
 	return s[:maxBytes]
+}
+
+func TruncateRunes(s string, maxRunes int) string {
+	if maxRunes <= 0 {
+		return ""
+	}
+	runes := []rune(s)
+	if len(runes) <= maxRunes {
+		return s
+	}
+	return string(runes[:maxRunes])
 }

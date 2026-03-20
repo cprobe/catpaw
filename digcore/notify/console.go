@@ -40,6 +40,11 @@ func (c *ConsoleNotifier) Forward(event *types.Event) bool {
 	return true
 }
 
+func (c *ConsoleNotifier) Comment(alertKey, comment string) bool {
+	printComment(alertKey, comment)
+	return true
+}
+
 func statusColor(status string) string {
 	switch status {
 	case types.EventStatusCritical:
@@ -95,6 +100,25 @@ func printEvent(event *types.Event) {
 	if desc != "" {
 		sb.WriteString("    ")
 		sb.WriteString(desc)
+		sb.WriteString("\n")
+	}
+
+	fmt.Print(sb.String())
+}
+
+func printComment(alertKey, comment string) {
+	ts := time.Now().Format("2006-01-02 15:04:05")
+
+	var sb strings.Builder
+	sb.WriteString(colorize(colorGray, ts))
+	sb.WriteString("  ")
+	sb.WriteString(colorize(colorBold+colorCyan, fmt.Sprintf("%-8s", "COMMENT")))
+	sb.WriteString("  ")
+	sb.WriteString(colorize(colorBold, alertKey))
+	sb.WriteString("\n")
+	if comment != "" {
+		sb.WriteString("    ")
+		sb.WriteString(comment)
 		sb.WriteString("\n")
 	}
 
