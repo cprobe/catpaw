@@ -1,8 +1,11 @@
 package aiclient
 
 // CompactMessages removes the oldest conversation rounds to fit within a
-// token budget. It always keeps messages[0] (the system prompt). Tool-call
-// sequences (an assistant message with ToolCalls followed by its tool
+// token budget. It always keeps messages[0] (the system prompt). If messages[1]
+// is a plain user message (no tool_calls), it is kept as well: some gateways
+// reject requests whose tail is only system+assistant+tool without any user
+// turn, and diagnosis relies on an initial user kickoff after the system prompt.
+// Tool-call sequences (an assistant message with ToolCalls followed by its tool
 // responses) are treated as atomic units — kept or removed together.
 //
 // Returns the original slice unchanged if it already fits within the budget.
@@ -16,11 +19,19 @@ func CompactMessages(messages []Message, tokenBudget int) []Message {
 		return messages
 	}
 
-	groups := parseMessageGroups(messages)
-	systemTokens := EstimateMessageTokens(messages[0])
-	budget := tokenBudget - systemTokens
+	stickyPrefix := 1
+	if len(messages) > 1 && messages[1].Role == "user" && len(messages[1].ToolCalls) == 0 {
+		stickyPrefix = 2
+	}
+	stickyTokens := EstimateMessagesTokens(messages[:stickyPrefix])
+	if stickyTokens > tokenBudget {
+		return messages[:stickyPrefix]
+	}
+
+	groups := parseMessageGroups(messages, stickyPrefix)
+	budget := tokenBudget - stickyTokens
 	if budget <= 0 {
-		return messages[:1]
+		return messages[:stickyPrefix]
 	}
 
 	keepFrom := len(groups)
@@ -37,11 +48,11 @@ func CompactMessages(messages []Message, tokenBudget int) []Message {
 		return messages
 	}
 	if keepFrom >= len(groups) {
-		return messages[:1]
+		return messages[:stickyPrefix]
 	}
 
-	result := make([]Message, 0, len(messages)-groups[keepFrom].startIdx+1)
-	result = append(result, messages[0])
+	result := make([]Message, 0, len(messages)-groups[keepFrom].startIdx+stickyPrefix)
+	result = append(result, messages[:stickyPrefix]...)
 	result = append(result, messages[groups[keepFrom].startIdx:]...)
 	return result
 }
@@ -75,9 +86,12 @@ func EstimateMessageTokens(m Message) int {
 	return tokens
 }
 
-func parseMessageGroups(messages []Message) []messageGroup {
+func parseMessageGroups(messages []Message, startIdx int) []messageGroup {
 	var groups []messageGroup
-	i := 1
+	i := startIdx
+	if startIdx < 1 {
+		i = 1
+	}
 	for i < len(messages) {
 		g := messageGroup{startIdx: i}
 		if messages[i].Role == "assistant" && len(messages[i].ToolCalls) > 0 {
