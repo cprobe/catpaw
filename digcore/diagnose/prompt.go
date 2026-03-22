@@ -3,13 +3,24 @@ package diagnose
 import (
 	"bytes"
 	"fmt"
+	"sort"
 	"strings"
 	"text/template"
 )
 
 var promptTmpl = template.Must(template.New("prompt").Funcs(template.FuncMap{
-	"add": func(a, b int) int { return a + b },
+	"add":        func(a, b int) int { return a + b },
+	"sortedKeys": sortedMapKeys,
 }).Parse(promptRaw))
+
+func sortedMapKeys(m map[string]string) []string {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	return keys
+}
 
 const promptRaw = `你是一位资深运维和 DBA 专家。
 
@@ -142,48 +153,87 @@ catpaw 监控系统检测到以下告警：
 {{- end}}
 
 请只使用工具获取信息，不要假设或编造数据。
+{{- if .PreCollectedContext}}
+
+## {{.Plugin}} 预采集数据
+
+以下是诊断触发时自动采集的 {{.Plugin}} 基线数据，可直接用于分析：
+
+<pre_collected plugin="{{.Plugin}}">
+{{.PreCollectedContext}}
+</pre_collected>
+{{- end}}
+{{- if .SystemBaseline}}
+
+## 系统基线
+
+以下是本机 OS 健康快照（诊断触发时自动采集），可直接用于判断是否存在系统级瓶颈，无需再调用对应 overview 工具：
+{{range $plugin := sortedKeys .SystemBaseline}}
+<system_baseline plugin="{{$plugin}}">
+{{index $.SystemBaseline $plugin}}
+</system_baseline>
+{{- end}}
+{{- end}}
+{{- if .DiagnoseHints}}
+
+## {{.Plugin}} 诊断路线图
+{{.DiagnoseHints}}
+{{- end}}
 {{- if ne .Language "zh"}}
 
 IMPORTANT: You MUST respond in {{.Language}}. All output including section headers, analysis, and recommendations must be in {{.Language}}.
 {{- end}}`
 
 type promptData struct {
-	Mode           string
-	Plugin         string
-	Target         string
-	RuntimeOS      string
-	IsSystemInspect bool
-	Checks         []CheckSnapshot
-	Descriptions   string
-	DirectTools    string
-	ToolCatalog    string
-	IsRemoteTarget bool
-	LocalHost      string
-	Language       string
+	Mode                string
+	Plugin              string
+	Target              string
+	RuntimeOS           string
+	IsSystemInspect     bool
+	Checks              []CheckSnapshot
+	Descriptions        string
+	DirectTools         string
+	ToolCatalog         string
+	IsRemoteTarget      bool
+	LocalHost           string
+	Language            string
+	PreCollectedContext string
+	DiagnoseHints       string
+	SystemBaseline      map[string]string
 }
 
-func buildSystemPrompt(req *DiagnoseRequest, directTools, toolCatalog, localHost string, isRemote bool, language string) string {
-	return renderPrompt(ModeAlert, req, directTools, toolCatalog, localHost, isRemote, language)
+// promptContext carries optional data populated by the engine before building the prompt.
+type promptContext struct {
+	PreCollectedContext string
+	DiagnoseHints      string
+	SystemBaseline     map[string]string // plugin → overview data (cpu, mem, disk)
 }
 
-func buildInspectPrompt(req *DiagnoseRequest, directTools, toolCatalog, localHost string, isRemote bool, language string) string {
-	return renderPrompt(ModeInspect, req, directTools, toolCatalog, localHost, isRemote, language)
+func buildSystemPrompt(req *DiagnoseRequest, directTools, toolCatalog, localHost string, isRemote bool, language string, pctx promptContext) string {
+	return renderPrompt(ModeAlert, req, directTools, toolCatalog, localHost, isRemote, language, pctx)
 }
 
-func renderPrompt(mode string, req *DiagnoseRequest, directTools, toolCatalog, localHost string, isRemote bool, language string) string {
+func buildInspectPrompt(req *DiagnoseRequest, directTools, toolCatalog, localHost string, isRemote bool, language string, pctx promptContext) string {
+	return renderPrompt(ModeInspect, req, directTools, toolCatalog, localHost, isRemote, language, pctx)
+}
+
+func renderPrompt(mode string, req *DiagnoseRequest, directTools, toolCatalog, localHost string, isRemote bool, language string, pctx promptContext) string {
 	data := promptData{
-		Mode:           mode,
-		Plugin:         req.Plugin,
-		Target:         req.Target,
-		RuntimeOS:      req.RuntimeOS,
-		IsSystemInspect: mode == ModeInspect && req.Plugin == "system",
-		Checks:         req.Checks,
-		Descriptions:   req.Descriptions,
-		DirectTools:    directTools,
-		ToolCatalog:    toolCatalog,
-		IsRemoteTarget: isRemote,
-		LocalHost:      localHost,
-		Language:       language,
+		Mode:                mode,
+		Plugin:              req.Plugin,
+		Target:              req.Target,
+		RuntimeOS:           req.RuntimeOS,
+		IsSystemInspect:     mode == ModeInspect && req.Plugin == "system",
+		Checks:              req.Checks,
+		Descriptions:        req.Descriptions,
+		DirectTools:         directTools,
+		ToolCatalog:         toolCatalog,
+		IsRemoteTarget:      isRemote,
+		LocalHost:           localHost,
+		Language:            language,
+		PreCollectedContext: pctx.PreCollectedContext,
+		DiagnoseHints:       pctx.DiagnoseHints,
+		SystemBaseline:      pctx.SystemBaseline,
 	}
 
 	var buf bytes.Buffer

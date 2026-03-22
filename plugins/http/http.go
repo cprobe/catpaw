@@ -141,6 +141,7 @@ func (ins *Instance) Init() error {
 	if ins.Concurrency == 0 {
 		ins.Concurrency = 10
 	}
+	boolPtr := func(v bool) *bool { return &v }
 
 	if ins.Connectivity.Severity == "" {
 		ins.Connectivity.Severity = types.EventStatusCritical
@@ -200,8 +201,8 @@ func (ins *Instance) Init() error {
 		if addr.Scheme != "http" && addr.Scheme != "https" {
 			return fmt.Errorf("only http and https are supported, target: %s", target)
 		}
-		if addr.Scheme == "https" && !ins.UseTLS {
-			ins.UseTLS = true
+		if addr.Scheme == "https" && ins.UseTLS == nil {
+			ins.UseTLS = boolPtr(true)
 		}
 	}
 
@@ -332,7 +333,7 @@ func (ins *Instance) gather(q *safe.Queue[*types.Event], target string) {
 	responseTime := time.Since(start)
 
 	connAttrs := map[string]string{
-		"response_time":   responseTime.String(),
+		"response_time":  responseTime.String(),
 		"threshold_desc": fmt.Sprintf("%s: connection failed", ins.Connectivity.Severity),
 	}
 	connEvent := types.BuildEvent(map[string]string{
@@ -366,7 +367,7 @@ func (ins *Instance) gather(q *safe.Queue[*types.Event], target string) {
 		rtEvent := types.BuildEvent(map[string]string{
 			"check": "http::response_time",
 		}, labels).SetAttrs(map[string]string{
-			"response_time":   responseTime.String(),
+			"response_time":  responseTime.String(),
 			"threshold_desc": strings.Join(rtParts, ", "),
 		}).SetCurrentValue(responseTime.String())
 
@@ -444,8 +445,8 @@ func (ins *Instance) gather(q *safe.Queue[*types.Event], target string) {
 			"check": "http::status_code",
 		}, labels).SetAttrs(map[string]string{
 			"status_code":    statusCode,
-			"expect_code":   fmt.Sprintf("%v", ins.StatusCode.Expect),
-			"response_body": truncateBody(body, maxBodyDisplaySize),
+			"expect_code":    fmt.Sprintf("%v", ins.StatusCode.Expect),
+			"response_body":  truncateBody(body, maxBodyDisplaySize),
 			"threshold_desc": fmt.Sprintf("%s: status code does not match expected", ins.StatusCode.Severity),
 		})
 

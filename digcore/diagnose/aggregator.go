@@ -22,7 +22,7 @@ type DiagnoseAggregator struct {
 // NewDiagnoseAggregator creates an aggregator with the given window duration.
 func NewDiagnoseAggregator(engine *DiagnoseEngine, window time.Duration) *DiagnoseAggregator {
 	if window <= 0 {
-		window = 5 * time.Second
+		window = 2 * time.Second
 	}
 	return &DiagnoseAggregator{
 		pending: make(map[string]*DiagnoseRequest),

@@ -177,7 +177,7 @@ type ConfigType struct {
 var Config *ConfigType
 
 func InitConfig(configDir string, interval int64, plugins, loglevel string) error {
-	configFile := path.Join(configDir, "config.toml")
+	configFile := path.Join(configDir, cfg.DefaultConfigFile)
 	if !file.IsExist(configFile) {
 		return fmt.Errorf("configuration file(%s) not found", configFile)
 	}
@@ -434,7 +434,7 @@ func (c *AIConfig) applyDefaults() {
 		c.ToolTimeout = Duration(10 * time.Second)
 	}
 	if time.Duration(c.AggregateWindow) == 0 {
-		c.AggregateWindow = Duration(5 * time.Second)
+		c.AggregateWindow = Duration(2 * time.Second)
 	}
 	if time.Duration(c.DiagnoseRetention) == 0 {
 		c.DiagnoseRetention = Duration(7 * 24 * time.Hour)

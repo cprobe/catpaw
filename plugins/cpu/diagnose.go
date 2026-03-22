@@ -15,53 +15,50 @@ import (
 
 var _ plugins.Diagnosable = (*CpuPlugin)(nil)
 
+func cpuOverviewReport(ctx context.Context) string {
+	var b strings.Builder
+
+	cores, _ := gocpu.CountsWithContext(ctx, true)
+	fmt.Fprintf(&b, "CPU cores: %d (logical)\n", cores)
+
+	total, err := gocpu.PercentWithContext(ctx, 0, false)
+	if err != nil {
+		fmt.Fprintf(&b, "CPU usage: error: %v\n", err)
+	} else if len(total) > 0 {
+		fmt.Fprintf(&b, "Total CPU usage: %.1f%%\n", total[0])
+	}
+
+	perCore, _ := gocpu.PercentWithContext(ctx, 0, true)
+	if len(perCore) > 0 {
+		fmt.Fprintf(&b, "\nPer-core usage:\n")
+		for i, pct := range perCore {
+			fmt.Fprintf(&b, "  core %d: %.1f%%\n", i, pct)
+		}
+	}
+
+	numCPU := runtime.NumCPU()
+	avg, loadErr := load.AvgWithContext(ctx)
+	if loadErr != nil {
+		fmt.Fprintf(&b, "\nLoad average: error: %v\n", loadErr)
+	} else {
+		fmt.Fprintf(&b, "\nLoad average: %.2f (1m), %.2f (5m), %.2f (15m)\n",
+			avg.Load1, avg.Load5, avg.Load15)
+		fmt.Fprintf(&b, "Load/core:    %.2f (1m), %.2f (5m), %.2f (15m)\n",
+			avg.Load1/float64(numCPU), avg.Load5/float64(numCPU), avg.Load15/float64(numCPU))
+	}
+
+	return b.String()
+}
+
 func (p *CpuPlugin) RegisterDiagnoseTools(registry *diagnose.ToolRegistry) {
-	registry.RegisterCategory("cpu", "cpu", "CPU diagnostic tools (usage, load, top processes)", diagnose.ToolScopeLocal)
+	registry.RegisterCategory("cpu", "cpu", "CPU diagnostic tools (overview, top processes)", diagnose.ToolScopeLocal)
 
 	registry.Register("cpu", diagnose.DiagnoseTool{
-		Name:        "cpu_usage",
-		Description: "Show current CPU usage percentage (total and per-core)",
+		Name:        "cpu_overview",
+		Description: "Combined CPU snapshot: total/per-core usage percentages, logical core count, and load averages (1m/5m/15m) with load-per-core ratio. NOTE: pre-collected in system baseline — use only when refreshing.",
 		Scope:       diagnose.ToolScopeLocal,
 		Execute: func(ctx context.Context, args map[string]string) (string, error) {
-			total, err := gocpu.PercentWithContext(ctx, 0, false)
-			if err != nil {
-				return "", fmt.Errorf("get cpu percent: %w", err)
-			}
-			perCore, _ := gocpu.PercentWithContext(ctx, 0, true)
-
-			var b strings.Builder
-			cores, _ := gocpu.CountsWithContext(ctx, true)
-			fmt.Fprintf(&b, "CPU cores: %d (logical)\n", cores)
-			if len(total) > 0 {
-				fmt.Fprintf(&b, "Total CPU usage: %.1f%%\n", total[0])
-			}
-			if len(perCore) > 0 {
-				fmt.Fprintf(&b, "\nPer-core usage:\n")
-				for i, pct := range perCore {
-					fmt.Fprintf(&b, "  core %d: %.1f%%\n", i, pct)
-				}
-			}
-			return b.String(), nil
-		},
-	})
-
-	registry.Register("cpu", diagnose.DiagnoseTool{
-		Name:        "cpu_load_average",
-		Description: "Show system load averages (1min, 5min, 15min) and ratio to CPU cores",
-		Scope:       diagnose.ToolScopeLocal,
-		Execute: func(ctx context.Context, args map[string]string) (string, error) {
-			avg, err := load.AvgWithContext(ctx)
-			if err != nil {
-				return "", fmt.Errorf("get load avg: %w", err)
-			}
-			cores := runtime.NumCPU()
-			var b strings.Builder
-			fmt.Fprintf(&b, "CPU cores: %d\n", cores)
-			fmt.Fprintf(&b, "Load average: %.2f (1m), %.2f (5m), %.2f (15m)\n",
-				avg.Load1, avg.Load5, avg.Load15)
-			fmt.Fprintf(&b, "Load/core:    %.2f (1m), %.2f (5m), %.2f (15m)\n",
-				avg.Load1/float64(cores), avg.Load5/float64(cores), avg.Load15/float64(cores))
-			return b.String(), nil
+			return cpuOverviewReport(ctx), nil
 		},
 	})
 
@@ -128,4 +125,14 @@ func (p *CpuPlugin) RegisterDiagnoseTools(registry *diagnose.ToolRegistry) {
 			return b.String(), nil
 		},
 	})
+
+	registry.SetDiagnoseHints("cpu", `
+- CPU 使用率告警 → cpu_overview（已包含 usage + load），若 usage 高则 top_cpu_processes 定位进程
+- 负载告警 → cpu_overview 查看 load/core 比值，若 > 1.0 则 top_cpu_processes 找根因
+- 首轮建议并行调用 cpu_overview + top_cpu_processes，一次拿到全部所需数据`)
+
+	registry.RegisterPreCollector("cpu", func(ctx context.Context, _ any) string {
+		return cpuOverviewReport(ctx)
+	})
+	registry.RegisterBaselinePlugin("cpu")
 }

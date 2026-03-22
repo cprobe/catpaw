@@ -77,7 +77,7 @@ const perMessageOverhead = 4
 // EstimateMessageTokens returns a conservative token estimate for a single
 // message, including role overhead and tool-call structure.
 func EstimateMessageTokens(m Message) int {
-	tokens := EstimateTokensChinese(m.Content) + perMessageOverhead
+	tokens := EstimateTokensChinese(m.Content) + EstimateTokensChinese(m.ReasoningContent) + perMessageOverhead
 	for _, tc := range m.ToolCalls {
 		tokens += EstimateTokensChinese(tc.Function.Name)
 		tokens += EstimateTokensChinese(tc.Function.Arguments)

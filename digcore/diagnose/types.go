@@ -139,10 +139,23 @@ type DiagnoseRequest struct {
 // DiagnoseSession manages the lifecycle of a single diagnosis run.
 // All remote tool calls within the same diagnosis share one Accessor (TCP connection).
 type DiagnoseSession struct {
-	Accessor  any             // shared remote Accessor, created by the plugin's factory
-	Record    *DiagnoseRecord
-	StartTime time.Time
-	mu        sync.Mutex
+	Accessor    any             // shared remote Accessor, created by the plugin's factory
+	instanceRef any             // original Instance reference for peer probing (username/password/TLS)
+	Record      *DiagnoseRecord
+	StartTime   time.Time
+	mu          sync.Mutex
+}
+
+// InstanceRef returns the original plugin Instance that triggered this session.
+// Diagnostic tools can use this to create temporary connections to peer nodes
+// with the same authentication credentials.
+func (s *DiagnoseSession) InstanceRef() any {
+	return s.instanceRef
+}
+
+// SetInstanceRef stores the plugin Instance reference for the session.
+func (s *DiagnoseSession) SetInstanceRef(ref any) {
+	s.instanceRef = ref
 }
 
 // Close releases the shared Accessor if it implements io.Closer.
@@ -204,7 +217,9 @@ type ToolCallRecord struct {
 
 // AccessorFactory creates a shared Accessor for a remote plugin.
 // The engine calls this once per DiagnoseSession.
-type AccessorFactory func(ctx context.Context, instanceRef any) (any, error)
+// target is the specific address being diagnosed (e.g. "10.0.0.2:6379"),
+// since an Instance may contain multiple targets.
+type AccessorFactory func(ctx context.Context, instanceRef any, target string) (any, error)
 
 // SeverityRank returns a numeric rank for severity comparison.
 // Higher rank = more severe.

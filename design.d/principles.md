@@ -2,7 +2,8 @@
 
 - catpaw 配合 Flashduty、PagerDuty 等 On-call 产品使用
 - catpaw 的实现可以参考 Sensu、Nagios 等同类产品，站在巨人的肩膀上，自然要超越他们
-- catpaw 的职能不能和 Prometheus + Node-Exporter 重叠
+- catpaw 的职能不能和 Prometheus + Exporter 生态重叠（包括 node-exporter、redis-exporter、mysqld-exporter 等），不做指标采集，不暴露 `/metrics`
+- catpaw 可以配置服务认证信息（Redis 密码、MySQL 账号等），但仅用于按需诊断，不用于持续采集。详见 [产品边界](product-boundary.md)
 - catpaw 应该更加关注异常，而不是关注历史指标趋势
 
 ## 1. 设计优雅、灵活、易用
@@ -108,3 +109,53 @@
 - 一个检查维度失败不影响同 instance 内其他维度
 - 一个 instance 失败不影响同插件内其他 instances
 - 一个插件失败不影响其他插件
+
+## 14. AI 诊断工具设计：为 LLM 多轮对话优化
+
+诊断由 LLM 驱动，每轮 tool call 意味着一次完整的 AI API 往返（1-3s 延迟 + token 消耗）。工具设计必须围绕**减少轮次**和**提高每轮信息密度**展开。
+
+### 14.1 PreCollector 预注入：省掉信息收集首轮
+
+为插件注册 `PreCollector`，在 AI 对话前自动采集基线数据，注入系统提示。LLM 从第一轮就能直接进入分析，而非花一轮去调"全景查看"工具。两类场景：
+
+**插件预采集**（plugin PreCollector）：对触发告警的插件采集其核心数据。
+- Remote 插件（Redis/MySQL 等）：在 session 建立后调用 accessor（如 `INFO all`、`SHOW GLOBAL STATUS`）
+- Local 插件（cpu/mem/disk 等）：直接调用 OS API 采集 overview 数据
+
+**系统基线**（system baseline）：对非 remote 诊断，引擎自动运行所有注册为 `BaselinePlugin` 的 PreCollector（cpu/mem/disk），排除触发插件避免重复。结果以 `<system_baseline>` 标签注入，让 LLM 在首轮就具备系统全貌，减少跨域探查的额外轮次。
+
+- 预采集数据应选择信息密度最高的单一操作（覆盖面广、开销可控）
+- 预采集失败不阻断诊断流程，LLM 仍可通过工具获取数据
+- 插件预采集用 `<pre_collected>` 标签，系统基线用 `<system_baseline>` 标签
+- 瓶颈在 LLM API 往返延迟（1-3s/轮），而非本地工具执行耗时（ms 级）——即使 local 工具执行很快，减少一轮 tool call 仍可省下一次 API 往返
+
+### 14.2 合并"必定一起用"的工具
+
+如果两个工具在所有诊断场景中都会被连续调用（无论什么告警类型，A 之后必调 B），应合并为一个工具。
+
+- 合并前提：两者返回数据量之和仍可控（< 4KB），不会浪费 token
+- 典型示例：Redis `MEMORY DOCTOR` + `MEMORY STATS` → `redis_memory_analysis`
+- 反例：`INFO` 和 `SLOWLOG` 不应合并——它们适用于不同告警场景
+
+### 14.3 消除冗余工具：减少 LLM 选择噪音
+
+工具数量越多，LLM 在每轮需要决策的搜索空间越大，错误选择的概率越高。如果一个工具的输出可被另一个工具的参数变体完全覆盖，应删除前者。
+
+- 典型示例：`redis_dbsize` 被 `redis_info section=keyspace` 覆盖
+- 判断标准：如果移除该工具后，LLM 在任何场景下都能通过其他工具获得等价信息，则应删除
+
+### 14.4 诊断路线图：引导 LLM 首轮并行调用
+
+通过 `SetDiagnoseHints` 注册按告警类型分类的工具调用建议路径。LLM 在第一轮就能并行调用 2-3 个最相关的工具，而非逐个试探。
+
+- 路线图应按告警类型组织（内存告警 → 工具 A + B，延迟告警 → 工具 C + D）
+- 明确提示"首轮建议并行调用"，利用引擎的并行 tool call 能力
+- 路线图是建议而非强制，LLM 仍可根据预采集数据的实际内容调整策略
+
+### 14.5 工具 Description 精准：LLM 靠它做选择
+
+LLM 根据 tool description 决定是否调用及如何传参。描述模糊 → 选错工具 → 浪费轮次。
+
+- 带参数的工具：在 description 中列出所有合法参数值及其含义
+- 有前置条件的工具：说明何时返回空/需要先做什么（如 `LATENCY LATEST` 需要开启 `latency-monitor-threshold`）
+- 与预采集数据重叠的工具：明确提示"预采集数据已包含该信息，仅在需要刷新时使用"

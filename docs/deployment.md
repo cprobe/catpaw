@@ -16,6 +16,7 @@ integration_key = "YOUR_KEY"
 ```
 
 按需启用或调整 `conf.d/p.*` 下的插件配置。
+如需在本机覆盖默认配置，可额外创建 `conf.d/config.local.toml`，它会在所有其他顶层配置文件之后加载。
 
 ### 3. 测试运行
 
@@ -36,7 +37,7 @@ After=network.target
 
 [Service]
 Type=simple
-ExecStart=/opt/catpaw/catpaw -configs /opt/catpaw/conf.d
+ExecStart=/opt/catpaw/catpaw run
 WorkingDirectory=/opt/catpaw
 Restart=always
 RestartSec=5
@@ -81,11 +82,12 @@ docker run -d \
 
 ## 目录结构
 
-```
+```text
 /opt/catpaw/
 ├── catpaw                  # 二进制文件
 └── conf.d/
     ├── config.toml         # 全局配置
+    ├── config.local.toml   # 本地覆盖配置（可选，最后加载）
     ├── p.disk/
     │   └── disk.toml       # 磁盘监控配置
     ├── p.procnum/
@@ -95,4 +97,4 @@ docker run -d \
     └── ...
 ```
 
-每个 `p.<plugin>/` 目录下可放多个 `.toml` 文件，内容会被合并加载。
+顶层配置按 `config.toml` → 其他文件 → `config.local.toml` 的顺序合并加载；每个 `p.<plugin>/` 目录下也可放多个 `.toml` 文件，内容会被合并加载。

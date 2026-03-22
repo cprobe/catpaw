@@ -141,6 +141,12 @@ func (a *RedisAccessor) Command(args ...string) (string, error) {
 	return a.client.command(args...)
 }
 
+// RawCommand executes an arbitrary Redis command and returns the parsed RESP value.
+// Intended for diagnostic helpers that need structured replies such as SCAN.
+func (a *RedisAccessor) RawCommand(args ...string) (any, error) {
+	return a.client.rawCommand(args...)
+}
+
 // Target returns the target address this accessor is connected to.
 func (a *RedisAccessor) Target() string {
 	return a.target
@@ -164,17 +170,27 @@ func (a *RedisAccessor) ClientList() (string, error) {
 	return a.client.command("CLIENT", "LIST")
 }
 
+// ClusterInfo executes CLUSTER INFO and returns the raw output.
+func (a *RedisAccessor) ClusterInfo() (string, error) {
+	return a.client.command("CLUSTER", "INFO")
+}
+
+// ClusterNodes executes CLUSTER NODES and returns the raw topology output.
+func (a *RedisAccessor) ClusterNodes() (string, error) {
+	return a.client.command("CLUSTER", "NODES")
+}
+
 // ConfigGet executes CONFIG GET <pattern> and returns the raw key-value pairs.
 // Sensitive fields (passwords, auth keys) are redacted.
 func (a *RedisAccessor) ConfigGet(pattern string) (string, error) {
 	if pattern == "" {
 		pattern = "*"
 	}
-	raw, err := a.client.command("CONFIG", "GET", pattern)
+	reply, err := a.client.rawCommand("CONFIG", "GET", pattern)
 	if err != nil {
 		return "", err
 	}
-	return filterSensitiveConfig(raw), nil
+	return formatRedactedConfigReply(reply)
 }
 
 // DBSize executes DBSIZE and returns the reply.
@@ -189,6 +205,26 @@ var redisConfigDenyList = map[string]bool{
 	"tls-key-file-pass": true,
 	"tls-cert-file":     true,
 	"tls-ca-cert-file":  true,
+}
+
+func formatRedactedConfigReply(reply any) (string, error) {
+	arr, ok := reply.([]any)
+	if !ok {
+		return "", fmt.Errorf("unexpected CONFIG GET reply type %T", reply)
+	}
+
+	redacted := make([]any, len(arr))
+	copy(redacted, arr)
+	for i := 0; i+1 < len(redacted); i += 2 {
+		key, ok := redacted[i].(string)
+		if !ok {
+			return "", fmt.Errorf("unexpected CONFIG GET key type %T", redacted[i])
+		}
+		if redisConfigDenyList[strings.TrimSpace(key)] {
+			redacted[i+1] = "***REDACTED***"
+		}
+	}
+	return formatReply(redacted), nil
 }
 
 func filterSensitiveConfig(raw string) string {
@@ -230,14 +266,22 @@ func (c *redisClient) info(section string) (string, error) {
 }
 
 func (c *redisClient) command(args ...string) (string, error) {
-	if err := c.writeCommand(args...); err != nil {
-		return "", err
-	}
-	reply, err := c.readReply()
+	reply, err := c.rawCommand(args...)
 	if err != nil {
 		return "", err
 	}
 	return formatReply(reply), nil
+}
+
+func (c *redisClient) rawCommand(args ...string) (any, error) {
+	if err := c.writeCommand(args...); err != nil {
+		return nil, err
+	}
+	reply, err := c.readReply()
+	if err != nil {
+		return nil, err
+	}
+	return reply, nil
 }
 
 func formatReply(v any) string {

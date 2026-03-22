@@ -66,6 +66,8 @@ Events can be forwarded to any alert platform (Flashduty, PagerDuty, or any HTTP
 | `ping` | ICMP reachability, packet loss, latency |
 | `procfd` | Per-process fd usage — prevent nofile exhaustion |
 | `procnum` | Process count check (multiple lookup methods) |
+| `redis` | Redis monitoring for standalone, master/replica, and Redis Cluster; includes Redis-specific AI diagnosis tools |
+| `redis_sentinel` | Redis Sentinel monitoring for quorum, master reachability from Sentinel's view, and Sentinel-specific AI diagnosis tools |
 | `scriptfilter` | Script output filter-rule matching |
 | `secmod` | SELinux/AppArmor baseline (Linux) |
 | `sockstat` | TCP listen queue overflow detection (Linux) |
@@ -91,7 +93,10 @@ When AI diagnosis is triggered (by alert, inspection, or chat), the AI agent has
 
 🐳 **Services**: systemd service status, failed services list, timer list, Docker ps/inspect
 
-🔌 **Remote plugins** (Redis, etc.) contribute their own specialized diagnostic tools for deep introspection.
+🔌 **Remote plugins** (Redis, Redis Sentinel, etc.) contribute their own specialized diagnostic tools for deep introspection.
+
+For Redis-specific checks, cluster semantics, and diagnosis tools, see [plugins/redis/README.md](plugins/redis/README.md).
+For Redis Sentinel-specific checks, diagnosis tools, and config semantics, see [plugins/redis_sentinel/README.md](plugins/redis_sentinel/README.md).
 
 ## 🖥️ CLI Commands
 
@@ -193,7 +198,9 @@ Ask questions like "Why is CPU high?" or "Check disk I/O latency" — the AI use
 ## ⚙️ Configuration
 
 - Global config: `conf.d/config.toml`
+- Local override: `conf.d/config.local.toml` (loaded last, git-ignored, ideal for developer-only changes)
 - Plugin configs: `conf.d/p.<plugin>/*.toml` (multiple files merged on load)
+- Top-level load order: `config.toml` -> other files in `conf.d/` -> `config.local.toml`
 - Hot-reload plugin configs with `SIGHUP`:
 
 ```bash

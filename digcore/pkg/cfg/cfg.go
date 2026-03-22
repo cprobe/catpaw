@@ -19,6 +19,11 @@ const (
 	JsonFormat ConfigFormat = "json"
 )
 
+const (
+	DefaultConfigFile       = "config.toml"
+	LocalOverrideConfigFile = "config.local.toml"
+)
+
 type ConfigWithFormat struct {
 	Config   string       `json:"config"`
 	Format   ConfigFormat `json:"format"`
@@ -44,10 +49,7 @@ func GuessFormat(fpath string) ConfigFormat {
 }
 
 func LoadConfigByDir(configDir string, configPtr interface{}) error {
-	var (
-		tomlFiles  []string
-		localTomls []string
-	)
+	var tomlFiles []string
 
 	loaders := []multiconfig.Loader{
 		&multiconfig.TagLoader{},
@@ -58,24 +60,22 @@ func LoadConfigByDir(configDir string, configPtr interface{}) error {
 	if err != nil {
 		return fmt.Errorf("failed to list files under: %s : %v", configDir, err)
 	}
+	sort.Strings(files)
+
 	for _, fpath := range files {
+		fullPath := path.Join(configDir, fpath)
+
 		switch {
 		case strings.HasSuffix(fpath, ".toml"):
-			if isLocalOverrideToml(fpath) {
-				localTomls = append(localTomls, fpath)
-			} else {
-				tomlFiles = append(tomlFiles, fpath)
-			}
+			tomlFiles = append(tomlFiles, fpath)
 		case strings.HasSuffix(fpath, ".json"):
-			loaders = append(loaders, &multiconfig.JSONLoader{Path: path.Join(configDir, fpath)})
+			loaders = append(loaders, &multiconfig.JSONLoader{Path: fullPath})
 		case strings.HasSuffix(fpath, ".yaml") || strings.HasSuffix(fpath, ".yml"):
-			loaders = append(loaders, &multiconfig.YAMLLoader{Path: path.Join(configDir, fpath)})
+			loaders = append(loaders, &multiconfig.YAMLLoader{Path: fullPath})
 		}
 	}
 
-	sort.Strings(tomlFiles)
-	sort.Strings(localTomls)
-	for _, fpath := range append(tomlFiles, localTomls...) {
+	for _, fpath := range orderedConfigFiles(tomlFiles) {
 		loaders = append(loaders, &multiconfig.TOMLLoader{Path: path.Join(configDir, fpath)})
 	}
 
@@ -88,6 +88,27 @@ func LoadConfigByDir(configDir string, configPtr interface{}) error {
 
 func isLocalOverrideToml(name string) bool {
 	return strings.HasSuffix(strings.ToLower(name), ".local.toml")
+}
+
+func orderedConfigFiles(files []string) []string {
+	sort.Strings(files)
+
+	ordered := make([]string, 0, len(files))
+
+	appendIf := func(predicate func(string) bool) {
+		for _, file := range files {
+			if predicate(file) {
+				ordered = append(ordered, file)
+			}
+		}
+	}
+
+	appendIf(func(file string) bool { return file == DefaultConfigFile })
+	appendIf(func(file string) bool { return file != DefaultConfigFile && !isLocalOverrideToml(file) })
+	appendIf(func(file string) bool { return isLocalOverrideToml(file) && file != LocalOverrideConfigFile })
+	appendIf(func(file string) bool { return file == LocalOverrideConfigFile })
+
+	return ordered
 }
 
 func LoadConfigs(configs []ConfigWithFormat, configPtr interface{}) error {

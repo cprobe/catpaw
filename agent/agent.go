@@ -45,6 +45,7 @@ import (
 	_ "github.com/cprobe/catpaw/plugins/procfd"
 	_ "github.com/cprobe/catpaw/plugins/procnum"
 	_ "github.com/cprobe/catpaw/plugins/redis"
+	_ "github.com/cprobe/catpaw/plugins/redis_sentinel"
 	_ "github.com/cprobe/catpaw/plugins/scriptfilter"
 	_ "github.com/cprobe/catpaw/plugins/secmod"
 	_ "github.com/cprobe/catpaw/plugins/sockstat"

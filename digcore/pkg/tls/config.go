@@ -12,12 +12,12 @@ import (
 
 // ClientConfig represents the standard client TLS config.
 type ClientConfig struct {
-	UseTLS             bool   `toml:"use_tls"`
+	UseTLS             *bool  `toml:"use_tls"`
 	TLSCA              string `toml:"tls_ca"`
 	TLSCert            string `toml:"tls_cert"`
 	TLSKey             string `toml:"tls_key"`
 	TLSKeyPwd          string `toml:"tls_key_pwd"`
-	InsecureSkipVerify bool   `toml:"insecure_skip_verify"`
+	InsecureSkipVerify *bool  `toml:"insecure_skip_verify"`
 	ServerName         string `toml:"tls_server_name"`
 	TLSMinVersion      string `toml:"tls_min_version"`
 	TLSMaxVersion      string `toml:"tls_max_version"`
@@ -38,17 +38,20 @@ type ServerConfig struct {
 // TLSConfig returns a tls.Config, may be nil without error if TLS is not
 // configured.
 func (c *ClientConfig) TLSConfig() (*tls.Config, error) {
-	if !c.UseTLS {
-		if c.InsecureSkipVerify || c.TLSCA != "" || c.TLSCert != "" || c.TLSKey != "" ||
-			c.ServerName != "" || c.TLSMinVersion != "" || c.TLSMaxVersion != "" {
-			c.UseTLS = true
-		} else {
-			return nil, nil
-		}
+	enabled := false
+	if c.UseTLS != nil {
+		enabled = *c.UseTLS
+	} else if c.InsecureSkipVerify != nil || c.TLSCA != "" || c.TLSCert != "" || c.TLSKey != "" ||
+		c.ServerName != "" || c.TLSMinVersion != "" || c.TLSMaxVersion != "" {
+		enabled = true
+	}
+	if !enabled {
+		return nil, nil
 	}
 
+	insecureSkipVerify := c.InsecureSkipVerify != nil && *c.InsecureSkipVerify
 	tlsConfig := &tls.Config{
-		InsecureSkipVerify: c.InsecureSkipVerify,
+		InsecureSkipVerify: insecureSkipVerify,
 		Renegotiation:      tls.RenegotiateNever,
 	}
 

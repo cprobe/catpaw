@@ -9,6 +9,12 @@ import (
 	"sync"
 )
 
+// PreCollector gathers baseline data from a remote accessor right after the
+// session is established. The result is injected into the AI prompt so the
+// model can start reasoning without a discovery round-trip.
+// Returning "" means no data was collected (non-fatal).
+type PreCollector func(ctx context.Context, accessor any) string
+
 // ToolRegistry manages all diagnostic tools registered by plugins.
 // Thread-safe for concurrent reads; writes happen only at startup.
 type ToolRegistry struct {
@@ -16,6 +22,9 @@ type ToolRegistry struct {
 	categories       map[string]*ToolCategory
 	toolIndex        map[string]*DiagnoseTool          // name → tool (flat index for fast lookup)
 	accessorFactory  map[string]AccessorFactory         // plugin → factory
+	preCollectors    map[string]PreCollector            // plugin → pre-collector
+	diagnoseHints    map[string]string                  // plugin → LLM diagnostic route map
+	baselinePlugins  []string                           // plugins whose PreCollector runs for every local diagnosis
 }
 
 // NewToolRegistry creates an empty registry.
@@ -24,6 +33,8 @@ func NewToolRegistry() *ToolRegistry {
 		categories:      make(map[string]*ToolCategory),
 		toolIndex:       make(map[string]*DiagnoseTool),
 		accessorFactory: make(map[string]AccessorFactory),
+		preCollectors:   make(map[string]PreCollector),
+		diagnoseHints:   make(map[string]string),
 	}
 }
 
@@ -78,14 +89,15 @@ func (r *ToolRegistry) RegisterAccessorFactory(plugin string, factory AccessorFa
 }
 
 // CreateAccessor calls the registered factory for the given plugin.
-func (r *ToolRegistry) CreateAccessor(ctx context.Context, plugin string, instanceRef any) (any, error) {
+// target identifies the specific address being diagnosed (e.g. "10.0.0.2:6379").
+func (r *ToolRegistry) CreateAccessor(ctx context.Context, plugin string, instanceRef any, target string) (any, error) {
 	r.mu.RLock()
 	factory, ok := r.accessorFactory[plugin]
 	r.mu.RUnlock()
 	if !ok {
 		return nil, fmt.Errorf("no accessor factory registered for plugin %q", plugin)
 	}
-	return factory(ctx, instanceRef)
+	return factory(ctx, instanceRef, target)
 }
 
 // Get returns a tool by name.
@@ -466,5 +478,79 @@ func (r *ToolRegistry) HasAccessorFactory(plugin string) bool {
 	defer r.mu.RUnlock()
 	_, ok := r.accessorFactory[plugin]
 	return ok
+}
+
+// RegisterPreCollector registers a function that gathers baseline data from a
+// remote accessor. Called once per diagnosis session, right after the accessor
+// is created. The result is injected into the AI system prompt.
+func (r *ToolRegistry) RegisterPreCollector(plugin string, fn PreCollector) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.preCollectors[plugin] = fn
+}
+
+// RunPreCollector calls the registered PreCollector for a plugin.
+// Returns "" if no collector is registered.
+func (r *ToolRegistry) RunPreCollector(ctx context.Context, plugin string, accessor any) string {
+	r.mu.RLock()
+	fn, ok := r.preCollectors[plugin]
+	r.mu.RUnlock()
+	if !ok {
+		return ""
+	}
+	return fn(ctx, accessor)
+}
+
+// SetDiagnoseHints registers a static diagnostic route map for a plugin.
+// Injected into the AI prompt to guide tool-call ordering per alert type.
+func (r *ToolRegistry) SetDiagnoseHints(plugin string, hints string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.diagnoseHints[plugin] = hints
+}
+
+// GetDiagnoseHints returns the registered diagnostic hints for a plugin.
+func (r *ToolRegistry) GetDiagnoseHints(plugin string) string {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return r.diagnoseHints[plugin]
+}
+
+// RegisterBaselinePlugin marks a plugin whose PreCollector should run for
+// every non-remote diagnosis to provide system-wide context. Typically
+// cpu, mem, disk. The triggering plugin is automatically excluded at
+// runtime to avoid duplication.
+func (r *ToolRegistry) RegisterBaselinePlugin(plugin string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	for _, p := range r.baselinePlugins {
+		if p == plugin {
+			return
+		}
+	}
+	r.baselinePlugins = append(r.baselinePlugins, plugin)
+}
+
+// RunBaselinePreCollectors runs PreCollectors for all registered baseline
+// plugins, excluding excludePlugin (the triggering plugin whose data is
+// already collected via RunPreCollector). Returns a map of plugin→data;
+// plugins that return "" are omitted.
+func (r *ToolRegistry) RunBaselinePreCollectors(ctx context.Context, excludePlugin string) map[string]string {
+	r.mu.RLock()
+	plugins := make([]string, len(r.baselinePlugins))
+	copy(plugins, r.baselinePlugins)
+	r.mu.RUnlock()
+
+	result := make(map[string]string, len(plugins))
+	for _, p := range plugins {
+		if p == excludePlugin {
+			continue
+		}
+		data := r.RunPreCollector(ctx, p, nil)
+		if data != "" {
+			result[p] = data
+		}
+	}
+	return result
 }
 

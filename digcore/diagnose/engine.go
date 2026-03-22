@@ -100,8 +100,9 @@ func (e *DiagnoseEngine) Submit(req *DiagnoseRequest) {
 // Returns the DiagnoseRecord so callers (e.g. inspect CLI) can inspect results.
 func (e *DiagnoseEngine) RunDiagnose(req *DiagnoseRequest) *DiagnoseRecord {
 	session := &DiagnoseSession{
-		Record:    NewDiagnoseRecord(req),
-		StartTime: time.Now(),
+		Record:      NewDiagnoseRecord(req),
+		StartTime:   time.Now(),
+		instanceRef: req.InstanceRef,
 	}
 
 	defer func() {
@@ -169,8 +170,9 @@ func (e *DiagnoseEngine) RunDiagnose(req *DiagnoseRequest) *DiagnoseRecord {
 // Intended for remote sessions where the server manages lifecycle.
 func (e *DiagnoseEngine) RunDiagnoseStreaming(ctx context.Context, req *DiagnoseRequest, cb StreamCallback) (report string, err error) {
 	session := &DiagnoseSession{
-		Record:    NewDiagnoseRecord(req),
-		StartTime: time.Now(),
+		Record:      NewDiagnoseRecord(req),
+		StartTime:   time.Now(),
+		instanceRef: req.InstanceRef,
 	}
 	defer session.Close()
 
@@ -231,6 +233,9 @@ func (e *DiagnoseEngine) diagnose(ctx context.Context, req *DiagnoseRequest, ses
 		return "", fmt.Errorf("create accessor: %w", err)
 	}
 
+	preCollected := e.registry.RunPreCollector(ctx, req.Plugin, session.Accessor)
+	diagnoseHints := e.registry.GetDiagnoseHints(req.Plugin)
+
 	if req.RuntimeOS == "" {
 		req.RuntimeOS = runtime.GOOS
 	}
@@ -238,13 +243,24 @@ func (e *DiagnoseEngine) diagnose(ctx context.Context, req *DiagnoseRequest, ses
 
 	hostname, _ := os.Hostname()
 	isRemote := isRemoteTarget(req.Target)
+
+	var systemBaseline map[string]string
+	if !isRemote {
+		systemBaseline = e.registry.RunBaselinePreCollectors(ctx, req.Plugin)
+	}
+
 	directToolsStr := formatDirectTools(directTools)
 	toolCatalog := e.registry.ListToolCatalogSmartForOS(req.RuntimeOS)
+	promptCtx := promptContext{
+		PreCollectedContext: preCollected,
+		DiagnoseHints:      diagnoseHints,
+		SystemBaseline:     systemBaseline,
+	}
 	var prompt string
 	if req.Mode == ModeInspect {
-		prompt = buildInspectPrompt(req, directToolsStr, toolCatalog, hostname, isRemote, e.cfg.Language)
+		prompt = buildInspectPrompt(req, directToolsStr, toolCatalog, hostname, isRemote, e.cfg.Language, promptCtx)
 	} else {
-		prompt = buildSystemPrompt(req, directToolsStr, toolCatalog, hostname, isRemote, e.cfg.Language)
+		prompt = buildSystemPrompt(req, directToolsStr, toolCatalog, hostname, isRemote, e.cfg.Language, promptCtx)
 	}
 
 	messages := make([]aiclient.Message, 0, e.maxRounds*4)
@@ -403,7 +419,7 @@ func (e *DiagnoseEngine) initSessionAccessor(ctx context.Context, req *DiagnoseR
 	if !e.registry.HasAccessorFactory(req.Plugin) {
 		return nil
 	}
-	accessor, err := e.registry.CreateAccessor(ctx, req.Plugin, req.InstanceRef)
+	accessor, err := e.registry.CreateAccessor(ctx, req.Plugin, req.InstanceRef, req.Target)
 	if err != nil {
 		return fmt.Errorf("create accessor for %s::%s: %w", req.Plugin, req.Target, err)
 	}

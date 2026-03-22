@@ -14,8 +14,9 @@ func TestRegisterDiagnoseTools(t *testing.T) {
 	p.RegisterDiagnoseTools(registry)
 
 	expectedTools := []string{
-		"redis_info", "redis_slowlog", "redis_client_list", "redis_config_get",
-		"redis_dbsize", "redis_latency", "redis_memory_doctor", "redis_memory_stats",
+		"redis_info", "redis_cluster_info", "redis_slowlog", "redis_client_list", "redis_config_get",
+		"redis_bigkeys_scan", "redis_query_peer",
+		"redis_latency", "redis_memory_analysis",
 	}
 	for _, name := range expectedTools {
 		tool, ok := registry.Get(name)
@@ -27,6 +28,13 @@ func TestRegisterDiagnoseTools(t *testing.T) {
 		}
 		if tool.RemoteExecute == nil {
 			t.Fatalf("tool %q has nil RemoteExecute", name)
+		}
+	}
+
+	removedTools := []string{"redis_dbsize", "redis_memory_doctor", "redis_memory_stats"}
+	for _, name := range removedTools {
+		if _, ok := registry.Get(name); ok {
+			t.Fatalf("tool %q should have been removed/merged but is still registered", name)
 		}
 	}
 
@@ -44,6 +52,39 @@ func TestRegisterDiagnoseTools(t *testing.T) {
 		if !strings.Contains(listing, name) {
 			t.Fatalf("ListTools output missing %q:\n%s", name, listing)
 		}
+	}
+}
+
+func TestPreCollectorRegistered(t *testing.T) {
+	registry := diagnose.NewToolRegistry()
+	p := &RedisPlugin{}
+	p.RegisterDiagnoseTools(registry)
+
+	result := registry.RunPreCollector(context.Background(), "redis", nil)
+	if result != "" {
+		t.Fatal("PreCollector with nil accessor should return empty string")
+	}
+
+	result = registry.RunPreCollector(context.Background(), "unknown", nil)
+	if result != "" {
+		t.Fatal("PreCollector for unregistered plugin should return empty string")
+	}
+}
+
+func TestDiagnoseHintsRegistered(t *testing.T) {
+	registry := diagnose.NewToolRegistry()
+	p := &RedisPlugin{}
+	p.RegisterDiagnoseTools(registry)
+
+	hints := registry.GetDiagnoseHints("redis")
+	if hints == "" {
+		t.Fatal("DiagnoseHints for redis should not be empty")
+	}
+	if !strings.Contains(hints, "内存告警") {
+		t.Fatal("DiagnoseHints should contain memory alert route")
+	}
+	if !strings.Contains(hints, "Cluster 告警") {
+		t.Fatal("DiagnoseHints should contain cluster alert route")
 	}
 }
 
@@ -84,11 +125,106 @@ func TestAccessorFactoryRegistered(t *testing.T) {
 	p.RegisterDiagnoseTools(registry)
 
 	// Factory should fail with wrong type
-	_, err := registry.CreateAccessor(context.Background(), "redis", "not-an-instance")
+	_, err := registry.CreateAccessor(context.Background(), "redis", "not-an-instance", "127.0.0.1:6379")
 	if err == nil {
 		t.Fatal("expected error for wrong instanceRef type")
 	}
 	if !strings.Contains(err.Error(), "expected *Instance") {
 		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestRedisClusterInfoToolStandalone(t *testing.T) {
+	initTestConfig(t)
+
+	srv := startFakeRedisServer(t, fakeRedisConfig{
+		redisMode: redisModeStandalone,
+		role:      "master",
+	})
+	defer srv.Close()
+
+	ins := &Instance{
+		Targets:  []string{"redis.local:6379"},
+		dialFunc: srv.Dial,
+	}
+	if err := ins.Init(); err != nil {
+		t.Fatal(err)
+	}
+
+	registry := diagnose.NewToolRegistry()
+	p := &RedisPlugin{}
+	p.RegisterDiagnoseTools(registry)
+	tool, ok := registry.Get("redis_cluster_info")
+	if !ok {
+		t.Fatal("redis_cluster_info not registered")
+	}
+	accessor, err := registry.CreateAccessor(context.Background(), "redis", ins, "redis.local:6379")
+	if err != nil {
+		t.Fatal(err)
+	}
+	session := &diagnose.DiagnoseSession{Accessor: accessor}
+	defer session.Close()
+
+	out, err := tool.RemoteExecute(context.Background(), session, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out, "not cluster mode") {
+		t.Fatalf("unexpected output: %s", out)
+	}
+}
+
+func TestRedisBigkeysScanTool(t *testing.T) {
+	initTestConfig(t)
+
+	srv := startFakeRedisServer(t, fakeRedisConfig{
+		role: "master",
+		keys: map[string]fakeRedisKey{
+			"cart:1":    {Type: "hash", Size: 4096},
+			"cart:2":    {Type: "hash", Size: 8192},
+			"session:1": {Type: "string", Size: 128},
+			"user:100":  {Type: "string", Size: 1024},
+		},
+	})
+	defer srv.Close()
+
+	ins := &Instance{
+		Targets:  []string{"redis.local:6379"},
+		dialFunc: srv.Dial,
+	}
+	if err := ins.Init(); err != nil {
+		t.Fatal(err)
+	}
+
+	registry := diagnose.NewToolRegistry()
+	p := &RedisPlugin{}
+	p.RegisterDiagnoseTools(registry)
+	tool, ok := registry.Get("redis_bigkeys_scan")
+	if !ok {
+		t.Fatal("redis_bigkeys_scan not registered")
+	}
+	accessor, err := registry.CreateAccessor(context.Background(), "redis", ins, "redis.local:6379")
+	if err != nil {
+		t.Fatal(err)
+	}
+	session := &diagnose.DiagnoseSession{Accessor: accessor}
+	defer session.Close()
+
+	out, err := tool.RemoteExecute(context.Background(), session, map[string]string{
+		"sample_keys": "10",
+		"topn":        "2",
+		"match":       "cart:*",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out, "sampled_keys: 2") {
+		t.Fatalf("expected sampled key count, got:\n%s", out)
+	}
+	if !strings.Contains(out, "cart:2") {
+		t.Fatalf("expected largest cart key in output, got:\n%s", out)
+	}
+	if strings.Contains(out, "session:1") {
+		t.Fatalf("unexpected non-matching key in output:\n%s", out)
 	}
 }
