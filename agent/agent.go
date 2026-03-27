@@ -28,6 +28,7 @@ import (
 	_ "github.com/cprobe/catpaw/plugins/diskio"
 	_ "github.com/cprobe/catpaw/plugins/dns"
 	_ "github.com/cprobe/catpaw/plugins/docker"
+	_ "github.com/cprobe/catpaw/plugins/etcd"
 	_ "github.com/cprobe/catpaw/plugins/exec"
 	_ "github.com/cprobe/catpaw/plugins/filecheck"
 	_ "github.com/cprobe/catpaw/plugins/filefd"

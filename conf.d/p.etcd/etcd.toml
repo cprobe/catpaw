@@ -1,0 +1,224 @@
+# =============================================================================
+#  catpaw etcd 插件配置
+# =============================================================================
+#
+#  一个 catpaw 实例即可监控整个 etcd 集群，targets 中列出所有成员地址即可。
+#
+#  检查信号分 5 层（L1-L4 默认 ON，L5 需配置阈值才生效）：
+#
+#  L1  etcd::health           连通性检查          默认 ON
+#  L2  etcd::has_leader       集群 leader 检查    默认 ON
+#  L3  etcd::db_size_pct      DB 容量百分比       默认 ON (80%/90%)
+#  L4  etcd::alarm            NOSPACE/CORRUPT     默认 ON
+#  L5  etcd::backend_commit_* 后端 commit 延迟    需配置
+#      etcd::wal_fsync_*      WAL fsync 延迟      需配置
+#      etcd::slow_apply       慢 apply 增量       需配置
+#      etcd::leader_changes   leader 切换增量     需配置
+#      etcd::proposals_failed 提案失败增量        需配置
+#
+# =============================================================================
+
+
+# =============================================================================
+#  基础连接
+# =============================================================================
+
+[[instances]]
+targets = [
+#     "https://10.0.0.1:2379",
+#     "https://10.0.0.2:2379",
+#     "https://10.0.0.3:2379",
+]
+
+# 采集周期。etcd 检查很轻量，30s 是合理默认值。
+interval = "30s"
+
+# 单次 HTTP 请求超时。
+timeout = "5s"
+
+# 并发检查数。3 节点集群用默认 5 即可，10+ 节点可调高。
+concurrency = 5
+
+# --- TLS ---
+# targets 使用 https:// 时必须配置。注意要用 client 证书，不是 server 证书。
+# 确认方法：echo $ETCDCTL_CACERT / $ETCDCTL_CERT / $ETCDCTL_KEY
+#
+# tls_ca   = "/etc/etcd/pki/ca.pem"
+# tls_cert = "/etc/etcd/pki/client.pem"
+# tls_key  = "/etc/etcd/pki/client-key.pem"
+# insecure_skip_verify = false
+
+
+# =============================================================================
+#  L1: 连通性 — etcd::health
+# =============================================================================
+# GET /health，检查返回 {"health":"true"}。始终开启，连不上必须告警。
+#
+# connectivity_severity — 连接失败时的告警级别
+#   可选值：Critical | Warning，默认 Critical
+#
+# health_path = "/health"
+# connectivity_severity = "Critical"
+
+
+# =============================================================================
+#  L2: 集群角色 — etcd::has_leader
+# =============================================================================
+# 检查集群是否有 leader。无 leader = 无法写入 = 硬故障。
+#
+# disabled — 是否关闭此检查，默认 false（生产环境不建议关闭）
+# severity — 告警级别，可选值：Critical | Warning，默认 Critical
+#
+# [instances.has_leader]
+# disabled = false
+# severity = "Critical"
+
+
+# =============================================================================
+#  L3: 容量 — etcd::db_size_pct
+# =============================================================================
+# DB 大小占 quota 的百分比。超过 quota 会触发 NOSPACE 并拒绝所有写入。
+#
+# disabled — 是否关闭此检查，默认 false
+#
+# quota_backend_bytes — etcd 的 --quota-backend-bytes 值
+#   默认 0 = 自动从 /metrics 的 etcd_server_quota_backend_bytes 获取（推荐）
+#   自动获取失败时回退到 etcd 默认值 2GB
+#   支持人类可读格式："2GB"、"8GB"、"512MB"，也支持纯数字（按字节算）
+#   查看实际值：cat /proc/$(pgrep etcd)/cmdline | tr '\0' '\n' | grep quota
+#
+# warn_ge     — Warning 百分比阈值，默认 80（有时间做 compaction/defrag）
+# critical_ge — Critical 百分比阈值，默认 90（再不处理就触发 NOSPACE）
+#
+# [instances.db_size_pct]
+# disabled = false
+# quota_backend_bytes = 0       # 0 = 自动检测
+# warn_ge    = 80
+# critical_ge = 90
+
+
+# =============================================================================
+#  L4: etcd 自身告警 — etcd::alarm
+# =============================================================================
+# 检查 etcd 是否有活跃的 NOSPACE / CORRUPT 告警，出现意味着已发生硬故障。
+#
+# disabled — 是否关闭此检查，默认 false
+# severity — 告警级别，可选值：Critical | Warning，默认 Critical
+#
+# [instances.alarm]
+# disabled = false
+# severity = "Critical"
+
+
+# =============================================================================
+#  L5a: 后端 commit 延迟 — etcd::backend_commit_p*
+# =============================================================================
+# etcd 每次写操作都要调用 boltdb backend commit 落盘。这个延迟变慢时，
+# 客户端写请求会超时，K8s API Server 变慢，严重时触发 leader 切换。
+# 典型根因：磁盘 I/O 瓶颈、DB 过大未 compaction、内存不足导致 mmap 换页。
+#
+# phi — 分位数，取值范围 (0, 1)
+#   常用值：0.50 (P50中位数)、0.90 (P90)、0.95 (P95)、0.99 (P99)、0.999 (P999)
+#   phi = 0.99 产生事件 etcd::backend_commit_p99
+#
+# warn_ge     — Warning 阈值，支持时间格式："10ms"、"100ms"、"1s" 等
+# critical_ge — Critical 阈值，必须大于 warn_ge
+# disabled    — 设为 true 可跳过此条检查
+#
+# 阈值参考（SSD）：P99 正常 < 25ms，Warning 100ms，Critical 250ms
+# HDD 放宽到 200ms / 500ms。
+
+[[instances.quantile_checks]]
+phi = 0.99
+warn_ge = "100ms"
+critical_ge = "250ms"
+
+# [[instances.quantile_checks]]
+# phi = 0.50
+# warn_ge = "50ms"
+# critical_ge = "100ms"
+
+
+# =============================================================================
+#  L5b: WAL fsync 延迟 — etcd::wal_fsync_p*
+# =============================================================================
+# WAL 是写入的第一道防线，fsync 将日志从内核缓存刷到磁盘。
+# WAL fsync 和 backend commit 通常一起变差（共享磁盘），但如果只有 WAL 慢，
+# 说明 WAL 目录所在的磁盘有单独问题（etcd 支持 WAL 和数据分盘部署）。
+# 生产环境建议和 backend commit 同时监控，便于定位瓶颈在 WAL 还是 boltdb。
+#
+# 参数与 quantile_checks 完全一致（phi / warn_ge / critical_ge / disabled）。
+
+# [[instances.wal_fsync_checks]]
+# phi = 0.99
+# warn_ge = "100ms"
+# critical_ge = "250ms"
+
+
+# =============================================================================
+#  L5c: 增量计数器 — slow_apply / leader_changes / proposals_failed
+# =============================================================================
+# 以下指标是累计计数器，catpaw 自动算每个采集周期的增量（delta）。
+# 首次采集建立基线不告警，etcd 重启导致计数器回退按 delta=0 处理。
+#
+# warn_ge     — 周期增量（整数） >= 此值触发 Warning
+# critical_ge — 周期增量（整数） >= 此值触发 Critical，必须大于 warn_ge
+#
+#
+# --- slow_apply ---
+# raft 提案 apply 耗时超过 100ms 的次数。偶尔 1-2 次可能是 I/O 抖动，
+# 持续出现说明磁盘或 CPU 跟不上。与 backend_commit 的关系：
+# commit 慢导致 apply 慢是最常见路径，但 commit 正常而 apply 慢指向 CPU 瓶颈。
+#
+# [instances.slow_apply]
+# warn_ge = 1
+# critical_ge = 5
+#
+#
+# --- leader_changes ---
+# leader 选举次数。每次切换意味着 1-3 秒写入不可用，watch 连接断开重连。
+# 典型根因：网络抖动、磁盘太慢（心跳超时内完不成 fsync）、节点重启。
+#
+# [instances.leader_changes]
+# warn_ge = 1
+# critical_ge = 3
+#
+#
+# --- proposals_failed ---
+# 提案无法达成多数派共识。这是最严重的信号：多数节点不可用或网络分区。
+# 与 leader_changes 的区别：leader_changes 说明还能选出 leader，
+# proposals_failed 说明连共识都达不成。
+#
+# [instances.proposals_failed]
+# warn_ge = 1
+# critical_ge = 5
+
+
+# =============================================================================
+#  告警策略
+# =============================================================================
+# for_duration    — 持续异常多少秒才触发告警（防抖），偶发毛刺不告警
+# repeat_interval — 未恢复时重复通知间隔
+# repeat_number   — 最多重复通知几次，之后不再重复
+
+[instances.alerting]
+for_duration = 10
+repeat_interval = "5m"
+repeat_number = 3
+
+
+# =============================================================================
+#  AI 自动诊断
+# =============================================================================
+# 告警触发后自动调用 AI + 诊断工具进行根因分析，结果回填告警平台。
+#
+# enabled      — 是否开启
+# min_severity — 最低触发级别，"Warning" 表示 Warning 和 Critical 都会触发
+# timeout      — AI 诊断超时，默认 120s
+# cooldown     — 同一 target 的诊断冷却期，防止重复诊断，默认 10m
+
+[instances.diagnose]
+enabled = true
+min_severity = "Warning"
+# timeout = "120s"
+# cooldown = "10m"
