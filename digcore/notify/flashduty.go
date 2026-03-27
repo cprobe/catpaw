@@ -72,6 +72,9 @@ func (f *FlashdutyNotifier) Comment(alertKey, comment string) bool {
 		return false
 	}
 
+	logger.Logger.Infow("flashduty: sending comment",
+		"alert_key", alertKey, "comment_url", f.commentURL, "comment_len", len(comment))
+
 	bs, err := json.Marshal(flashdutyCommentPayload{
 		AlertKey: alertKey,
 		Comment:  comment,
@@ -91,6 +94,8 @@ func (f *FlashdutyNotifier) Comment(alertKey, comment string) bool {
 
 		ok, retryable := f.doPost(alertKey, f.commentURL, bs)
 		if ok {
+			logger.Logger.Infow("flashduty: comment sent successfully",
+				"alert_key", alertKey)
 			return true
 		}
 		if !retryable {
