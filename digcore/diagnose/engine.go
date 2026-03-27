@@ -153,6 +153,12 @@ func (e *DiagnoseEngine) RunDiagnose(req *DiagnoseRequest) *DiagnoseRecord {
 
 	if report != "" && len(req.Events) > 0 {
 		e.forwardReport(req, session.Record, report)
+	} else if report == "" {
+		logger.Logger.Warnw("diagnose report empty, skipping forward",
+			"plugin", req.Plugin, "target", req.Target, "status", session.Record.Status)
+	} else if len(req.Events) == 0 {
+		logger.Logger.Warnw("diagnose has no events, skipping forward",
+			"plugin", req.Plugin, "target", req.Target, "report_len", len(report))
 	}
 
 	e.state.AddTokens(session.Record.AI.InputTokens, session.Record.AI.OutputTokens)
@@ -465,12 +471,20 @@ func (e *DiagnoseEngine) forwardReport(req *DiagnoseRequest, record *DiagnoseRec
 	comment := FormatReportComment(record, report, e.cfg.Language)
 	now := time.Now().Unix()
 
+	logger.Logger.Infow("diagnose forwarding report",
+		"plugin", req.Plugin, "target", req.Target,
+		"event_count", len(req.Events), "report_len", len(report), "comment_len", len(comment))
+
 	seen := make(map[string]bool, len(req.Events))
 	for _, original := range req.Events {
 		if seen[original.AlertKey] {
 			continue
 		}
 		seen[original.AlertKey] = true
+
+		logger.Logger.Infow("diagnose forwarding comment to notifiers",
+			"alert_key", original.AlertKey, "plugin", req.Plugin, "target", req.Target)
+
 		if notify.ForwardComment(original.AlertKey, comment) {
 			logger.Logger.Infow("diagnose report commented",
 				"alert_key", original.AlertKey, "plugin", req.Plugin, "target", req.Target, "ts", now)

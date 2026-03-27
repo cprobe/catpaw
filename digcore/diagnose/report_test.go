@@ -109,7 +109,7 @@ func TestFormatReport_ShortBody(t *testing.T) {
 
 func TestFormatReportComment_Truncation(t *testing.T) {
 	record := newTestRecord()
-	longBody := strings.Repeat("诊断结论", 300)
+	longBody := strings.Repeat("诊断结论", 1200)
 	result := FormatReportComment(record, longBody, "zh")
 	if got := len([]rune(result)); got > maxCommentChars {
 		t.Fatalf("comment should be at most %d chars, got %d", maxCommentChars, got)
